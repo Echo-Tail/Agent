@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getAgentApi, createAgentApi, updateAgentApi } from '../../api/agent'
 import { listModelsApi } from '../../api/model'
+import { listToolsApi } from '../../api/tool'
 import { validate, usernameRules } from '../../utils/validation'
 import type { AgentCreateRequest } from '../../types/agent'
 import type { AiModel } from '../../types/api'
+import type { ToolDefinition } from '../../api/tool'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +31,9 @@ const tools = ref<string[]>([])
 const status = ref<'active' | 'disabled'>('active')
 const models = ref<AiModel[]>([])
 const selectedModelId = ref<number | null>(null)
+const availableTools = ref<ToolDefinition[]>([])
+
+const enabledTools = computed(() => availableTools.value.filter((t) => t.enabled))
 
 const availableIcons = [
   { value: 'bi-robot', label: '机器人', path: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z' },
@@ -38,15 +43,6 @@ const availableIcons = [
   { value: 'bi-gear', label: '工具', path: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' },
   { value: 'bi-brain', label: '智能', path: 'M12 2C7.58 2 4 3.12 4 6.5c0 1.46.63 2.77 1.68 3.74-.26.4-.46.78-.56 1.13-.49 1.7.88 3.13 2.88 3.13.2 0 .4-.02.6-.05.9.86 2.07 1.35 3.4 1.35s2.5-.49 3.4-1.35c.2.03.4.05.6.05 2 0 3.37-1.43 2.88-3.13-.1-.35-.3-.73-.56-1.13C19.37 9.27 20 7.96 20 6.5 20 3.12 16.42 2 12 2zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm-6 4c-.55 0-1 .45-1 1v1H4c-.55 0-1 .45-1 1s.45 1 1 1h1v1c0 .55.45 1 1 1s1-.45 1-1v-1h1c.55 0 1-.45 1-1s-.45-1-1-1H7v-1c0-.55-.45-1-1-1zm12 0c-.55 0-1 .45-1 1v1h-1c-.55 0-1 .45-1 1s.45 1 1 1h1v1c0 .55.45 1 1 1s1-.45 1-1v-1h1c.55 0 1-.45 1-1s-.45-1-1-1h-1v-1c0-.55-.45-1-1-1z' },
   { value: 'bi-tools', label: '运维', path: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z' },
-]
-
-const toolOptions = [
-  { label: 'Web 搜索', value: 'web' },
-  { label: '终端与文件', value: 'terminal_files' },
-  { label: '浏览器自动化', value: 'browser' },
-  { label: '图片生成', value: 'media' },
-  { label: '记忆系统', value: 'memory' },
-  { label: 'MCP 服务', value: 'mcp' },
 ]
 
 const modelOptions = computed(() => {
@@ -65,14 +61,25 @@ const modelOptions = computed(() => {
   }))
 })
 
+async function fetchTools() {
+  const res = await listToolsApi()
+  if (res.data.code === 200) {
+    availableTools.value = res.data.data ?? []
+  }
+}
+
 async function fetchAgent() {
   if (!isEdit.value) return
   fetching.value = true
   try {
-    const [res, modelRes] = await Promise.all([
+    const [res, modelRes, toolRes] = await Promise.all([
       getAgentApi(agentId.value),
       listModelsApi(),
+      listToolsApi(),
     ])
+    if (toolRes.data.code === 200) {
+      availableTools.value = toolRes.data.data ?? []
+    }
     if (modelRes.data.code === 200) {
       models.value = modelRes.data.data ?? []
     }
@@ -108,6 +115,7 @@ async function loadModels() {
 }
 
 onMounted(() => {
+  fetchTools()
   if (isEdit.value) {
     fetchAgent()
   } else {
@@ -252,14 +260,14 @@ function handleTagsChange(v: string[]) {
           </n-form-item>
 
           <!-- Tools -->
-          <n-form-item label="工具">
+          <n-form-item v-if="enabledTools.length > 0" label="工具">
             <n-checkbox-group v-model:value="tools">
               <n-space>
                 <n-checkbox
-                  v-for="opt in toolOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                  :label="opt.label"
+                  v-for="tool in enabledTools"
+                  :key="tool.id"
+                  :value="tool.id"
+                  :label="tool.name"
                 />
               </n-space>
             </n-checkbox-group>
