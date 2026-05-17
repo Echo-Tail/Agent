@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useChatStore } from '../../stores/chat'
 import { useAgentStore } from '../../stores/agent'
 import { getSystemAgentApi, getAgentApi, updateAgentApi } from '../../api/agent'
-import { listToolsApi } from '../../api/tool'
 import { uploadFileApi } from '../../api/file'
 import { listModelsApi } from '../../api/model'
 import MessageBubble from '../../components/MessageBubble.vue'
 import AgentCard from '../../components/AgentCard.vue'
 import type { Agent } from '../../types/agent'
 import type { FileRecord, AiModel } from '../../types/api'
-import type { ToolDefinition } from '../../api/tool'
 import type { DropdownOption } from 'naive-ui'
 
 const route = useRoute()
@@ -96,41 +94,6 @@ async function handleModelSelect(key: string) {
     message.error('模型切换失败')
   }
 }
-
-/* ====== Tools (always all available in direct mode) ====== */
-const availableTools = ref<ToolDefinition[]>([])
-const selectedToolIds = ref<string[]>([])
-const showToolPanel = ref(false)
-const toolPanelRef = ref<HTMLElement | null>(null)
-const activeToolCount = computed(() => selectedToolIds.value.length)
-
-async function fetchTools() {
-  try {
-    const res = await listToolsApi()
-    if (res.data.code === 200) {
-      availableTools.value = res.data.data ?? []
-    }
-  } catch { /* ignore */ }
-}
-
-function toggleTool(toolId: string) {
-  const idx = selectedToolIds.value.indexOf(toolId)
-  if (idx >= 0) selectedToolIds.value.splice(idx, 1)
-  else selectedToolIds.value.push(toolId)
-}
-
-function isToolSelected(toolId: string): boolean {
-  return selectedToolIds.value.includes(toolId)
-}
-
-function onClickOutside(e: MouseEvent) {
-  if (toolPanelRef.value && !toolPanelRef.value.contains(e.target as Node)) {
-    showToolPanel.value = false
-  }
-}
-
-onMounted(() => document.addEventListener('click', onClickOutside))
-onUnmounted(() => document.removeEventListener('click', onClickOutside))
 
 /* ====== File upload ====== */
 const attachedFile = ref<FileRecord | null>(null)
@@ -229,7 +192,6 @@ function handleNewSession() {
 
 function handleSwitchToDirect() {
   chat.switchToDirect()
-  selectedToolIds.value = []
   if (!chat.activeSession && systemAgent.value) {
     startDirectSession()
   }
@@ -285,7 +247,6 @@ function handleStop() {
 
 /* ====== Init ====== */
 async function init() {
-  fetchTools()
   loadModels()
   agentStore.fetchAgents()
   await loadSystemAgent()
@@ -459,39 +420,6 @@ init()
               </n-icon>
             </template>
           </n-button>
-
-          <div ref="toolPanelRef" class="tool-wrapper">
-            <n-button
-              quaternary size="small"
-              :disabled="chat.isStreaming || !isDirectMode"
-              @click="showToolPanel = !showToolPanel"
-              class="action-btn"
-            >
-              <template #icon>
-                <n-icon size="20">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21.58 16.09l-1.09-1.09a2.03 2.03 0 00-2.83 0l-5.94 5.94a2.03 2.03 0 000 2.83l1.09 1.09c.78.78 2.05.78 2.83 0l5.94-5.94c.78-.78.78-2.05 0-2.83zm-4.24 2.83l-4.24 4.24-1.41-1.41 4.24-4.24 1.41 1.41zM2 17.27V21h3.73l9.9-9.9-3.73-3.73L2 17.27zM18.36 8.64l1.41-1.41c.78-.78.78-2.05 0-2.83l-1.17-1.17a2.03 2.03 0 00-2.83 0l-1.41 1.41 4 4z"/>
-                  </svg>
-                </n-icon>
-              </template>
-            </n-button>
-            <span v-if="activeToolCount > 0 && isDirectMode" class="tool-badge">{{ activeToolCount }}</span>
-            <div v-if="showToolPanel && isDirectMode" class="tool-panel">
-              <div class="tool-panel-header">选择工具（直接对话）</div>
-              <div
-                v-for="tool in availableTools"
-                :key="tool.id"
-                class="tool-item"
-                @click="toggleTool(tool.id)"
-              >
-                <n-checkbox :checked="isToolSelected(tool.id)" />
-                <div class="tool-item-info">
-                  <span class="tool-item-name">{{ tool.name }}</span>
-                  <span class="tool-item-desc">{{ tool.description }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <n-input
             v-model:value="chat.inputText"
@@ -789,84 +717,6 @@ init()
   margin-bottom: 2px;
 }
 
-.tool-wrapper {
-  position: relative;
-  margin-bottom: 2px;
-}
-
-.tool-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  background: #C8815F;
-  border-radius: 8px;
-  padding: 0 5px;
-  pointer-events: none;
-}
-
-.tool-panel {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 8px;
-  min-width: 260px;
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  padding: 8px 0;
-  z-index: 100;
-}
-
-.tool-panel-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-color, #333);
-  padding: 6px 14px 10px;
-  border-bottom: 1px solid var(--border-color, #eee);
-  margin-bottom: 4px;
-}
-
-.tool-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.tool-item:hover {
-  background: var(--hover-bg, #f5f5f5);
-}
-
-.tool-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.tool-item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-color, #333);
-}
-
-.tool-item-desc {
-  font-size: 12px;
-  color: #999;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* ── Agent section ── */
 .agents-section {
