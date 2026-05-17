@@ -17,4 +17,10 @@ public class ToolDefinition {
     private String name;
     private String description;
     private String category;
+
+    @Builder.Default
+    private Boolean enabled = true;
+
+    @Builder.Default
+    private String configJson = "";
 }
