@@ -1,0 +1,39 @@
+package cafe.snails.ecomagents.config;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * LLM 全局配置，绑定 application.properties 中 llm.* 前缀的配置项。
+ * <p>可通过环境变量 {@code LLM_API_KEY} 或配置文件中的 {@code llm.api.key} 设置。</p>
+ */
+@Configuration
+@ConfigurationProperties(prefix = "llm")
+public class LlmConfig {
+
+    /** API 请求地址 */
+    private String apiUrl = "https://api.openai.com/v1/chat/completions";
+    /** API 密钥（占位符 sk-placeholder 表示未配置） */
+    private String apiKey = "sk-placeholder";
+    /** 模型名称 */
+    private String model = "gpt-4o-mini";
+    /** 最大输出 token 数 */
+    private int maxTokens = 2048;
+    /** 生成温度 */
+    private double temperature = 0.7;
+    /** LLM 流式调用超时时间（秒） */
+    private long streamTimeout = 60;
+
+    public String getApiUrl() { return apiUrl; }
+    public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
+    public String getApiKey() { return apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public String getModel() { return model; }
+    public void setModel(String model) { this.model = model; }
+    public int getMaxTokens() { return maxTokens; }
+    public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
+    public double getTemperature() { return temperature; }
+    public void setTemperature(double temperature) { this.temperature = temperature; }
+    public long getStreamTimeout() { return streamTimeout; }
+    public void setStreamTimeout(long streamTimeout) { this.streamTimeout = streamTimeout; }
+}

@@ -1,0 +1,295 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import {
+  listSessionsApi,
+  getSessionApi,
+  createSessionApi,
+  updateSessionApi,
+  deleteSessionApi,
+  listFoldersApi,
+  createFolderApi,
+  updateFolderApi,
+  deleteFolderApi,
+  streamChat,
+} from '../api/session'
+import type { Session, SessionSummary, SessionFolder, SessionMessage } from '../types/session'
+
+export type ChatMode = 'direct' | 'agent'
+
+export const useChatStore = defineStore('chat', () => {
+  // Chat mode
+  const chatMode = ref<ChatMode>('direct')
+
+  // Session state
+  const sessions = ref<SessionSummary[]>([])
+  const activeSession = ref<Session | null>(null)
+  const messages = ref<SessionMessage[]>([])
+  const sessionLoading = ref(false)
+
+  // Folder state
+  const folders = ref<SessionFolder[]>([])
+
+  // Streaming state
+  const isStreaming = ref(false)
+  const streamingText = ref('')
+  const abortController = ref<AbortController | null>(null)
+
+  // Input state
+  const inputText = ref('')
+
+  // Current agent ID
+  const activeAgentId = ref<number | null>(null)
+
+  /* ====== Getters ====== */
+
+  const folderTree = computed(() => {
+    const map = new Map<number, SessionFolder & { children: SessionFolder[] }>()
+    const roots: (SessionFolder & { children: SessionFolder[] })[] = []
+
+    for (const f of [...folders.value].sort((a, b) => a.orderNum - b.orderNum)) {
+      map.set(f.id, { ...f, children: [] })
+    }
+
+    for (const f of map.values()) {
+      if (f.parentId && map.has(f.parentId)) {
+        map.get(f.parentId)!.children.push(f)
+      } else {
+        roots.push(f)
+      }
+    }
+    return roots
+  })
+
+  /* ====== Session Actions ====== */
+
+  async function fetchSessions(params?: { folderId?: number; agentId?: number }) {
+    sessionLoading.value = true
+    try {
+      const res = await listSessionsApi(params)
+      if (res.data.code === 200) {
+        sessions.value = res.data.data ?? []
+      }
+    } finally {
+      sessionLoading.value = false
+    }
+  }
+
+  async function loadSession(id: number) {
+    sessionLoading.value = true
+    try {
+      const res = await getSessionApi(id)
+      if (res.data.code === 200 && res.data.data) {
+        activeSession.value = res.data.data
+        messages.value = res.data.data.messages ?? []
+      }
+    } finally {
+      sessionLoading.value = false
+    }
+  }
+
+  async function createSession(agentId: number, title?: string) {
+    const res = await createSessionApi({ agentId, title: title || '新对话' })
+    if (res.data.code === 200 && res.data.data) {
+      activeSession.value = res.data.data
+      messages.value = []
+      return res.data.data
+    }
+    throw new Error(res.data.message || '创建会话失败')
+  }
+
+  async function updateSession(id: number, data: { title?: string; folderId?: number | null }) {
+    const res = await updateSessionApi(id, data)
+    if (res.data.code === 200) {
+      await fetchSessions()
+      return true
+    }
+    return false
+  }
+
+  async function removeSession(id: number) {
+    const res = await deleteSessionApi(id)
+    if (res.data.code === 200) {
+      if (activeSession.value?.id === id) {
+        activeSession.value = null
+        messages.value = []
+      }
+      await fetchSessions()
+      return true
+    }
+    return false
+  }
+
+  /* ====== Folder Actions ====== */
+
+  async function fetchFolders() {
+    try {
+      const res = await listFoldersApi()
+      if (res.data.code === 200) {
+        folders.value = res.data.data ?? []
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function addFolder(name: string, parentId?: number | null) {
+    const res = await createFolderApi({ name, parentId })
+    if (res.data.code === 200) {
+      await fetchFolders()
+      return true
+    }
+    return false
+  }
+
+  async function renameFolder(id: number, name: string) {
+    const res = await updateFolderApi(id, { name })
+    if (res.data.code === 200) {
+      await fetchFolders()
+      return true
+    }
+    return false
+  }
+
+  async function removeFolder(id: number) {
+    const res = await deleteFolderApi(id)
+    if (res.data.code === 200) {
+      await fetchFolders()
+      return true
+    }
+    return false
+  }
+
+  /* ====== Mode Switching ====== */
+
+  function switchToDirect() {
+    chatMode.value = 'direct'
+    activeAgentId.value = null
+    clearActiveSession()
+  }
+
+  function switchToAgent(_agentId: number) {
+    chatMode.value = 'agent'
+    activeAgentId.value = _agentId
+    clearActiveSession()
+  }
+
+  /* ====== Chat / Streaming ====== */
+
+  async function sendMessage(agentId: number, content: string) {
+    if (!activeSession.value) {
+      console.warn('sendMessage skipped: no active session (agentId=%s)', agentId)
+      throw new Error('没有活跃会话，请重新选择 Agent')
+    }
+
+    const userMsg: SessionMessage = {
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    }
+    messages.value.push(userMsg)
+
+    isStreaming.value = true
+    streamingText.value = ''
+    abortController.value = new AbortController()
+
+    try {
+      await streamChat(
+        agentId,
+        activeSession.value.id,
+        content,
+        (token) => {
+          streamingText.value += token
+        },
+        (fullText) => {
+          messages.value.push({
+            role: 'assistant',
+            content: fullText,
+            timestamp: new Date().toISOString(),
+          })
+          streamingText.value = ''
+          isStreaming.value = false
+          abortController.value = null
+          fetchSessions()
+        },
+        (errorMsg) => {
+          streamingText.value = ''
+          isStreaming.value = false
+          abortController.value = null
+          messages.value.push({
+            role: 'assistant',
+            content: errorMsg,
+            timestamp: new Date().toISOString(),
+            isError: true,
+          })
+        },
+        abortController.value.signal,
+      )
+    } catch (e) {
+      console.error('sendMessage failed:', e)
+      if (isStreaming.value) {
+        isStreaming.value = false
+        abortController.value = null
+        messages.value.push({
+          role: 'assistant',
+          content: e instanceof Error ? e.message : '发送消息时发生未知错误',
+          timestamp: new Date().toISOString(),
+          isError: true,
+        })
+      }
+    }
+  }
+
+  function stopStreaming() {
+    abortController.value?.abort()
+    if (streamingText.value) {
+      messages.value.push({
+        role: 'assistant',
+        content: streamingText.value,
+        timestamp: new Date().toISOString(),
+      })
+    }
+    streamingText.value = ''
+    isStreaming.value = false
+    abortController.value = null
+  }
+
+  function clearActiveSession() {
+    activeSession.value = null
+    messages.value = []
+    inputText.value = ''
+  }
+
+  return {
+    // state
+    chatMode,
+    sessions,
+    activeSession,
+    messages,
+    sessionLoading,
+    folders,
+    isStreaming,
+    streamingText,
+    inputText,
+    activeAgentId,
+    // getters
+    folderTree,
+    // mode
+    switchToDirect,
+    switchToAgent,
+    // session actions
+    fetchSessions,
+    loadSession,
+    createSession,
+    updateSession,
+    removeSession,
+    // folder actions
+    fetchFolders,
+    addFolder,
+    renameFolder,
+    removeFolder,
+    // chat
+    sendMessage,
+    stopStreaming,
+    clearActiveSession,
+  }
+})
