@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import axios from 'axios'
 import { listAgentsApi } from '../api/agent'
 import type { Agent, AgentSummary } from '../types/agent'
 
@@ -26,7 +27,11 @@ export const useAgentStore = defineStore('agent', () => {
         error.value = body.message || '获取 Agent 列表失败'
       }
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : '网络异常'
+      if (axios.isAxiosError(e) && (e.response?.status === 401 || e.response?.status === 403)) {
+        error.value = '登录已过期，请重新登录'
+      } else {
+        error.value = e instanceof Error ? e.message : '网络异常'
+      }
     } finally {
       loading.value = false
     }

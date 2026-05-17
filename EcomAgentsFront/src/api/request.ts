@@ -21,7 +21,7 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 http.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem(STORAGE_KEY_TOKEN)
       localStorage.removeItem(STORAGE_KEY_USER)
       window.location.href = '/login'
