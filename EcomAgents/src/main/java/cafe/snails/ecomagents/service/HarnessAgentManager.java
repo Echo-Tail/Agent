@@ -5,8 +5,12 @@ import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
+import cafe.snails.ecomagents.repository.ToolConfigRepository;
+import cafe.snails.ecomagents.tool.WebSearchTool;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.model.OpenAIChatModel;
 import io.agentscope.core.tool.Toolkit;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * HarnessAgent 工厂，为每次 chat 请求创建带 per-request Hook 的 HarnessAgent 实例。
@@ -34,6 +39,7 @@ public class HarnessAgentManager {
 
     private final AgentRepository agentRepository;
     private final AiModelRepository aiModelRepository;
+    private final ToolConfigRepository toolConfigRepository;
     private final WorkspaceConfig workspaceConfig;
     private final LlmConfig llmConfig;
     private final ObjectMapper objectMapper;
@@ -55,6 +61,8 @@ public class HarnessAgentManager {
                 .build();
 
         Toolkit toolkit = new Toolkit();
+        registerAgentTools(toolkit);
+
         java.nio.file.Path workspacePath = java.nio.file.Path.of(
                 workspaceConfig.getRoot(), "agent-" + agentId);
 
@@ -71,6 +79,45 @@ public class HarnessAgentManager {
 
         log.debug("HarnessAgent created for agent {} (user {})", agentId, userId);
         return harnessAgent;
+    }
+
+    // ===== Tool registration =====
+
+    /**
+     * 从 DB 加载所有已启用的外部工具，注册到 Toolkit。
+     * 所有 Agent 共享同一套已启用的工具。
+     */
+    private void registerAgentTools(Toolkit toolkit) {
+        List<ToolConfig> enabledTools = toolConfigRepository.findByEnabledTrue();
+        if (enabledTools == null || enabledTools.isEmpty()) return;
+
+        for (ToolConfig tool : enabledTools) {
+            switch (tool.getId()) {
+                case "web_search" -> registerWebSearch(toolkit, tool);
+                default -> log.debug("Tool '{}' not yet implemented, skipping", tool.getId());
+            }
+        }
+    }
+
+    private void registerWebSearch(Toolkit toolkit, ToolConfig config) {
+        String apiKey = extractApiKey(config.getConfigJson());
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("web_search tool is enabled but no API key configured");
+            return;
+        }
+        toolkit.registerTool(new WebSearchTool(apiKey));
+        log.info("WebSearchTool registered (Tavily)");
+    }
+
+    private String extractApiKey(String configJson) {
+        if (configJson == null || configJson.isBlank()) return null;
+        try {
+            Map<String, Object> cfg = objectMapper.readValue(configJson, new TypeReference<Map<String, Object>>() {});
+            return (String) cfg.get("apiKey");
+        } catch (Exception e) {
+            log.warn("Failed to parse web_search config JSON: {}", e.getMessage());
+            return null;
+        }
     }
 
     // ===== Model resolution helpers =====
