@@ -21,4 +21,5 @@ public interface AgentRepository extends JpaRepository<Agent, Long> {
     /** 查找关联了指定知识库的所有 Agent */
     @Query("SELECT a FROM Agent a JOIN a.knowledgeBaseIds kbId WHERE kbId = :kbId")
     List<Agent> findByKnowledgeBaseId(@Param("kbId") Long kbId);
+
 }

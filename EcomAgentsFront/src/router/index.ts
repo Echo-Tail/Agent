@@ -78,6 +78,11 @@ const router = createRouter({
           component: () => import('../views/admin/ToolManage.vue'),
         },
         {
+          path: 'admin/skills',
+          name: 'SkillManage',
+          component: () => import('../views/admin/SkillManage.vue'),
+        },
+        {
           path: 'knowledge',
           name: 'KnowledgeBase',
           component: () => import('../views/knowledge/KnowledgeBase.vue'),
@@ -121,7 +126,7 @@ router.beforeEach((to, _from) => {
   }
 
   // Admin-only routes
-  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage') {
+  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage') {
     if (!isAdmin) {
       return { name: 'Dashboard' }
     }

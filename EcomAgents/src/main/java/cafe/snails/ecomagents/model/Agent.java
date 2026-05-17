@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.model;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -38,7 +39,8 @@ public class Agent {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "agent_tags", joinColumns = @JoinColumn(name = "agent_id"))
     @Column(name = "tag", length = 50)
-    private List<String> tags;
+    @Builder.Default
+    private List<String> tags = new ArrayList<>();
 
     /** 系统提示词，定义 Agent 的角色和行为 */
     @Column(columnDefinition = "TEXT", name = "system_prompt")

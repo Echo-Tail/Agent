@@ -37,7 +37,20 @@ public class WorkspaceInitService {
 
             Files.createDirectories(agentDir.resolve("sessions"));
             Files.createDirectories(agentDir.resolve("knowledge"));
-            Files.createDirectories(agentDir.resolve("skills"));
+            Path globalSkills = Path.of(workspaceConfig.getRoot(), "skills");
+            Files.createDirectories(globalSkills);
+            Path agentSkills = agentDir.resolve("skills");
+            // Remove if exists from previous init
+            if (Files.exists(agentSkills)) {
+                try { deleteRecursively(agentSkills); } catch (IOException ignored) {}
+            }
+            try {
+                Files.createSymbolicLink(agentSkills, globalSkills);
+            } catch (IOException e) {
+                // Symlink not supported (e.g. Windows without dev mode) — fall back to directory
+                log.warn("Cannot create symlink for skills, creating directory instead: {}", e.getMessage());
+                Files.createDirectories(agentSkills);
+            }
             Files.createDirectories(agentDir.resolve("subagents"));
 
             Path knowledgeMd = agentDir.resolve("knowledge/KNOWLEDGE.md");

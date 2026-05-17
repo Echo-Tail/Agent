@@ -56,6 +56,14 @@ export interface FileRecord {
   storedPath: string
 }
 
+export interface SkillDefinition {
+  name: string
+  description: string
+  category: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AiModel {
   id: number
   name: string

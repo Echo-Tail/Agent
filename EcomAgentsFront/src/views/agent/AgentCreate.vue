@@ -4,11 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getAgentApi, createAgentApi, updateAgentApi } from '../../api/agent'
 import { listModelsApi } from '../../api/model'
-import { listToolsApi } from '../../api/tool'
 import { validate, usernameRules } from '../../utils/validation'
 import type { AgentCreateRequest } from '../../types/agent'
 import type { AiModel } from '../../types/api'
-import type { ToolDefinition } from '../../api/tool'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,14 +25,9 @@ const description = ref('')
 const systemPrompt = ref('')
 const greeting = ref('')
 const tags = ref<string[]>([])
-const tools = ref<string[]>([])
 const status = ref<'active' | 'disabled'>('active')
 const models = ref<AiModel[]>([])
 const selectedModelId = ref<number | null>(null)
-const availableTools = ref<ToolDefinition[]>([])
-
-const enabledTools = computed(() => availableTools.value.filter((t) => t.enabled))
-
 const availableIcons = [
   { value: 'bi-robot', label: '机器人', path: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z' },
   { value: 'bi-chat-dots', label: '对话', path: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z' },
@@ -61,25 +54,14 @@ const modelOptions = computed(() => {
   }))
 })
 
-async function fetchTools() {
-  const res = await listToolsApi()
-  if (res.data.code === 200) {
-    availableTools.value = res.data.data ?? []
-  }
-}
-
 async function fetchAgent() {
   if (!isEdit.value) return
   fetching.value = true
   try {
-    const [res, modelRes, toolRes] = await Promise.all([
+    const [res, modelRes] = await Promise.all([
       getAgentApi(agentId.value),
       listModelsApi(),
-      listToolsApi(),
     ])
-    if (toolRes.data.code === 200) {
-      availableTools.value = toolRes.data.data ?? []
-    }
     if (modelRes.data.code === 200) {
       models.value = modelRes.data.data ?? []
     }
@@ -92,7 +74,6 @@ async function fetchAgent() {
       systemPrompt.value = a.systemPrompt || ''
       greeting.value = a.greeting || ''
       tags.value = a.tags || []
-      tools.value = a.tools || []
       status.value = a.status || 'active'
       selectedModelId.value = a.modelId ?? null
     } else {
@@ -115,7 +96,6 @@ async function loadModels() {
 }
 
 onMounted(() => {
-  fetchTools()
   if (isEdit.value) {
     fetchAgent()
   } else {
@@ -139,7 +119,6 @@ async function handleSubmit() {
       systemPrompt: systemPrompt.value || undefined,
       greeting: greeting.value || undefined,
       tags: tags.value.length ? tags.value : undefined,
-      tools: tools.value.length ? tools.value : undefined,
       modelId: selectedModelId.value ?? undefined,
     }
 
@@ -257,20 +236,6 @@ function handleTagsChange(v: string[]) {
               :max="10"
               :disabled="loading"
             />
-          </n-form-item>
-
-          <!-- Tools -->
-          <n-form-item v-if="enabledTools.length > 0" label="工具">
-            <n-checkbox-group v-model:value="tools">
-              <n-space>
-                <n-checkbox
-                  v-for="tool in enabledTools"
-                  :key="tool.id"
-                  :value="tool.id"
-                  :label="tool.name"
-                />
-              </n-space>
-            </n-checkbox-group>
           </n-form-item>
 
           <!-- Model -->

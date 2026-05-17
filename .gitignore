@@ -53,6 +53,8 @@ replay_pid*
 .issues
 .claude
 CONTEXT.md
+*/workspace
+docs
 
 # Local env files
 .env

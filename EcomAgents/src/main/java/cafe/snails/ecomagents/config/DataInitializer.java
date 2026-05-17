@@ -89,15 +89,7 @@ public class DataInitializer implements CommandLineRunner {
                 ToolConfig.builder().id("web_search").name("网页搜索")
                         .description("搜索互联网获取最新信息").category("web").build(),
                 ToolConfig.builder().id("image_generation").name("图片生成")
-                        .description("根据文字描述生成图片").category("media").build(),
-                ToolConfig.builder().id("browser_automation").name("浏览器自动化")
-                        .description("自动浏览网页并提取内容").category("browser").build(),
-                ToolConfig.builder().id("file_operation").name("文件操作")
-                        .description("读取和写入本地文件").category("terminal_files").build(),
-                ToolConfig.builder().id("code_execution").name("代码执行")
-                        .description("运行 Python / JavaScript 等代码片段").category("terminal_files").build(),
-                ToolConfig.builder().id("memory_read").name("记忆读取")
-                        .description("读取持久化的对话记忆").category("memory").build()
+                        .description("根据文字描述生成图片").category("media").build()
         );
 
         toolConfigRepository.saveAll(tools);
