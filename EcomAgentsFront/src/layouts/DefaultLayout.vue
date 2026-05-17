@@ -25,6 +25,7 @@ const pageTitles: Record<string, string> = {
   History: '历史会话',
   UserManage: '用户管理',
   ModelManage: '模型管理',
+  ToolManage: '工具管理',
   KnowledgeBase: '知识库',
   Logs: '日志',
   Settings: '设置',
@@ -49,6 +50,7 @@ const menuOptions = computed<MenuOption[]>(() => {
     items.push(
       { label: '用户管理', key: 'UserManage' },
       { label: '模型管理', key: 'ModelManage' },
+      { label: '工具管理', key: 'ToolManage' },
     )
   }
   items.push({ label: '日志', key: 'Logs' })

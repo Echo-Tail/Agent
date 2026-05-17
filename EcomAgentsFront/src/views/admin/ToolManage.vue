@@ -1,0 +1,275 @@
+<script setup lang="ts">
+import { h, ref, onMounted } from 'vue'
+import { useMessage } from 'naive-ui'
+import type { DataTableColumn } from 'naive-ui'
+import { listToolsApi, updateToolApi, toggleToolApi, saveToolConfigApi } from '../../api/tool'
+import type { ToolDefinition } from '../../api/tool'
+
+const message = useMessage()
+
+const tools = ref<ToolDefinition[]>([])
+const loading = ref(false)
+const toggling = ref<Set<string>>(new Set())
+
+/* ====== Config modal ====== */
+const showConfigModal = ref(false)
+const editingTool = ref<ToolDefinition | null>(null)
+const editName = ref('')
+const editDescription = ref('')
+const configApiProvider = ref<'tavily' | 'firecrawl' | ''>('')
+const configApiKey = ref('')
+const saving = ref(false)
+
+const categoryLabels: Record<string, string> = {
+  web: '网页搜索',
+  media: '图片生成',
+  browser: '浏览器',
+  terminal_files: '终端与文件',
+  memory: '记忆系统',
+}
+
+const categoryColors: Record<string, string> = {
+  web: '#18a058',
+  media: '#2080f0',
+  browser: '#f0a020',
+  terminal_files: '#d03050',
+  memory: '#8050c0',
+}
+
+/* ====== Fetch ====== */
+async function fetchTools() {
+  loading.value = true
+  try {
+    const res = await listToolsApi()
+    if (res.data.code === 200) {
+      tools.value = res.data.data ?? []
+    }
+  } catch {
+    message.error('加载工具列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchTools)
+
+/* ====== Toggle ====== */
+async function handleToggle(tool: ToolDefinition) {
+  if (toggling.value.has(tool.id)) return
+  toggling.value = new Set(toggling.value).add(tool.id)
+  try {
+    const res = await toggleToolApi(tool.id)
+    if (res.data.code === 200) {
+      tool.enabled = res.data.data.enabled
+      message.success(res.data.message || (tool.enabled ? '已启用' : '已禁用'))
+    } else {
+      message.error(res.data.message || '操作失败')
+    }
+  } catch {
+    message.error('网络异常')
+  } finally {
+    const next = new Set(toggling.value)
+    next.delete(tool.id)
+    toggling.value = next
+  }
+}
+
+/* ====== Edit/Config modal ====== */
+function openConfig(tool: ToolDefinition) {
+  editingTool.value = tool
+  editName.value = tool.name
+  editDescription.value = tool.description
+  // Parse existing config
+  try {
+    const cfg = tool.configJson ? JSON.parse(tool.configJson) : {}
+    configApiProvider.value = cfg.provider || ''
+    configApiKey.value = cfg.apiKey || ''
+  } catch {
+    configApiProvider.value = ''
+    configApiKey.value = ''
+  }
+  showConfigModal.value = true
+}
+
+async function handleSaveConfig() {
+  if (!editingTool.value) return
+  saving.value = true
+  try {
+    // Update name/description first
+    if (editName.value !== editingTool.value.name || editDescription.value !== editingTool.value.description) {
+      const updateRes = await updateToolApi(editingTool.value.id, {
+        name: editName.value,
+        description: editDescription.value,
+      })
+      if (updateRes.data.code !== 200) {
+        message.error(updateRes.data.message || '更新失败')
+        return
+      }
+      editingTool.value.name = updateRes.data.data.name
+      editingTool.value.description = updateRes.data.data.description
+    }
+
+    // Build config JSON based on tool type
+    let configJson = ''
+    if (editingTool.value.id === 'web_search' && configApiKey.value) {
+      configJson = JSON.stringify({
+        provider: configApiProvider.value || 'tavily',
+        apiKey: configApiKey.value,
+      })
+    } else if (editingTool.value.id === 'image_generation' && configApiKey.value) {
+      configJson = JSON.stringify({
+        apiKey: configApiKey.value,
+      })
+    } else if (configApiKey.value) {
+      configJson = JSON.stringify({ apiKey: configApiKey.value })
+    }
+
+    if (configJson !== editingTool.value.configJson) {
+      const configRes = await saveToolConfigApi(editingTool.value.id, configJson)
+      if (configRes.data.code !== 200) {
+        message.error(configRes.data.message || '配置保存失败')
+        return
+      }
+      editingTool.value.configJson = configRes.data.data.configJson
+    }
+
+    // Refresh list to reflect changes
+    await fetchTools()
+    message.success('保存成功')
+    showConfigModal.value = false
+  } catch {
+    message.error('网络异常')
+  } finally {
+    saving.value = false
+  }
+}
+
+/* ====== Columns ====== */
+const columns: DataTableColumn<ToolDefinition>[] = [
+  {
+    title: '名称',
+    key: 'name',
+    width: 140,
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '描述',
+    key: 'description',
+    ellipsis: { tooltip: true },
+    minWidth: 200,
+  },
+  {
+    title: '类别',
+    key: 'category',
+    width: 120,
+    render: (row) =>
+      h('span', {
+        style: `display:inline-block;padding:1px 10px;border-radius:10px;font-size:12px;background:${categoryColors[row.category] || '#888'};color:#fff;line-height:20px;`,
+      }, categoryLabels[row.category] || row.category),
+  },
+  {
+    title: '状态',
+    key: 'enabled',
+    width: 90,
+    render: (row) =>
+      h('n-switch', {
+        value: row.enabled,
+        loading: toggling.value.has(row.id),
+        'onUpdate:value': () => handleToggle(row),
+        size: 'small',
+      }),
+  },
+  {
+    title: '配置',
+    key: 'config',
+    width: 80,
+    render: (row) =>
+      h('n-button', {
+        size: 'tiny',
+        quaternary: true,
+        onClick: () => openConfig(row),
+      }, { default: () => '配置' }),
+  },
+]
+</script>
+
+<template>
+  <n-space vertical size="large">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <n-h3 style="margin: 0;">工具管理</n-h3>
+    </div>
+
+    <n-data-table
+      :columns="columns"
+      :data="tools"
+      :loading="loading"
+      :bordered="true"
+      :single-line="false"
+      :row-key="(row: ToolDefinition) => row.id"
+      striped
+    />
+
+    <!-- Config Modal -->
+    <n-modal
+      v-model:show="showConfigModal"
+      :title="editName || '工具配置'"
+      preset="card"
+      style="width: 520px; max-width: 90vw;"
+      :mask-closable="false"
+      :segmented="true"
+    >
+      <n-form v-if="editingTool">
+        <n-form-item label="工具名称">
+          <n-input v-model:value="editName" :disabled="saving" />
+        </n-form-item>
+        <n-form-item label="工具描述">
+          <n-input v-model:value="editDescription" type="textarea" :rows="2" :disabled="saving" />
+        </n-form-item>
+
+        <n-divider />
+
+        <!-- web_search: API Provider + Key -->
+        <template v-if="editingTool.id === 'web_search'">
+          <n-form-item label="API 提供商">
+            <n-radio-group v-model:value="configApiProvider" :disabled="saving">
+              <n-radio-button value="tavily">Tavily</n-radio-button>
+              <n-radio-button value="firecrawl">Firecrawl</n-radio-button>
+            </n-radio-group>
+          </n-form-item>
+          <n-form-item label="API Key">
+            <n-input
+              v-model:value="configApiKey"
+              type="password"
+              show-password-on="click"
+              placeholder="输入 API Key"
+              :disabled="saving"
+            />
+          </n-form-item>
+        </template>
+
+        <!-- image_generation: API Key -->
+        <template v-else-if="editingTool.id === 'image_generation'">
+          <n-form-item label="API Key">
+            <n-input
+              v-model:value="configApiKey"
+              type="password"
+              show-password-on="click"
+              placeholder="输入 API Key"
+              :disabled="saving"
+            />
+          </n-form-item>
+        </template>
+
+        <!-- Other tools: generic API Key -->
+        <template v-else>
+          <n-empty description="此工具无需额外配置" style="padding: 16px 0;" />
+        </template>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px;">
+          <n-button @click="showConfigModal = false" :disabled="saving">取消</n-button>
+          <n-button type="primary" :loading="saving" @click="handleSaveConfig">保存</n-button>
+        </div>
+      </n-form>
+    </n-modal>
+  </n-space>
+</template>
