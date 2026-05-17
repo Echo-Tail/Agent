@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 公开端点
                         .requestMatchers("/v1/login", "/v1/register").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 管理员端点
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
