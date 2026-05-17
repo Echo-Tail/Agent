@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, ref, onMounted } from 'vue'
+import { h, ref, watch, onMounted } from 'vue'
 import type { DataTableColumn, SelectOption } from 'naive-ui'
 import { useMessage, useDialog, NButton } from 'naive-ui'
 import { listModelsApi, createModelApi, updateModelApi, deleteModelApi, validateModelApi } from '../../api/model'
@@ -26,6 +26,18 @@ const tokenOptions: SelectOption[] = [
 ]
 
 onMounted(fetchModels)
+
+// 供应商切换时自动设定 API 版本路径
+watch(() => editingModel.value.provider, (provider) => {
+  if (!provider || isEditMode.value) return
+  const versionMap: Record<string, string> = {
+    openai: '/v1',
+    deepseek: '',
+    qwen: '/v1',
+    other: '/v1',
+  }
+  editingModel.value.apiVersion = versionMap[provider] || '/v1'
+})
 
 async function fetchModels() {
   loading.value = true
@@ -304,8 +316,8 @@ const columns: DataTableColumn<AiModel>[] = [
             </n-form-item>
           </n-gi>
           <n-gi>
-            <n-form-item label="API 版本路径">
-              <n-input v-model:value="editingModel.apiVersion" placeholder="/v1" :disabled="saving" />
+            <n-form-item label="温度">
+              <n-input-number v-model:value="editingModel.temperature" :min="0" :max="2" :step="0.1" style="width: 100%;" />
             </n-form-item>
           </n-gi>
         </n-grid>
@@ -316,11 +328,6 @@ const columns: DataTableColumn<AiModel>[] = [
           <n-gi>
             <n-form-item label="最大 Token">
               <n-select v-model:value="editingModel.maxTokens" :options="tokenOptions" :disabled="saving" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="温度">
-              <n-input-number v-model:value="editingModel.temperature" :min="0" :max="2" :step="0.1" style="width: 100%;" />
             </n-form-item>
           </n-gi>
         </n-grid>

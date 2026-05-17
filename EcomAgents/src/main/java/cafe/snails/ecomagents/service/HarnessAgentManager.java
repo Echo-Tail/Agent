@@ -149,7 +149,16 @@ public class HarnessAgentManager {
         AiModel aiModel = findModel(agent);
         String apiUrl = aiModel != null ? aiModel.getApiUrl() : null;
         if (apiUrl == null) apiUrl = llmConfig.getApiUrl();
-        return extractPath(apiUrl);
+
+        String path = extractPath(apiUrl);
+        if (!path.isBlank()) return path;
+
+        // Bare domain URL — use apiVersion (if set) + /chat/completions
+        String version = aiModel != null ? aiModel.getApiVersion() : null;
+        if (version != null && !version.isBlank()) {
+            return version + "/chat/completions";
+        }
+        return "/chat/completions";
     }
 
     private AiModel findModel(Agent agent) {
