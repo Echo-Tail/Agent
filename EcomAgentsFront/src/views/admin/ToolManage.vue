@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { h, ref, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { useMessage, NSwitch, NButton } from 'naive-ui'
 import type { DataTableColumn } from 'naive-ui'
 import { listToolsApi, updateToolApi, toggleToolApi, saveToolConfigApi } from '../../api/tool'
 import type { ToolDefinition } from '../../api/tool'
@@ -172,7 +172,7 @@ const columns: DataTableColumn<ToolDefinition>[] = [
     key: 'enabled',
     width: 90,
     render: (row) =>
-      h('n-switch', {
+      h(NSwitch, {
         value: row.enabled,
         loading: toggling.value.has(row.id),
         'onUpdate:value': () => handleToggle(row),
@@ -184,9 +184,9 @@ const columns: DataTableColumn<ToolDefinition>[] = [
     key: 'config',
     width: 80,
     render: (row) =>
-      h('n-button', {
+      h(NButton, {
         size: 'tiny',
-        quaternary: true,
+        type: 'primary',
         onClick: () => openConfig(row),
       }, { default: () => '配置' }),
   },
