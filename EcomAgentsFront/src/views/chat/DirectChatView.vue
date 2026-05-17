@@ -4,15 +4,16 @@ import { useRoute } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { useChatStore } from '../../stores/chat'
 import { useAgentStore } from '../../stores/agent'
-import { getSystemAgentApi } from '../../api/agent'
+import { getSystemAgentApi, getAgentApi, updateAgentApi } from '../../api/agent'
 import { listToolsApi } from '../../api/tool'
 import { uploadFileApi } from '../../api/file'
-import { getAgentApi } from '../../api/agent'
+import { listModelsApi } from '../../api/model'
 import MessageBubble from '../../components/MessageBubble.vue'
 import AgentCard from '../../components/AgentCard.vue'
 import type { Agent } from '../../types/agent'
-import type { FileRecord } from '../../types/api'
+import type { FileRecord, AiModel } from '../../types/api'
 import type { ToolDefinition } from '../../api/tool'
+import type { DropdownOption } from 'naive-ui'
 
 const route = useRoute()
 const message = useMessage()
@@ -38,6 +39,61 @@ async function loadSystemAgent() {
     systemAgentError.value = true
   } finally {
     systemAgentLoading.value = false
+  }
+}
+
+/* ====== Model display and switching ====== */
+const models = ref<AiModel[]>([])
+
+async function loadModels() {
+  if (models.value.length > 0) return
+  try {
+    const res = await listModelsApi()
+    if (res.data.code === 200) {
+      models.value = res.data.data ?? []
+    }
+  } catch { /* ignore */ }
+}
+
+const currentModelLabel = computed(() => {
+  if (!systemAgent.value?.modelId) return ''
+  const m = models.value.find((x) => x.id === systemAgent.value!.modelId)
+  return m ? `${m.name} (${m.provider})` : ''
+})
+
+const modelMenuOptions = computed(() => {
+  const grouped = new Map<string, DropdownOption[]>()
+  for (const m of models.value) {
+    if (!grouped.has(m.provider)) {
+      grouped.set(m.provider, [])
+    }
+    grouped.get(m.provider)!.push({
+      label: m.name,
+      key: `model_${m.id}`,
+    })
+  }
+  return Array.from(grouped.entries()).map(([provider, children]) => ({
+    label: provider,
+    key: `provider_${provider}`,
+    type: 'submenu' as const,
+    children,
+  }))
+})
+
+async function handleModelSelect(key: string) {
+  if (!key.startsWith('model_')) return
+  const modelId = Number(key.slice(6))
+  if (!systemAgent.value || modelId === systemAgent.value.modelId) return
+  try {
+    const res = await updateAgentApi(systemAgent.value.id, { modelId })
+    if (res.data.code === 200) {
+      systemAgent.value = res.data.data
+      message.success('模型已切换')
+    } else {
+      message.error(res.data.message || '模型切换失败')
+    }
+  } catch {
+    message.error('模型切换失败')
   }
 }
 
@@ -230,6 +286,7 @@ function handleStop() {
 /* ====== Init ====== */
 async function init() {
   fetchTools()
+  loadModels()
   agentStore.fetchAgents()
   await loadSystemAgent()
 
@@ -280,12 +337,24 @@ init()
     <!-- Breadcrumb bar -->
     <div class="breadcrumb-bar">
       <div class="breadcrumb-left">
-        <span
-          v-if="isDirectMode"
-          class="breadcrumb-item active"
-        >
+        <span v-if="isDirectMode" class="breadcrumb-item active">
           💬 默认对话
         </span>
+        <n-dropdown
+          v-if="currentModelLabel && isDirectMode"
+          trigger="click"
+          :options="modelMenuOptions"
+          @select="handleModelSelect"
+        >
+          <span class="model-pill">
+            {{ currentModelLabel }}
+            <n-icon size="12">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 10l5 5 5-5z"/>
+              </svg>
+            </n-icon>
+          </span>
+        </n-dropdown>
         <template v-else>
           <span class="breadcrumb-item link" @click="handleSwitchToDirect">
             💬 默认对话
@@ -773,5 +842,23 @@ init()
 
 .agent-card-wrapper {
   cursor: pointer;
+}
+
+.model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: var(--tag-bg, #f0f0f0);
+  color: var(--text-color, #666);
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.model-pill:hover {
+  background: var(--hover-bg, #e0e0e0);
 }
 </style>
