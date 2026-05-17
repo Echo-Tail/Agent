@@ -1,14 +1,17 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
+import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
@@ -29,6 +32,8 @@ public class KnowledgeBaseService {
 
     private final KnowledgeBaseRepository kbRepository;
     private final KnowledgeDocumentRepository docRepository;
+    private final AgentRepository agentRepository;
+    private final WorkspaceInitService workspaceInitService;
 
     // ========== Knowledge Base CRUD ==========
 
@@ -63,11 +68,18 @@ public class KnowledgeBaseService {
                 .orElseGet(() -> ApiResponse.error(404, "知识库不存在"));
     }
 
-    /** 删除知识库及其下所有文档 */
+    /** 删除知识库及其下所有文档，同步清除 Agent workspace 中的知识库内容 */
+    @Transactional
     public ApiResponse<Void> deleteKnowledgeBase(Long id) {
         if (!kbRepository.existsById(id)) {
             return ApiResponse.error(404, "知识库不存在");
         }
+        // 先同步清空关联 Agent 的知识库内容
+        List<Agent> agents = agentRepository.findByKnowledgeBaseId(id);
+        for (Agent agent : agents) {
+            workspaceInitService.updateKnowledgeMd(agent.getId(), null);
+        }
+
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(id);
         docRepository.deleteAll(docs);
         kbRepository.deleteById(id);
@@ -114,7 +126,12 @@ public class KnowledgeBaseService {
                 .uploadedBy(userId)
                 .build();
 
-        return ApiResponse.success("文档上传成功", docRepository.save(doc));
+        KnowledgeDocument saved = docRepository.save(doc);
+
+        // 同步知识库内容到关联 Agent workspace
+        syncKnowledgeBaseToAgents(kbId);
+
+        return ApiResponse.success("文档上传成功", saved);
     }
 
     /** 删除指定知识库下的某个文档 */
@@ -126,6 +143,10 @@ public class KnowledgeBaseService {
             return ApiResponse.error(404, "文档不存在");
         }
         docRepository.deleteById(docId);
+
+        // 同步知识库内容到关联 Agent workspace
+        syncKnowledgeBaseToAgents(kbId);
+
         return ApiResponse.success("文档已删除", null);
     }
 
@@ -170,6 +191,49 @@ public class KnowledgeBaseService {
                     .append(snippet).append("\n\n");
         }
         return context.toString();
+    }
+
+    // ========== Workspace Sync ==========
+
+    /**
+     * 构建知识库的完整内容文本，用于写入 workspace knowledge/KNOWLEDGE.md。
+     * 包含知识库名称和所有文档的完整内容。
+     */
+    public String buildKnowledgeMdContent(Long kbId) {
+        var kbOpt = kbRepository.findById(kbId);
+        if (kbOpt.isEmpty()) return "";
+        KnowledgeBase kb = kbOpt.get();
+        List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId);
+        if (docs.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("## ").append(kb.getName()).append("\n\n");
+        if (kb.getDescription() != null && !kb.getDescription().isBlank()) {
+            sb.append(kb.getDescription()).append("\n\n");
+        }
+        sb.append("共 ").append(docs.size()).append(" 篇文档\n\n");
+
+        for (KnowledgeDocument doc : docs) {
+            sb.append("### ").append(doc.getFileName()).append("\n\n");
+            if (doc.getContent() != null && !doc.getContent().isBlank()) {
+                sb.append(doc.getContent()).append("\n\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * 同步指定知识库到所有关联的 Agent workspace。
+     * 当知识库文档新增/删除时调用。
+     */
+    @Transactional
+    public void syncKnowledgeBaseToAgents(Long kbId) {
+        String content = buildKnowledgeMdContent(kbId);
+        List<Agent> agents = agentRepository.findByKnowledgeBaseId(kbId);
+        for (Agent agent : agents) {
+            workspaceInitService.updateKnowledgeMd(agent.getId(), content);
+            log.debug("Synced KB {} to agent {}", kbId, agent.getId());
+        }
     }
 
     // ========== Helpers ==========

@@ -121,6 +121,7 @@ onMounted(() => {
     <!-- Setup error -->
     <n-alert v-if="setupError" type="error" :title="setupError" closable @close="setupError = ''" />
 
+    <n-spin :show="loading" size="large">
     <!-- Stats cards -->
     <n-grid :cols="5" :x-gap="12" v-if="stats">
       <n-gi v-for="card in getStatsCards()" :key="card!.label">
@@ -209,6 +210,7 @@ onMounted(() => {
       :row-key="(row: LogEntry) => row.id"
       :max-height="520"
     />
+    </n-spin>
 
     <!-- Detail modal -->
     <n-modal v-model:show="showDetail" preset="card" title="日志详情"

@@ -4,7 +4,9 @@ import cafe.snails.ecomagents.dto.*;
 import cafe.snails.ecomagents.model.User;
 import cafe.snails.ecomagents.repository.InviteCodeRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
+import cafe.snails.ecomagents.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +23,11 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final InviteCodeRepository inviteCodeRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     /**
-     * 用户登录。校验用户名、密码和账号状态，登录成功返回 mock token。
+     * 用户登录。校验用户名、密码和账号状态，登录成功返回 JWT token。
      */
     public ApiResponse<LoginResponse> login(LoginRequest req) {
         var userOpt = userRepository.findByUsername(req.getUsername());
@@ -31,7 +35,7 @@ public class UserService {
             return ApiResponse.error(401, "用户名或密码错误");
         }
         User user = userOpt.get();
-        if (!user.getPassword().equals(req.getPassword())) {
+        if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             return ApiResponse.error(401, "用户名或密码错误");
         }
         if (!"active".equals(user.getStatus())) {
@@ -39,7 +43,7 @@ public class UserService {
         }
         LoginResponse resp = new LoginResponse();
         resp.setUser(toDTO(user));
-        resp.setToken("mock-token-" + user.getId());
+        resp.setToken(jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole()));
         return ApiResponse.success("登录成功", resp);
     }
 
@@ -59,7 +63,7 @@ public class UserService {
         User user = User.builder()
                 .username(req.getUsername())
                 .email(req.getEmail() != null ? req.getEmail() : "")
-                .password(req.getPassword())
+                .password(passwordEncoder.encode(req.getPassword()))
                 .role("user")
                 .status("active")
                 .inviteCode(req.getInviteCode())

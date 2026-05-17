@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.FileRecord;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -29,9 +30,9 @@ public class FileController {
      * 上传文件，支持 TXT / MD / PDF / PNG / JPG / JSON / CSV / XML 等格式。
      */
     @PostMapping("/files/upload")
-    public ApiResponse<FileRecord> uploadFile(@RequestParam("file") MultipartFile file) {
-        // TODO: get userId from auth context
-        return fileStorageService.uploadFile(file, 1L);
+    public ApiResponse<FileRecord> uploadFile(@RequestParam("file") MultipartFile file,
+                                              @CurrentUserId Long userId) {
+        return fileStorageService.uploadFile(file, userId);
     }
 
     /**

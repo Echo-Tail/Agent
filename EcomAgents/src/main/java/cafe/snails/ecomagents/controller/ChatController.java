@@ -1,5 +1,6 @@
 package cafe.snails.ecomagents.controller;
 
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.HarnessChatService;
 import cafe.snails.ecomagents.service.SessionMapper;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +37,8 @@ public class ChatController {
     @PostMapping(value = "/{agentId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(
             @PathVariable("agentId") Long agentId,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body,
+            @CurrentUserId Long userId) {
 
         Long dbSessionId = body.get("sessionId") != null
                 ? Long.valueOf(body.get("sessionId").toString()) : null;
@@ -47,11 +49,8 @@ public class ChatController {
             return errorEmitter("消息内容不能为空");
         }
 
-        log.info("streamChat request: agentId={}, dbSessionId={}, contentLen={}",
-                agentId, dbSessionId, content.length());
-
-        // TODO: 替换为从 JWT token 中提取真实 userId
-        Long userId = 1L;
+        log.info("streamChat request: agentId={}, dbSessionId={}, contentLen={}, userId={}",
+                agentId, dbSessionId, content.length(), userId);
 
         // 通过 SessionMapper 获取或创建 HarnessAgent sessionId（UUID 格式）
         String harnessSessionId = sessionMapper.resolveHarnessSessionId(dbSessionId, agentId, userId);

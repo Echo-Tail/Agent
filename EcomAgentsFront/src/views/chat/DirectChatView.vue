@@ -411,6 +411,13 @@ init()
           <div v-if="chat.isStreaming" class="streaming-cursor">
             <span class="cursor-dot">▍</span>
           </div>
+          <!-- Tool call visualization -->
+          <div v-if="chat.currentToolCalls.length > 0" class="tool-calls-indicator">
+            <div v-for="tool in chat.currentToolCalls" :key="tool" class="tool-call-chip">
+              <span class="tool-call-spinner"></span>
+              <span class="tool-call-name">{{ tool }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -669,6 +676,53 @@ init()
 
 @keyframes blink {
   50% { opacity: 0; }
+}
+
+/* ── Tool call indicator ── */
+.tool-calls-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 46px 4px;
+  align-items: center;
+}
+
+.tool-call-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tag-bg, #f0f0f0);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  padding: 4px 10px 4px 8px;
+  font-size: 12px;
+  color: var(--text-color, #666);
+  animation: toolFadeIn 0.25s ease-out;
+}
+
+.tool-call-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color, #ddd);
+  border-top-color: #C8815F;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.tool-call-name {
+  font-weight: 500;
+  color: var(--text-color, #333);
+  white-space: nowrap;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes toolFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Input ── */

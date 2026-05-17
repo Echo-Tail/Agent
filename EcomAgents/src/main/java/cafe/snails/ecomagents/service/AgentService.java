@@ -86,10 +86,10 @@ public class AgentService {
 
     /** 创建新 Agent，自动填充创建时间和创建人，并初始化 workspace */
     @Transactional
-    public ApiResponse<Agent> createAgent(Agent agent) {
+    public ApiResponse<Agent> createAgent(Agent agent, Long userId) {
         agent.setId(null);
         agent.setCreatedAt(LocalDate.now());
-        agent.setCreatedBy(1L);
+        agent.setCreatedBy(userId);
         if (agent.getStatus() == null) agent.setStatus("active");
         Agent saved = agentRepository.save(agent);
 

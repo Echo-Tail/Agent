@@ -3,6 +3,8 @@ package cafe.snails.ecomagents.service;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
+import cafe.snails.ecomagents.model.Agent;
+import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,13 +32,17 @@ class KnowledgeBaseServiceTest {
     private KnowledgeBaseRepository kbRepository;
     @Mock
     private KnowledgeDocumentRepository docRepository;
+    @Mock
+    private AgentRepository agentRepository;
+    @Mock
+    private WorkspaceInitService workspaceInitService;
 
     private KnowledgeBaseService service;
     private KnowledgeBase sampleKb;
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeBaseService(kbRepository, docRepository);
+        service = new KnowledgeBaseService(kbRepository, docRepository, agentRepository, workspaceInitService);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();
@@ -92,6 +98,7 @@ class KnowledgeBaseServiceTest {
     @Test
     void deleteKnowledgeBase_shouldDeleteDocsAndKb() {
         when(kbRepository.existsById(1L)).thenReturn(true);
+        when(agentRepository.findByKnowledgeBaseId(1L)).thenReturn(List.of());
         when(docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(1L)).thenReturn(List.of());
         ApiResponse<Void> result = service.deleteKnowledgeBase(1L);
         assertEquals(200, result.getCode());

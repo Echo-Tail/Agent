@@ -28,7 +28,7 @@ public class User {
     @Column(length = 100)
     private String email;
 
-    /** 登录密码（明文存储，后续应改为加密存储） */
+    /** 登录密码（BCrypt 加密存储） */
     @Column(nullable = false, length = 100)
     private String password;
 

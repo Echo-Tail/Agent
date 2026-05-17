@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Agent;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.AgentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -38,8 +39,9 @@ public class AgentController {
 
     /** 创建 Agent */
     @PostMapping("/agents")
-    public ApiResponse<Agent> createAgent(@RequestBody Agent agent) {
-        return agentService.createAgent(agent);
+    public ApiResponse<Agent> createAgent(@RequestBody Agent agent,
+                                          @CurrentUserId Long userId) {
+        return agentService.createAgent(agent, userId);
     }
 
     /** 更新 Agent */

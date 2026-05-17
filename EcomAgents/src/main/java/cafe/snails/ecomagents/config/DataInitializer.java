@@ -9,6 +9,7 @@ import cafe.snails.ecomagents.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,44 +28,48 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final InviteCodeRepository inviteCodeRepository;
     private final ToolConfigRepository toolConfigRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional
     public void run(String... args) {
-        if (userRepository.count() > 0) {
-            log.info("数据库已存在数据，跳过初始化");
-            return;
+        // 重置管理员账号：更新密码确保为 BCrypt 编码
+        User admin = userRepository.findByUsername("admin").orElse(null);
+        if (admin == null) {
+            log.info("创建管理员账号...");
+            admin = User.builder()
+                    .username("admin").email("admin@ecomagents.com")
+                    .password(passwordEncoder.encode("123456")).role("admin").status("active")
+                    .inviteCode("ADMIN001").createdAt(LocalDate.of(2024, 1, 1)).build();
+        } else {
+            log.info("重置管理员密码...");
+            admin.setPassword(passwordEncoder.encode("123456"));
+        }
+        userRepository.save(admin);
+
+        // 删除除管理员外的所有用户
+        Long adminId = admin.getId();
+        var toDelete = userRepository.findAll().stream()
+                .filter(u -> !u.getId().equals(adminId)).toList();
+        if (!toDelete.isEmpty()) {
+            userRepository.deleteAll(toDelete);
+            log.info("已删除 {} 个非管理员用户", toDelete.size());
         }
 
-        log.info("初始化种子数据...");
+        // 初始化邀请码（仅当不存在时）
+        if (inviteCodeRepository.count() == 0) {
+            log.info("初始化邀请码...");
+            inviteCodeRepository.save(InviteCode.builder().code("FREE001")
+                    .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
+            inviteCodeRepository.save(InviteCode.builder().code("FREE002")
+                    .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
+            inviteCodeRepository.save(InviteCode.builder().code("EC2026")
+                    .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
+            inviteCodeRepository.save(InviteCode.builder().code("AGENT01")
+                    .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
+        }
 
-        userRepository.save(User.builder()
-                .username("admin").email("admin@ecomagents.com")
-                .password("123456").role("admin").status("active")
-                .inviteCode("ADMIN001").createdAt(LocalDate.of(2024, 1, 1)).build());
-        userRepository.save(User.builder()
-                .username("张三").email("zhangsan@example.com")
-                .password("123456").role("user").status("active")
-                .inviteCode("INVITE001").createdAt(LocalDate.of(2024, 1, 15)).build());
-        userRepository.save(User.builder()
-                .username("李四").email("lisi@example.com")
-                .password("123456").role("user").status("active")
-                .inviteCode("INVITE002").createdAt(LocalDate.of(2024, 2, 1)).build());
-
-        inviteCodeRepository.save(InviteCode.builder().code("INVITE001")
-                .used(true).usedBy("张三").usedByUserId(2L)
-                .createdAt(LocalDate.of(2024, 1, 10)).build());
-        inviteCodeRepository.save(InviteCode.builder().code("FREE001")
-                .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
-        inviteCodeRepository.save(InviteCode.builder().code("FREE002")
-                .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
-        inviteCodeRepository.save(InviteCode.builder().code("EC2026")
-                .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
-        inviteCodeRepository.save(InviteCode.builder().code("AGENT01")
-                .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
-
-        log.info("种子数据初始化完成");
-
+        log.info("数据初始化完成");
         initTools();
     }
 

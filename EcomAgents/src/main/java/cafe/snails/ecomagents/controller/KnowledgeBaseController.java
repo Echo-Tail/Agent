@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.controller;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.KnowledgeBaseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -37,9 +38,9 @@ public class KnowledgeBaseController {
 
     /** 创建知识库 */
     @PostMapping("/knowledge-bases")
-    public ApiResponse<KnowledgeBase> createKnowledgeBase(@RequestBody KnowledgeBase kb) {
-        // TODO: get userId from auth context
-        return kbService.createKnowledgeBase(kb, 1L);
+    public ApiResponse<KnowledgeBase> createKnowledgeBase(@RequestBody KnowledgeBase kb,
+                                                         @CurrentUserId Long userId) {
+        return kbService.createKnowledgeBase(kb, userId);
     }
 
     /** 更新知识库 */
@@ -66,9 +67,9 @@ public class KnowledgeBaseController {
     @PostMapping("/knowledge-bases/{kbId}/documents")
     public ApiResponse<KnowledgeDocument> uploadDocument(
             @PathVariable("kbId") Long kbId,
-            @RequestParam("file") MultipartFile file) {
-        // TODO: get userId from auth context
-        return kbService.uploadDocument(kbId, file, 1L);
+            @RequestParam("file") MultipartFile file,
+            @CurrentUserId Long userId) {
+        return kbService.uploadDocument(kbId, file, userId);
     }
 
     /** 删除知识库下的某个文档 */

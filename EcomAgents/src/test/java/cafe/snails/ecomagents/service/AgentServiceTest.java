@@ -81,7 +81,7 @@ class AgentServiceTest {
             a.setId(2L);
             return a;
         });
-        ApiResponse<Agent> result = service.createAgent(input);
+        ApiResponse<Agent> result = service.createAgent(input, 1L);
         assertEquals(200, result.getCode());
         assertNotNull(result.getData().getCreatedAt());
         assertEquals("active", result.getData().getStatus());
