@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { h, ref, onMounted } from 'vue'
+import { h, ref, onMounted, defineExpose } from 'vue'
 import { useMessage, NSwitch, NButton } from 'naive-ui'
-import type { DataTableColumn } from 'naive-ui'
+import type { DataTableColumn, SelectOption } from 'naive-ui'
 import { listToolsApi, updateToolApi, toggleToolApi, saveToolConfigApi } from '../../api/tool'
+import { listModelsApi } from '../../api/model'
 import type { ToolDefinition } from '../../api/tool'
+import type { AiModel } from '../../types/api'
 
 const message = useMessage()
 
@@ -18,6 +20,9 @@ const editName = ref('')
 const editDescription = ref('')
 const configApiProvider = ref<'tavily' | 'firecrawl' | ''>('')
 const configApiKey = ref('')
+const configModelId = ref<number | null>(null)
+const models = ref<SelectOption[]>([])
+const loadingModels = ref(false)
 const saving = ref(false)
 
 const categoryLabels: Record<string, string> = {
@@ -75,7 +80,7 @@ async function handleToggle(tool: ToolDefinition) {
 }
 
 /* ====== Edit/Config modal ====== */
-function openConfig(tool: ToolDefinition) {
+async function openConfig(tool: ToolDefinition) {
   editingTool.value = tool
   editName.value = tool.name
   editDescription.value = tool.description
@@ -84,11 +89,42 @@ function openConfig(tool: ToolDefinition) {
     const cfg = tool.configJson ? JSON.parse(tool.configJson) : {}
     configApiProvider.value = cfg.provider || ''
     configApiKey.value = cfg.apiKey || ''
+    configModelId.value = cfg.modelId ?? null
   } catch {
     configApiProvider.value = ''
     configApiKey.value = ''
+    configModelId.value = null
   }
   showConfigModal.value = true
+
+  // Load models for image_generation
+  if (tool.id === 'image_generation') {
+    await fetchEnabledModels()
+  }
+}
+
+async function fetchEnabledModels() {
+  loadingModels.value = true
+  try {
+    const res = await listModelsApi()
+    if (res.data.code === 200) {
+      const list: AiModel[] = res.data.data ?? []
+      models.value = list
+        .filter((m) => m.enabled)
+        .map((m) => ({
+          label: `${m.name}（${m.provider} · ${m.modelName}）`,
+          value: m.id,
+        }))
+    } else {
+      models.value = []
+      message.error(res.data.message || '加载模型列表失败')
+    }
+  } catch {
+    models.value = []
+    message.error('网络异常，无法加载模型列表')
+  } finally {
+    loadingModels.value = false
+  }
 }
 
 async function handleSaveConfig() {
@@ -116,10 +152,10 @@ async function handleSaveConfig() {
         provider: configApiProvider.value || 'tavily',
         apiKey: configApiKey.value,
       })
-    } else if (editingTool.value.id === 'image_generation' && configApiKey.value) {
-      configJson = JSON.stringify({
-        apiKey: configApiKey.value,
-      })
+    } else if (editingTool.value.id === 'image_generation') {
+      if (configModelId.value != null) {
+        configJson = JSON.stringify({ modelId: configModelId.value })
+      }
     } else if (configApiKey.value) {
       configJson = JSON.stringify({ apiKey: configApiKey.value })
     }
@@ -143,6 +179,9 @@ async function handleSaveConfig() {
     saving.value = false
   }
 }
+
+/* ====== Expose for testing ====== */
+defineExpose({ openConfig, fetchEnabledModels, fetchTools, showConfigModal, models, loadingModels, configModelId, configApiKey })
 
 /* ====== Columns ====== */
 const columns: DataTableColumn<ToolDefinition>[] = [
@@ -247,17 +286,25 @@ const columns: DataTableColumn<ToolDefinition>[] = [
           </n-form-item>
         </template>
 
-        <!-- image_generation: API Key -->
+        <!-- image_generation: Model selector only (API Key comes from model config) -->
         <template v-else-if="editingTool.id === 'image_generation'">
-          <n-form-item label="API Key">
-            <n-input
-              v-model:value="configApiKey"
-              type="password"
-              show-password-on="click"
-              placeholder="输入 API Key"
-              :disabled="saving"
+          <n-alert type="info" :bordered="false" style="margin-bottom: 12px;">
+            选择模型管理中已配置的图片生成模型，API Key 等相关信息沿用模型配置。
+          </n-alert>
+          <n-form-item label="使用模型">
+            <n-select
+              v-model:value="configModelId"
+              :options="models"
+              :loading="loadingModels"
+              :disabled="saving || loadingModels"
+              filterable
+              placeholder="选择图片生成模型"
+              clearable
             />
           </n-form-item>
+          <n-alert v-if="models.length === 0 && !loadingModels" type="warning" :bordered="false">
+            模型管理中暂无已启用的模型，请先<a href="#/admin/models" style="text-decoration: underline;">添加模型</a>。
+          </n-alert>
         </template>
 
         <!-- Other tools: generic API Key -->
