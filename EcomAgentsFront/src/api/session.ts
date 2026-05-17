@@ -51,16 +51,24 @@ export function deleteFolderApi(id: number) {
 
 /* ====== SSE Streaming ====== */
 
+export interface StreamChatCallbacks {
+  onToken: (text: string) => void
+  onDone: (fullText: string) => void
+  onError: (message: string) => void
+  onReasoning?: (content: string) => void
+  onToolCall?: (tool: string) => void
+  onToolResult?: (tool: string, summary?: string) => void
+}
+
 export async function streamChat(
   agentId: number,
   sessionId: number,
   content: string,
-  onToken: (text: string) => void,
-  onDone: (fullText: string) => void,
-  onError: (message: string) => void,
+  callbacks: StreamChatCallbacks,
   abortSignal?: AbortSignal,
   timeoutMs: number = STREAM_TIMEOUT,
 ): Promise<void> {
+  const { onToken, onDone, onError, onReasoning, onToolCall, onToolResult } = callbacks
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
 
   // Timeout controller: abort fetch when time runs out
@@ -130,6 +138,12 @@ export async function streamChat(
             clearTimeout(timeoutId)
             completed = true
             onError(event.message)
+          } else if (event.type === 'reasoning') {
+            onReasoning?.(event.content)
+          } else if (event.type === 'tool_call') {
+            onToolCall?.(event.tool)
+          } else if (event.type === 'tool_result') {
+            onToolResult?.(event.tool, event.summary)
           }
         } catch {
           console.warn('streamChat: malformed SSE JSON, skipping line:', trimmed)

@@ -50,4 +50,22 @@ export interface SseErrorEvent {
   message: string
 }
 
-export type SseEvent = SseTokenEvent | SseDoneEvent | SseErrorEvent
+export interface SseReasoningEvent {
+  type: 'reasoning'
+  content: string
+}
+
+export interface SseToolCallEvent {
+  type: 'tool_call'
+  tool: string
+  status: string
+}
+
+export interface SseToolResultEvent {
+  type: 'tool_result'
+  tool: string
+  status: string
+  summary?: string
+}
+
+export type SseEvent = SseTokenEvent | SseDoneEvent | SseErrorEvent | SseReasoningEvent | SseToolCallEvent | SseToolResultEvent

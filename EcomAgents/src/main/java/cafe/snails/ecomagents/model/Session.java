@@ -33,6 +33,10 @@ public class Session {
     /** 所属文件夹 ID，为 null 表示未归档 */
     private Long folderId;
 
+    /** HarnessAgent 使用的会话 ID（UUID 格式：sess-{agentId}-{uuid}） */
+    @Column(name = "harness_session_id", length = 100)
+    private String harnessSessionId;
+
     /** 标签列表 */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "session_tags", joinColumns = @JoinColumn(name = "session_id"))

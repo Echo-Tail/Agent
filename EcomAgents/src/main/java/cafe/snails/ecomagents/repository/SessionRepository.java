@@ -19,6 +19,9 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     /** 查找未归入任何文件夹的会话 */
     List<Session> findByFolderIdIsNull();
 
+    /** 根据 HarnessAgent 会话 ID 查找会话 */
+    Optional<Session> findByHarnessSessionId(String harnessSessionId);
+
     /** 按 ID 查找会话并同时加载 messages 集合（避免 LazyInitializationException） */
     @Query("SELECT s FROM Session s LEFT JOIN FETCH s.messages WHERE s.id = :id")
     Optional<Session> findByIdWithMessages(@Param("id") Long id);

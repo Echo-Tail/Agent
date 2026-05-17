@@ -51,7 +51,6 @@ replay_pid*
 *.bat
 .issue
 .issues
-CLAUDE.md
 .claude
 CONTEXT.md
 

@@ -19,7 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * {@link AgentService} 的单元测试，覆盖 Agent CRUD 业务逻辑。
+ * {@link AgentService} 的单元测试，覆盖 Agent CRUD 业务逻辑及 workspace 同步。
  */
 @ExtendWith(MockitoExtension.class)
 class AgentServiceTest {
@@ -30,13 +30,16 @@ class AgentServiceTest {
     @Mock
     private AiModelRepository aiModelRepository;
 
+    @Mock
+    private WorkspaceInitService workspaceInitService;
+
     private AgentService service;
 
     private Agent sampleAgent;
 
     @BeforeEach
     void setUp() {
-        service = new AgentService(repository, aiModelRepository);
+        service = new AgentService(repository, aiModelRepository, workspaceInitService);
         sampleAgent = Agent.builder()
                 .id(1L).name("客服助手").icon("bi-headset")
                 .description("客服Agent")
@@ -71,7 +74,7 @@ class AgentServiceTest {
     }
 
     @Test
-    void createAgent_shouldSetDefaults() {
+    void createAgent_shouldSetDefaultsAndInitWorkspace() {
         Agent input = Agent.builder().name("New Agent").build();
         when(repository.save(any())).thenAnswer(i -> {
             Agent a = i.getArgument(0);
@@ -82,6 +85,7 @@ class AgentServiceTest {
         assertEquals(200, result.getCode());
         assertNotNull(result.getData().getCreatedAt());
         assertEquals("active", result.getData().getStatus());
+        verify(workspaceInitService).initWorkspace(any());
     }
 
     @Test
@@ -93,6 +97,17 @@ class AgentServiceTest {
         assertEquals("New Name", result.getData().getName());
         assertEquals(2L, result.getData().getModelId());
         assertEquals("bi-robot", result.getData().getIcon());
+        // No prompt/knowledge change → workspace not updated
+        verify(workspaceInitService, never()).updateAgentsMd(any(), any());
+    }
+
+    @Test
+    void updateAgent_withSystemPrompt_shouldSyncAgentsMd() {
+        when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        Agent updates = Agent.builder().systemPrompt("新的系统提示词").build();
+        service.updateAgent(1L, updates);
+        verify(workspaceInitService).updateAgentsMd(eq(1L), eq("新的系统提示词"));
     }
 
     @Test
@@ -103,11 +118,12 @@ class AgentServiceTest {
     }
 
     @Test
-    void deleteAgent_shouldDelete() {
+    void deleteAgent_shouldDeleteAndCleanWorkspace() {
         when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
         ApiResponse<Agent> result = service.deleteAgent(1L);
         assertEquals(200, result.getCode());
         verify(repository).delete(sampleAgent);
+        verify(workspaceInitService).deleteWorkspace(1L);
     }
 
     @Test
@@ -116,5 +132,6 @@ class AgentServiceTest {
         ApiResponse<Agent> result = service.deleteAgent(99L);
         assertEquals(404, result.getCode());
         verify(repository, never()).delete(any());
+        verify(workspaceInitService, never()).deleteWorkspace(any());
     }
 }

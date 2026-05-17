@@ -34,6 +34,9 @@ export const useChatStore = defineStore('chat', () => {
   const streamingText = ref('')
   const abortController = ref<AbortController | null>(null)
 
+  // Tool call tracking (for UI display during streaming)
+  const currentToolCalls = ref<string[]>([])
+
   // Input state
   const inputText = ref('')
 
@@ -190,6 +193,7 @@ export const useChatStore = defineStore('chat', () => {
 
     isStreaming.value = true
     streamingText.value = ''
+    currentToolCalls.value = []
     abortController.value = new AbortController()
 
     try {
@@ -197,30 +201,40 @@ export const useChatStore = defineStore('chat', () => {
         agentId,
         activeSession.value.id,
         content,
-        (token) => {
-          streamingText.value += token
-        },
-        (fullText) => {
-          messages.value.push({
-            role: 'assistant',
-            content: fullText,
-            timestamp: new Date().toISOString(),
-          })
-          streamingText.value = ''
-          isStreaming.value = false
-          abortController.value = null
-          fetchSessions()
-        },
-        (errorMsg) => {
-          streamingText.value = ''
-          isStreaming.value = false
-          abortController.value = null
-          messages.value.push({
-            role: 'assistant',
-            content: errorMsg,
-            timestamp: new Date().toISOString(),
-            isError: true,
-          })
+        {
+          onToken: (token) => {
+            streamingText.value += token
+          },
+          onDone: (fullText) => {
+            messages.value.push({
+              role: 'assistant',
+              content: fullText,
+              timestamp: new Date().toISOString(),
+            })
+            streamingText.value = ''
+            isStreaming.value = false
+            currentToolCalls.value = []
+            abortController.value = null
+            fetchSessions()
+          },
+          onError: (errorMsg) => {
+            streamingText.value = ''
+            isStreaming.value = false
+            currentToolCalls.value = []
+            abortController.value = null
+            messages.value.push({
+              role: 'assistant',
+              content: errorMsg,
+              timestamp: new Date().toISOString(),
+              isError: true,
+            })
+          },
+          onToolCall: (tool) => {
+            currentToolCalls.value = [...currentToolCalls.value, tool]
+          },
+          onToolResult: (tool) => {
+            currentToolCalls.value = currentToolCalls.value.filter(t => t !== tool)
+          },
         },
         abortController.value.signal,
       )
@@ -269,6 +283,7 @@ export const useChatStore = defineStore('chat', () => {
     folders,
     isStreaming,
     streamingText,
+    currentToolCalls,
     inputText,
     activeAgentId,
     // getters
