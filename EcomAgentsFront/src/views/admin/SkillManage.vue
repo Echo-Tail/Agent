@@ -18,10 +18,10 @@ const importingUrl = ref(false)
 
 /* ====== Download animation state ====== */
 const statusMessages = [
-  '正在解析技能 URL...',
-  '正在连接 GitHub...',
-  '正在下载技能文件...',
-  '正在解压...',
+  '正在解析 GitHub URL...',
+  '正在检测 Git 环境...',
+  '正在克隆技能仓库...',
+  '正在扫描 SKILL.md...',
   '正在写入 workspace...',
 ]
 const currentStatusIndex = ref(0)
@@ -31,23 +31,14 @@ let elapsedTimer: ReturnType<typeof setInterval> | null = null
 let tipTimer: ReturnType<typeof setInterval> | null = null
 
 const tips = [
-  '技能文件托管在 GitHub，下载时间取决于网络状况',
-  '首次下载需要安装 npx 工具，后续会快很多',
-  '从 skills.sh 导入的技能会自动保持最新',
+  '技能仓库通过 git clone 下载，支持 gh-proxy 加速',
+  '支持批量导入：仓库根 URL 会自动扫描所有 SKILL.md',
+  '通过子树路径可以只导入仓库中的指定技能',
   '一个技能包就是一个独立的操作指南',
   '导入后所有 Agent 自动获得该技能',
+  '如需更新技能，请先删除再重新导入',
 ]
 const currentTip = ref(tips[0])
-
-const supportedSources = [
-  'https://skills.sh/...',
-  'https://clawhub.ai/...',
-  'https://skillsmp.com/...',
-  'https://lobehub.com/...',
-  'https://market.lobehub.com/...（LobeHub 直链下载地址）',
-  'https://github.com/...',
-  'https://modelscope.cn/skills/...',
-]
 
 /* ====== ZIP Upload Modal ====== */
 const showUploadModal = ref(false)
@@ -56,20 +47,38 @@ const uploading = ref(false)
 
 /* ====== Category helpers ====== */
 const categoryLabels: Record<string, string> = {
-  browser: '浏览器',
-  development: '开发工具',
-  data: '数据分析',
-  automation: '自动化',
-  communication: '通讯',
+  'content-creation': '内容创作与发布',
+  'video-creation': '视频创作',
+  'ecommerce-marketing': '电商与营销',
+  'presentation': 'PPT与演示',
+  'digital-human': '数字人与视频配音',
+  'document-analysis': '文档与分析',
+  'voice-audio': '语音与音频',
+  'agent-collaboration': '智能体协作',
+  'product-management': '产品与项目管理',
+  'financial-analysis': '财务分析',
+  'design-visualization': '设计与可视化',
+  'cultural-creation': '文化创作',
+  'document-processing': '文档处理',
+  'skill-management': '技能管理',
   other: '其他',
 }
 
 const categoryColors: Record<string, string> = {
-  browser: '#f0a020',
-  development: '#2080f0',
-  data: '#18a058',
-  automation: '#d03050',
-  communication: '#8050c0',
+  'content-creation': '#e74c3c',
+  'video-creation': '#e67e22',
+  'ecommerce-marketing': '#f39c12',
+  'presentation': '#2ecc71',
+  'digital-human': '#1abc9c',
+  'document-analysis': '#3498db',
+  'voice-audio': '#9b59b6',
+  'agent-collaboration': '#8e44ad',
+  'product-management': '#2980b9',
+  'financial-analysis': '#16a085',
+  'design-visualization': '#e91e63',
+  'cultural-creation': '#ff7043',
+  'document-processing': '#607d8b',
+  'skill-management': '#795548',
   other: '#888',
 }
 
@@ -95,17 +104,14 @@ function startImportAnimation() {
   elapsedSeconds.value = 0
   currentTip.value = tips[Math.floor(Math.random() * tips.length)]
 
-  // Rotate status messages every 8 seconds
   statusTimer = setInterval(() => {
     currentStatusIndex.value = (currentStatusIndex.value + 1) % statusMessages.length
   }, 8000)
 
-  // Update elapsed time every second
   elapsedTimer = setInterval(() => {
     elapsedSeconds.value++
   }, 1000)
 
-  // Rotate tips every 15 seconds, starting after first 15s
   setTimeout(() => {
     tipTimer = setInterval(() => {
       const next = tips[Math.floor(Math.random() * tips.length)]
@@ -144,7 +150,7 @@ async function handleUrlImport() {
   try {
     const res = await importFromUrlApi(importUrl.value.trim())
     if (res.data.code === 200) {
-      message.success('技能导入成功')
+      message.success(res.data.message || '技能导入成功')
       showUrlModal.value = false
       await fetchSkills()
     } else {
@@ -295,16 +301,19 @@ const columns: DataTableColumn<SkillDefinition>[] = [
       <template v-if="!importingUrl">
         <n-form>
           <div style="margin-bottom: 12px; font-size: 13px; color: #888; line-height: 1.8;">
-            支持从以下 URL 来源导入：
+            支持两种入链格式：
             <br>
-            <span v-for="src in supportedSources" :key="src" style="display:block;padding-left:12px;">
-              {{ src }}
+            <span style="display:block;padding-left:12px;">
+              <b>仓库根链接</b> — https://github.com/{owner}/{repo}（全量扫描所有 SKILL.md）
+            </span>
+            <span style="display:block;padding-left:12px;">
+              <b>子树链接</b> — https://github.com/{owner}/{repo}/tree/main/skills/{name}（导入单个技能）
             </span>
           </div>
-          <n-form-item label="技能 URL" required>
+          <n-form-item label="GitHub URL" required>
             <n-input
               v-model:value="importUrl"
-              placeholder="https://www.skills.sh/vercel-labs/skills/find-skills"
+              placeholder="https://github.com/{owner}/{repo}"
             />
           </n-form-item>
           <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px;">
@@ -343,12 +352,12 @@ const columns: DataTableColumn<SkillDefinition>[] = [
           <div style="background:#f5f7fa;border-radius:8px;padding:12px 16px;text-align:left;font-size:13px;color:#888;margin-top:8px;">
             <div style="font-weight:600;color:#666;margin-bottom:4px;">💡 {{ currentTip }}</div>
             <div style="margin-top:6px;color:#999;font-size:12px;">
-              技能文件从 GitHub 下载，5 分钟超时自动取消。<br>
-              首次使用 npx 会额外花点时间安装工具。
+              技能仓库通过 git clone 下载，首次下载取决于仓库大小和网络状况。<br>
+              5 分钟超时自动取消。
             </div>
           </div>
 
-          <!-- Cancel hint (disabled since we can't cancel server-side easily) -->
+          <!-- Cancel hint -->
           <div style="margin-top:16px;font-size:12px;color:#bbb;">
             导入中请勿关闭窗口...
           </div>
@@ -376,8 +385,17 @@ const columns: DataTableColumn<SkillDefinition>[] = [
             <n-button>{{ uploadFile ? uploadFile.name : '选择文件' }}</n-button>
           </n-upload>
         </n-form-item>
-        <div style="font-size: 13px; color: #888; margin-bottom: 16px;">
-          ZIP 解压后的一级目录即技能名称，每个一级目录内必须包含 SKILL.md。
+        <div style="font-size: 13px; color: #888; margin-bottom: 16px; line-height: 1.8;">
+          ZIP 格式要求：每个一级目录为一个技能，目录内必须包含 SKILL.md（含 name + description frontmatter）。
+          <pre style="background:#f5f7fa;padding:10px;border-radius:6px;margin-top:8px;font-size:12px;line-height:1.6;">
+my-skill/
+  ├── SKILL.md          # 必需：YAML frontmatter 含 name + description
+  ├── assets/           # 可选：技能附属资源文件
+  └── examples/         # 可选：示例文件
+
+another-skill/
+  └── SKILL.md          # 支持批量：ZIP 可包含多个技能目录</pre>
+          提示：SKILL.md 必须包含 YAML frontmatter（--- 包裹的元数据），且必须提供 name 和 description 字段。
         </div>
 
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px;">

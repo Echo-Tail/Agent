@@ -1,10 +1,13 @@
 package cafe.snails.ecomagents.service;
 
+import cafe.snails.ecomagents.config.SkillConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.SkillIndex;
 import cafe.snails.ecomagents.repository.SkillIndexRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +18,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 基于文件系统的技能服务。
@@ -31,8 +37,19 @@ public class SkillService {
     private static final Logger log = LoggerFactory.getLogger(SkillService.class);
 
     private final WorkspaceConfig workspaceConfig;
+    private final SkillConfig skillConfig;
     private final SkillIndexRepository skillIndexRepository;
     private final ObjectMapper objectMapper;
+
+    private static final DateTimeFormatter ISO_FORMAT = DateTimeFormatter.ISO_DATE_TIME;
+
+    // GitHub 仓库根链接: https://github.com/{owner}/{repo}[.git]
+    private static final Pattern GITHUB_REPO_PATTERN =
+            Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+?)(?:\\.git)?(?:/.*)?$");
+
+    // GitHub tree 链接: https://github.com/{owner}/{repo}/tree/{branch}/skills/{path}
+    private static final Pattern GITHUB_TREE_PATTERN =
+            Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+?)/tree/[^/]+/(skills/.+)$");
 
     /**
      * 获取全局技能目录路径。
@@ -49,99 +66,189 @@ public class SkillService {
     }
 
     /**
-     * skills.sh URL 正则：https://www.skills.sh/{org}/skills/{skill-name}
+     * 从 GitHub URL 导入技能。
+     * 支持两种格式：
+     * <ul>
+     *   <li>仓库根链接 {@code https://github.com/{owner}/{repo}} — 全量扫描仓库下所有 SKILL.md</li>
+     *   <li>子目录链接 {@code https://github.com/{owner}/{repo}/tree/{branch}/skills/{name}} — 只导入该技能</li>
+     * </ul>
      */
-    private static final Pattern SKILLS_SH_PATTERN =
-            Pattern.compile("^https?://(?:www\\.)?skills\\.sh/([^/]+)/skills/([^/]+)");
+    public ApiResponse<Void> importFromGithubUrl(String url) {
+        String trimmed = url.trim();
 
-    /**
-     * 从 skills.sh URL 导入技能。
-     * 解析 URL 提取 org/skill-name，拼接 npx 命令后执行。
-     */
-    public ApiResponse<Void> importFromSkillsUrl(String url) {
-        Matcher m = SKILLS_SH_PATTERN.matcher(url.trim());
-        if (!m.matches()) {
-            return ApiResponse.error(400, "不支持的 URL 格式，目前仅支持 skills.sh 链接");
+        // 1. 解析 URL
+        Matcher treeMatcher = GITHUB_TREE_PATTERN.matcher(trimmed);
+        Matcher repoMatcher = GITHUB_REPO_PATTERN.matcher(trimmed);
+
+        String owner, repo, skillSubPath;
+        boolean isSingleSkill;
+
+        if (treeMatcher.matches()) {
+            owner = treeMatcher.group(1);
+            repo = treeMatcher.group(2);
+            skillSubPath = treeMatcher.group(3);
+            isSingleSkill = true;
+        } else if (repoMatcher.matches()) {
+            owner = repoMatcher.group(1);
+            repo = repoMatcher.group(2);
+            skillSubPath = null;
+            isSingleSkill = false;
+        } else {
+            return ApiResponse.error(400, "不支持的 URL 格式，请输入 GitHub 链接：https://github.com/{owner}/{repo}");
         }
-        String org = m.group(1);
-        String skillName = m.group(2);
-        String npxUrl = "https://github.com/" + org + "/skills";
-        String cmd = String.format("npx skills add %s --skill %s", npxUrl, skillName);
 
-        Path workspaceRoot = Path.of(workspaceConfig.getRoot());
+        // 2. 检测 git 安装
+        ApiResponse<Void> gitCheck = checkGitInstalled();
+        if (gitCheck != null) return gitCheck;
+
+        // 3. 读取已有 lock
+        Map<String, JsonNode> existingSkills = readLockSkills();
+
+        // 4. 克隆仓库
+        Path tempDir;
+        String commitHash;
+        String repoUrl = "https://github.com/" + owner + "/" + repo + ".git";
         try {
-            Files.createDirectories(workspaceRoot);
-            List<String> command = buildNpxCommand(npxUrl, skillName);
-            log.info("Running command: {} in dir: {}", String.join(" ", command), workspaceRoot);
-            ProcessBuilder pb = new ProcessBuilder(command);
-            pb.directory(workspaceRoot.toFile());
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+            tempDir = Files.createTempDirectory("skill-clone-");
+            String ghProxy = skillConfig.getGhProxyUrl();
+            String cloneUrl = (ghProxy != null && !ghProxy.isBlank())
+                    ? ghProxy + "/" + repoUrl
+                    : repoUrl;
 
-            StringBuilder output = new StringBuilder();
-            Thread readerThread = new Thread(() -> {
-                try (var r = process.inputReader()) {
-                    String line;
-                    while ((line = r.readLine()) != null) {
-                        synchronized (output) {
-                            output.append(line).append("\n");
-                        }
-                        log.info("[npx] {}", line);
-                    }
-                } catch (IOException ignored) {}
-            });
-            readerThread.start();
-
-            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.MINUTES);
-            readerThread.join(5000);
-            if (!finished) {
-                process.destroyForcibly();
-                log.warn("npx skills add timed out. Output:\n{}", output);
-                return ApiResponse.error(500, "技能下载超时（5分钟），请稍后重试");
-            }
-            int exitCode = process.exitValue();
-            log.info("npx exit code: {}. Output:\n{}", exitCode, output);
+            int exitCode = runGitCommand(null, "clone", "--depth", "1", cloneUrl, tempDir.toString());
             if (exitCode != 0) {
-                return ApiResponse.error(500, "npx skills add 失败，退出码: " + exitCode + "\n" + output);
+                deleteRecursively(tempDir);
+                return ApiResponse.error(500, "Git 克隆失败，请检查网络连接和仓库地址");
             }
 
-            // npx skills add outputs to .agents/skills/{skillName} relative to workspace root.
-            // Move it to workspace/skills/{skillName}.
-            Path agentSkillsDir = workspaceRoot.resolve(".agents/skills");
-            Path skillSource = agentSkillsDir.resolve(skillName);
-            if (Files.isDirectory(skillSource)) {
-                Files.createDirectories(getSkillsDir());
-                Path target = getSkillsDir().resolve(skillName);
-                if (Files.exists(target)) {
-                    deleteRecursively(target);
-                }
-                Files.move(skillSource, target);
-                log.info("Moved skill from {} to {}", skillSource, target);
-                // Clean up .agents directory tree
-                Path agentsDir = workspaceRoot.resolve(".agents");
-                if (Files.isDirectory(agentsDir)) {
-                    deleteRecursively(agentsDir);
-                }
-            } else {
-                log.warn("Expected skill directory not found at {}", skillSource);
-                log.info("Contents of {}:", workspaceRoot);
-                try (var files = Files.list(workspaceRoot)) {
-                    files.forEach(f -> log.info("  - {}", f.getFileName()));
-                }
+            commitHash = captureGitOutput(tempDir, "rev-parse", "HEAD");
+            if (commitHash == null) {
+                commitHash = "unknown";
             }
-
-            refreshIndex();
-            log.info("Skill imported from skills.sh: org={}, skill={}", org, skillName);
-            return ApiResponse.success("技能导入成功", null);
-        } catch (IOException | InterruptedException e) {
-            log.error("Failed to import skill from URL {}: {}", url, e.getMessage());
-            return ApiResponse.error(500, "技能导入失败: " + e.getMessage());
+            log.info("Cloned repo {} at commit {}", repoUrl, commitHash);
+        } catch (IOException e) {
+            return ApiResponse.error(500, "创建临时目录失败: " + e.getMessage());
         }
+
+        // 5. 扫描 SKILL.md 文件
+        List<Path> skillMdFiles;
+        try {
+            Path scanRoot = tempDir;
+            if (isSingleSkill && skillSubPath != null) {
+                scanRoot = tempDir.resolve(skillSubPath);
+                if (!Files.isDirectory(scanRoot)) {
+                    deleteRecursively(tempDir);
+                    return ApiResponse.error(400, "仓库中未找到指定路径: " + skillSubPath);
+                }
+            }
+
+            skillMdFiles = findSkillMdFiles(scanRoot);
+            if (skillMdFiles.isEmpty()) {
+                deleteRecursively(tempDir);
+                return ApiResponse.error(400, "未找到有效的 SKILL.md 文件");
+            }
+        } catch (IOException e) {
+            deleteRecursively(tempDir);
+            return ApiResponse.error(500, "扫描技能文件失败: " + e.getMessage());
+        }
+
+        // 6. 逐个验证 + 导入
+        Path skillsDir = getSkillsDir();
+        try {
+            Files.createDirectories(skillsDir);
+        } catch (IOException e) {
+            deleteRecursively(tempDir);
+            return ApiResponse.error(500, "创建技能目录失败: " + e.getMessage());
+        }
+
+        List<ImportedSkill> imported = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+
+        for (Path skillMd : skillMdFiles) {
+            try {
+                // 读取 frontmatter
+                String content = Files.readString(skillMd);
+                String name = extractFrontmatterField(content, "name");
+                String description = extractFrontmatterField(content, "description");
+
+                // 验证
+                String validationError = validateSkillFormat(name, description);
+                if (validationError != null) {
+                    errors.add(skillMd.getFileName() + ": " + validationError);
+                    continue;
+                }
+
+                // 检查是否已存在
+                if (existingSkills.containsKey(name)) {
+                    skipped.add(name);
+                    continue;
+                }
+
+                // 计算 skillPath（相对于仓库根）
+                String relativeSkillPath = tempDir.relativize(skillMd).toString().replace("\\", "/");
+
+                // 拷贝技能目录
+                Path sourceDir = skillMd.getParent();
+                Path targetDir = skillsDir.resolve(name);
+                if (Files.exists(targetDir)) {
+                    deleteRecursively(targetDir);
+                }
+                copyDirectory(sourceDir, targetDir);
+
+                ImportedSkill is = new ImportedSkill();
+                is.name = name;
+                is.source = owner + "/" + repo;
+                is.sourceUrl = repoUrl;
+                is.skillPath = relativeSkillPath;
+                is.commitHash = commitHash;
+                imported.add(is);
+
+                log.info("Imported skill: {} from {}/{}", name, owner, repo);
+            } catch (IOException e) {
+                errors.add(skillMd.getFileName() + ": " + e.getMessage());
+            }
+        }
+
+        // 7. 写入 lock
+        if (!imported.isEmpty()) {
+            writeLockSkills(existingSkills, imported);
+        }
+
+        // 8. 清理
+        deleteRecursively(tempDir);
+
+        // 9. 刷新索引
+        if (!imported.isEmpty()) {
+            refreshIndex();
+        }
+
+        // 10. 构建结果消息
+        StringBuilder msg = new StringBuilder();
+        if (!imported.isEmpty()) {
+            msg.append("成功导入 ").append(imported.size()).append(" 个技能：");
+            msg.append(imported.stream().map(s -> s.name).collect(Collectors.joining("、")));
+        }
+        if (!skipped.isEmpty()) {
+            if (!msg.isEmpty()) msg.append("；");
+            msg.append("已存在跳过：").append(String.join("、", skipped));
+            msg.append("（如需更新请先删除再导入）");
+        }
+        if (!errors.isEmpty()) {
+            if (!msg.isEmpty()) msg.append("；");
+            msg.append("以下文件格式有误已跳过：").append(String.join("; ", errors));
+        }
+
+        if (imported.isEmpty() && skipped.isEmpty() && !errors.isEmpty()) {
+            return ApiResponse.error(400, "所有技能均未通过格式验证：\n" + String.join("\n", errors));
+        }
+
+        return ApiResponse.success(msg.toString(), null);
     }
 
     /**
      * 从上传的 ZIP 文件导入技能。
-     * ZIP 解压后的一级目录即技能名称，每个一级目录内必须包含 SKILL.md。
+     * ZIP 解压后的一级目录即技能名称，每个一级目录内必须包含 SKILL.md（含 name + description frontmatter）。
      */
     public ApiResponse<Void> uploadSkillZip(MultipartFile file) {
         if (file.isEmpty()) {
@@ -157,17 +264,30 @@ public class SkillService {
             Path tempFile = Files.createTempFile("skill-upload-", ".zip");
             file.transferTo(tempFile.toFile());
 
-            // Extract to a temp staging directory first for validation
             Path stagingDir = Files.createTempDirectory("skill-staging-");
             try {
                 extractZip(tempFile, stagingDir);
 
-                // Validate: first-level dirs must contain SKILL.md
+                // Validate: first-level dirs must contain SKILL.md with valid frontmatter
                 List<Path> invalidDirs = new ArrayList<>();
+                List<String> formatErrors = new ArrayList<>();
                 try (var dirs = Files.list(stagingDir)) {
                     dirs.filter(Files::isDirectory).forEach(dir -> {
-                        if (!Files.exists(dir.resolve("SKILL.md"))) {
+                        Path skillMd = findSkillMdInDir(dir);
+                        if (skillMd == null) {
                             invalidDirs.add(dir);
+                        } else {
+                            try {
+                                String content = Files.readString(skillMd);
+                                String name = extractFrontmatterField(content, "name");
+                                String description = extractFrontmatterField(content, "description");
+                                String err = validateSkillFormat(name, description);
+                                if (err != null) {
+                                    formatErrors.add(dir.getFileName() + ": " + err);
+                                }
+                            } catch (IOException e) {
+                                formatErrors.add(dir.getFileName() + ": " + e.getMessage());
+                            }
                         }
                     });
                 }
@@ -178,6 +298,12 @@ public class SkillService {
                         sb.append(d.getFileName().toString()).append(" ");
                     }
                     return ApiResponse.error(400, sb.toString().trim());
+                }
+
+                if (!formatErrors.isEmpty()) {
+                    return ApiResponse.error(400,
+                            "以下技能目录 SKILL.md 格式有误（需要 name + description frontmatter）：\n"
+                                    + String.join("\n", formatErrors));
                 }
 
                 // Move valid skill directories to workspace/skills/
@@ -217,15 +343,12 @@ public class SkillService {
         if (!Files.isDirectory(skillDir)) {
             return ApiResponse.error(404, "技能不存在: " + name);
         }
-        try {
-            deleteRecursively(skillDir);
-            skillIndexRepository.deleteById(name);
-            log.info("Skill deleted: {}", name);
-            return ApiResponse.success("技能已删除", null);
-        } catch (IOException e) {
-            log.error("Failed to delete skill {}: {}", name, e.getMessage());
-            return ApiResponse.error(500, "技能删除失败: " + e.getMessage());
-        }
+        deleteRecursively(skillDir);
+        skillIndexRepository.deleteById(name);
+        // Also remove from lock
+        removeFromLock(name);
+        log.info("Skill deleted: {}", name);
+        return ApiResponse.success("技能已删除", null);
     }
 
     /**
@@ -239,7 +362,6 @@ public class SkillService {
             return;
         }
 
-        // Collect current skill names from filesystem
         Set<String> fsSkills = new HashSet<>();
         try (var dirs = Files.list(skillsDir)) {
             dirs.filter(Files::isDirectory)
@@ -255,7 +377,6 @@ public class SkillService {
             log.warn("Failed to scan skills directory: {}", e.getMessage());
         }
 
-        // Remove index entries for deleted skills
         List<SkillIndex> existing = skillIndexRepository.findAll();
         for (SkillIndex idx : existing) {
             if (!fsSkills.contains(idx.getName())) {
@@ -267,12 +388,142 @@ public class SkillService {
     // ===== Private helpers =====
 
     /**
+     * 检测 git 是否已安装。
+     */
+    private ApiResponse<Void> checkGitInstalled() {
+        try {
+            int exitCode = runGitCommand(null, "--version");
+            if (exitCode != 0) {
+                return ApiResponse.error(400,
+                        "未检测到 Git，请先安装 Git: https://git-scm.com/downloads");
+            }
+            return null;
+        } catch (Exception e) {
+            return ApiResponse.error(400,
+                    "未检测到 Git，请先安装 Git: https://git-scm.com/downloads");
+        }
+    }
+
+    /**
+     * 运行 git 命令并返回退出码。
+     */
+    private int runGitCommand(Path workingDir, String... args) throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.addAll(Arrays.asList(args));
+
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        ProcessBuilder pb;
+        if (isWindows) {
+            List<String> wrapped = new ArrayList<>();
+            wrapped.add("cmd.exe");
+            wrapped.add("/c");
+            wrapped.add(String.join(" ", command));
+            pb = new ProcessBuilder(wrapped);
+        } else {
+            pb = new ProcessBuilder(command);
+        }
+
+        if (workingDir != null) {
+            pb.directory(workingDir.toFile());
+        }
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+        try {
+            return process.waitFor();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return -1;
+        }
+    }
+
+    /**
+     * 在指定目录执行 git 命令并捕获 stdout 第一行。
+     */
+    private String captureGitOutput(Path workingDir, String... args) {
+        try {
+            List<String> command = new ArrayList<>();
+            command.add("git");
+            command.addAll(Arrays.asList(args));
+
+            boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+            ProcessBuilder pb;
+            if (isWindows) {
+                List<String> wrapped = new ArrayList<>();
+                wrapped.add("cmd.exe");
+                wrapped.add("/c");
+                wrapped.add(String.join(" ", command));
+                pb = new ProcessBuilder(wrapped);
+            } else {
+                pb = new ProcessBuilder(command);
+            }
+
+            pb.directory(workingDir.toFile());
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+            try (var reader = process.inputReader()) {
+                boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+                if (finished && process.exitValue() == 0) {
+                    return reader.lines().findFirst().orElse(null);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 从文件系统临时目录查找所有 SKILL.md 文件（不区分大小写）。
+     */
+    private List<Path> findSkillMdFiles(Path root) throws IOException {
+        List<Path> results = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            walk.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().equalsIgnoreCase("SKILL.md"))
+                    .forEach(results::add);
+        }
+        return results;
+    }
+
+    /**
+     * 在指定目录下查找 SKILL.md（不区分大小写），只查一级。
+     */
+    private Path findSkillMdInDir(Path dir) {
+        try (var files = Files.list(dir)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().equalsIgnoreCase("SKILL.md"))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 验证技能格式：name 和 description 必填。
+     */
+    private String validateSkillFormat(String name, String description) {
+        if (name == null || name.isBlank()) {
+            return "缺少 name frontmatter";
+        }
+        if (description == null || description.isBlank()) {
+            return "缺少 description frontmatter";
+        }
+        return null;
+    }
+
+    /**
      * 解析 SKILL.md 的 YAML frontmatter，构造 SkillIndex。
      */
     private SkillIndex parseSkillFrontmatter(Path skillDir) {
         String name = skillDir.getFileName().toString();
-        Path skillMd = skillDir.resolve("SKILL.md");
-        if (!Files.isReadable(skillMd)) {
+        Path skillMd = findSkillMdInDir(skillDir);
+        if (skillMd == null || !Files.isReadable(skillMd)) {
             return SkillIndex.builder()
                     .name(name)
                     .description("")
@@ -327,17 +578,96 @@ public class SkillService {
         return null;
     }
 
-    /**
-     * 构建跨平台的 npx 命令列表。
-     * Windows 上 npx 是 .cmd 文件，需要 cmd.exe /c 来执行。
-     */
-    private List<String> buildNpxCommand(String repoUrl, String skillName) {
-        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
-        if (isWindows) {
-            return List.of("cmd.exe", "/c", "npx", "-y", "skills", "add", repoUrl, "--skill", skillName);
-        }
-        return List.of("npx", "-y", "skills", "add", repoUrl, "--skill", skillName);
+    // ===== Lock file management =====
+
+    private Path getLockFile() {
+        return Path.of(workspaceConfig.getRoot(), "skills-lock.json");
     }
+
+    /**
+     * 读取 skills-lock.json，返回 skillName → entry 的映射。
+     * 兼容 version 1 和 version 2 格式。
+     */
+    private Map<String, JsonNode> readLockSkills() {
+        Path lockFile = getLockFile();
+        if (!Files.isReadable(lockFile)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(lockFile.toFile());
+            JsonNode skills = root.get("skills");
+            if (skills != null && skills.isObject()) {
+                Map<String, JsonNode> result = new LinkedHashMap<>();
+                skills.fieldNames().forEachRemaining(name -> result.put(name, skills.get(name)));
+                return result;
+            }
+        } catch (IOException e) {
+            log.warn("Failed to read skills-lock.json: {}", e.getMessage());
+        }
+        return new LinkedHashMap<>();
+    }
+
+    /**
+     * 将新导入的技能写入 lock 文件（version 2 格式）。
+     */
+    private void writeLockSkills(Map<String, JsonNode> existing, List<ImportedSkill> imported) {
+        Path lockFile = getLockFile();
+        try {
+            Files.createDirectories(lockFile.getParent());
+
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("version", 2);
+            ObjectNode skillsNode = root.putObject("skills");
+
+            // Preserve existing entries
+            for (Map.Entry<String, JsonNode> entry : existing.entrySet()) {
+                skillsNode.set(entry.getKey(), entry.getValue());
+            }
+
+            // Add new entries
+            String now = LocalDateTime.now().format(ISO_FORMAT);
+            for (ImportedSkill s : imported) {
+                ObjectNode entry = skillsNode.putObject(s.name);
+                entry.put("source", s.source);
+                entry.put("sourceType", "github");
+                entry.put("sourceUrl", s.sourceUrl);
+                entry.put("skillPath", s.skillPath);
+                entry.put("commitHash", s.commitHash);
+                entry.put("installedAt", now);
+                entry.put("updatedAt", now);
+            }
+
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(lockFile.toFile(), root);
+            log.info("Skills lock updated: {} new skills", imported.size());
+        } catch (IOException e) {
+            log.error("Failed to write skills-lock.json: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 从 lock 文件中移除指定技能。
+     */
+    private void removeFromLock(String skillName) {
+        Map<String, JsonNode> existing = readLockSkills();
+        if (!existing.containsKey(skillName)) return;
+
+        existing.remove(skillName);
+        Path lockFile = getLockFile();
+        try {
+            Files.createDirectories(lockFile.getParent());
+            ObjectNode root = objectMapper.createObjectNode();
+            root.put("version", 2);
+            ObjectNode skillsNode = root.putObject("skills");
+            for (Map.Entry<String, JsonNode> entry : existing.entrySet()) {
+                skillsNode.set(entry.getKey(), entry.getValue());
+            }
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(lockFile.toFile(), root);
+        } catch (IOException e) {
+            log.error("Failed to remove skill {} from lock: {}", skillName, e.getMessage());
+        }
+    }
+
+    // ===== File I/O helpers =====
 
     private void extractZip(Path zipFile, Path targetDir) throws IOException {
         try (var zis = new java.util.zip.ZipInputStream(
@@ -356,7 +686,8 @@ public class SkillService {
         }
     }
 
-    private void deleteRecursively(Path dir) throws IOException {
+    private void deleteRecursively(Path dir) {
+        if (!Files.exists(dir)) return;
         try (var stream = Files.walk(dir)) {
             stream.sorted(java.util.Comparator.reverseOrder())
                     .forEach(p -> {
@@ -366,6 +697,35 @@ public class SkillService {
                             log.warn("Failed to delete {}: {}", p, e.getMessage());
                         }
                     });
+        } catch (IOException e) {
+            log.warn("Failed to walk directory {}: {}", dir, e.getMessage());
         }
+    }
+
+    private void copyDirectory(Path source, Path target) throws IOException {
+        try (var stream = Files.walk(source)) {
+            stream.forEach(src -> {
+                Path dst = target.resolve(source.relativize(src));
+                try {
+                    if (Files.isDirectory(src)) {
+                        Files.createDirectories(dst);
+                    } else {
+                        Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (IOException e) {
+                    log.warn("Failed to copy {} to {}: {}", src, dst, e.getMessage());
+                }
+            });
+        }
+    }
+
+    // ===== Internal DTO =====
+
+    private static class ImportedSkill {
+        String name;
+        String source;
+        String sourceUrl;
+        String skillPath;
+        String commitHash;
     }
 }

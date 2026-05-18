@@ -1,160 +1,189 @@
 # EcomAgents — 企业电商智能体管理平台
 
-Enterprise E-commerce AI Agent Management Platform
+[![Java 17](https://img.shields.io/badge/Java-17-blue?logo=openjdk&style=for-the-badge)](https://adoptium.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0-brightgreen?logo=spring&style=for-the-badge)](https://spring.io/projects/spring-boot)
+[![Vue 3](https://img.shields.io/badge/Vue_3-4dba87?logo=vuedotjs&style=for-the-badge)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&style=for-the-badge)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-316192?logo=postgresql&style=for-the-badge)](https://www.postgresql.org/)
+[![Gradle](https://img.shields.io/badge/Gradle-02303A?logo=gradle&style=for-the-badge)](https://gradle.org/)
+[![License](https://img.shields.io/badge/License-ISC-lightgrey?style=for-the-badge)]()
 
-A full-stack platform for managing, configuring, and interacting with AI agents in an e-commerce context. Built with AgentScope Java SDK for agent orchestration, featuring a Spring Boot backend and Vue 3 SPA frontend.
+[![中文](https://img.shields.io/badge/语言-中文-red?style=for-the-badge)](README.md)
+[![English](https://img.shields.io/badge/Language-English-lightgrey?style=for-the-badge)](README_EN.md)
 
-## Architecture
+📖 **English version available** → [README_EN.md](README_EN.md)
+
+---
+
+![系统概览](docs/image/EcomAgents.png)
+
+一站式企业级 AI 智能体管理平台，基于 [AgentScope Java SDK](https://java.agentscope.io/) 构建。提供智能体生命周期管理、对话交互、工具集成、知识库管理等功能，适用于电商场景下的 AI 自动化运营。
+
+## 功能特性
+
+- **智能体管理** — 创建、编辑、管理 AI 智能体，支持角色设定（System Prompt）、模型分配、欢迎语和标签
+- **模型管理** — 管理员可配置多种 LLM 后端（OpenAI、DeepSeek、Qwen 等），支持独立 API Key、接口地址和模型参数
+- **工具管理** — 按需启停工具（网页搜索、图片生成等），支持 JSON 配置
+- **技能管理** — 基于文件系统的技能体系，支持 GitHub URL 导入（git clone）和 ZIP 上传，全局共享
+- **知识库** — 文档上传（TXT、MD、JSON）+ RAG 向量检索
+- **对话系统** — SSE 实时流式对话，支持消息历史、文件夹分组
+- **用户系统** — 邀请码注册、管理员/普通用户角色、JWT 认证
+
+## 技术栈
+
+### 后端 (EcomAgents/)
+
+| 组件 | 技术 |
+|------|------|
+| 框架 | Spring Boot 4.0.6 (Web, JPA, Security, Validation) |
+| 语言 | Java 17 |
+| 数据库 | PostgreSQL 14+（生产）/ H2（开发） |
+| ORM | Hibernate 7 + Spring Data JPA |
+| 认证 | JWT (jjwt 0.12.6) + Spring Security |
+| 智能体框架 | [AgentScope Java SDK](https://java.agentscope.io/) 1.1.0 |
+| 构建 | Gradle |
+| 测试 | JUnit 5, Mockito |
+
+### 前端 (EcomAgentsFront/)
+
+| 组件 | 技术 |
+|------|------|
+| 框架 | Vue 3 (Composition API) |
+| UI 库 | Naive UI |
+| 语言 | TypeScript |
+| 构建 | Vite 6 |
+| 状态管理 | Pinia |
+| 路由 | Vue Router 4 |
+| HTTP 客户端 | Axios |
+| 测试 | Vitest + happy-dom |
+| 流式通信 | SSE via ReadableStream API |
+
+## 项目结构
 
 ```
 Agent/
-├── EcomAgents/          # Spring Boot backend (Java 17, Gradle)
+├── EcomAgents/                     # Spring Boot 后端 (Java 17, Gradle, port 8888)
 │   └── src/main/java/cafe/snails/ecomagents/
-│       ├── config/       # CORS, security, data initializer, workspace config
-│       ├── controller/   # REST controllers (Auth, Agent, Session, Model, Tool, Skill, Knowledge, User)
-│       ├── dto/          # Request/response DTOs
-│       ├── harness/      # AgentScope harness configuration
-│       ├── model/        # JPA entities (Agent, AiModel, Session, User, ToolConfig, SkillIndex, etc.)
-│       ├── repository/   # Spring Data JPA repositories
-│       ├── security/     # JWT authentication filter + Spring Security config
-│       ├── service/      # Business logic layer
-│       └── tool/         # AgentScope @Tool annotated tools
-├── EcomAgentsFront/      # Vue 3 SPA (TypeScript, Vite, Naive UI)
+│       ├── config/                 # CORS、安全、数据初始化、Workspace/Skill 配置
+│       ├── controller/             # REST 控制器 (Auth/Agent/Session/Model/Tool/Skill/Knowledge/User)
+│       ├── dto/                    # 请求/响应 DTO
+│       ├── harness/                # AgentScope HarnessAgent 集成层
+│       ├── model/                  # JPA 实体 (Agent, AiModel, Session, User, ToolConfig, SkillIndex 等)
+│       ├── repository/             # Spring Data JPA 仓储
+│       ├── security/               # JWT 认证过滤器 + Spring Security 配置
+│       ├── service/                # 业务逻辑层 (含 AgentScope 工具注册)
+│       └── tool/                   # AgentScope @Tool 注解工具
+├── EcomAgentsFront/                # Vue 3 前端 SPA (TypeScript, Vite, Naive UI, port 5173)
 │   └── src/
-│       ├── api/          # Axios HTTP client layer
-│       ├── components/   # Reusable UI components
-│       ├── constants/    # Shared constants (API, storage keys, limits)
-│       ├── layouts/      # DefaultLayout (sidebar), BlankLayout (fullscreen)
-│       ├── router/       # Vue Router with auth guard
-│       ├── stores/       # Pinia state management (auth, theme, agent, chat, knowledge)
-│       ├── types/        # TypeScript interfaces
-│       ├── utils/        # Validation utilities
-│       └── views/        # Route-level page components (12 routes)
-│           ├── admin/    # User, Model, Tool, Skill management
-│           ├── agent/    # Agent list and create/edit
-│           ├── chat/     # Direct chat with SSE streaming
-│           └── ...
+│       ├── api/                    # Axios HTTP 客户端层
+│       ├── components/             # 可复用 UI 组件
+│       ├── constants/              # 共享常量 (API 地址、存储键、验证限制)
+│       ├── layouts/                # 布局组件 (DefaultLayout 侧边栏, BlankLayout 全屏)
+│       ├── router/                 # Vue Router + 导航守卫
+│       ├── stores/                 # Pinia 状态管理 (auth/theme/agent/chat/knowledge)
+│       ├── types/                  # TypeScript 接口定义
+│       ├── utils/                  # 验证工具函数
+│       └── views/                  # 路由页面组件
+│           ├── admin/              # 用户/模型/工具/技能管理
+│           ├── agent/              # 智能体列表与创建
+│           ├── chat/               # 实时对话
+│           └── ...                 # Dashboard, Login, Register, Settings 等
+├── cli.bat                         # Claude CLI 代理隧道启动器
+├── docs/image/                     # 系统截图
+├── CONTEXT.md                      # 领域模型与架构文档
+└── README.md / README_EN.md        # 项目文档
 ```
 
-## Tech Stack
+## 快速开始
 
-### Backend (EcomAgents/)
-
-| Component | Technology |
-|-----------|-----------|
-| Framework | Spring Boot 4.0.6 (Web, JPA, Security, Validation) |
-| Language | Java 17 |
-| Database | PostgreSQL (production) / H2 (development) |
-| ORM | Hibernate 7 with Spring Data JPA |
-| Auth | JWT (jjwt 0.12.6) with Spring Security |
-| Agent Framework | [AgentScope Java SDK](https://java.agentscope.io/) 1.1.0 |
-| Build | Gradle |
-| Testing | JUnit 5, Mockito |
-
-### Frontend (EcomAgentsFront/)
-
-| Component | Technology |
-|-----------|-----------|
-| Framework | Vue 3 (Composition API) |
-| UI Library | Naive UI |
-| Language | TypeScript |
-| Build | Vite 6 |
-| State Management | Pinia |
-| Router | Vue Router 4 |
-| HTTP Client | Axios |
-| Testing | Vitest + happy-dom |
-| Streaming | SSE via ReadableStream API |
-
-## Features
-
-- **Agent Management** — Create, edit, list AI agents with system prompts, model assignment, greeting messages, and tags
-- **Model Management** — Admin-configured LLM backends (OpenAI, DeepSeek, Qwen, etc.) with per-model API keys, URLs, and parameters
-- **Tool Management** — Enable/disable and configure agent tools (web search, image generation, etc.) with per-tool JSON config
-- **Skill Management** — Filesystem-based skill system: import from [skills.sh](https://www.skills.sh) URLs or upload ZIP packages; skills are stored as SKILL.md files in `workspace/skills/` and shared globally across all agents
-- **Knowledge Base** — Document upload (TXT, MD, JSON) with RAG-powered search
-- **Chat** — Real-time SSE streaming conversations with agents
-- **User System** — Registration via invite codes, admin/user roles, JWT authentication
-- **Session Management** — Chat history with folder organization
-
-## Getting Started
-
-### Prerequisites
+### 前置要求
 
 - Java 17+
 - Node.js 18+
-- PostgreSQL 14+ (or use H2 for development)
-- npm / pnpm
+- PostgreSQL 14+（开发环境可使用 H2）
+- Git（技能导入需要）
 
-### Backend Setup
+### 后端启动
 
 ```bash
 cd EcomAgents
 
-# Configure database in src/main/resources/application.properties
-# Default: PostgreSQL at localhost:5432/ecomagents
+# 配置数据库连接 (src/main/resources/application.properties)
+# 默认使用 PostgreSQL localhost:5432/ecomagents
 
-# Run tests
+# 运行测试
 ./gradlew test
 
-# Start development server (port 8888)
+# 启动开发服务器 (端口 8888)
 ./gradlew bootRun
 ```
 
-### Frontend Setup
+### 前端启动
 
 ```bash
 cd EcomAgentsFront
 
-# Install dependencies
+# 安装依赖
 npm install
 
-# Run tests
+# 运行测试
 npm test
 
-# Start development server (port 8080, proxies /v1 to :8888)
+# 启动开发服务器 (端口 5173, /v1 代理到 :8888)
 npm run dev
 
-# Production build
+# 生产构建
 npm run build
 ```
 
-### Default Admin Account
+### 默认管理员账号
 
-- Username: `admin`
-- Password: `123456`
+- 用户名: `admin`
+- 密码: `123456`
 
-### API Endpoints
+### 技能导入
 
-The frontend dev server proxies `/v1/*` requests to `http://localhost:8888`. All API routes are prefixed with `/v1`:
+支持从 GitHub 仓库导入技能（git clone）：
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/v1/login` | Login |
-| POST | `/v1/register` | Register (requires invite code) |
-| GET | `/v1/agents` | List agents |
-| POST | `/v1/agents` | Create agent |
-| GET | `/v1/agents/{id}` | Get agent details |
-| PUT | `/v1/agents/{id}` | Update agent |
-| DELETE | `/v1/agents/{id}` | Delete agent |
-| GET | `/v1/models` | List AI models |
-| POST | `/v1/models` | Create model (admin) |
-| GET | `/v1/tools` | List tools |
-| PUT | `/v1/tools/{id}` | Update tool config (admin) |
-| GET | `/v1/skills` | List skills |
-| POST | `/v1/skills/import-url` | Import skill from URL |
-| POST | `/v1/skills/upload` | Upload skill ZIP |
-| DELETE | `/v1/skills/{name}` | Delete skill |
-| POST | `/v1/chat/{agentId}/stream` | SSE streaming chat |
-| GET | `/v1/sessions` | List sessions (with folder tree) |
-| POST | `/v1/sessions` | Create session |
+```
+https://github.com/{owner}/{repo}                              # 全量导入
+https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技能
+```
 
-## Project Conventions
+同时支持 ZIP 文件上传导入技能。
 
-- **Backend**: RESTful controllers at `/v1/*`, JPA entities with Lombok, service-layer business logic
-- **Frontend**: Composition API `<script setup>` style, Naive UI components, Pinia composition stores
-- **Admin pages**: Admin-only routes guarded by Vue Router `beforeEach` + backend security filter
-- **Skills**: File-system based in `workspace/skills/{name}/SKILL.md` with YAML frontmatter (`description`, `category`)
+## API 接口
 
-## License
+前端开发服务器将 `/v1/*` 请求代理到 `http://localhost:8888`。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/v1/login` | 登录 |
+| POST | `/v1/register` | 注册（需邀请码） |
+| GET | `/v1/agents` | 智能体列表 |
+| POST | `/v1/agents` | 创建智能体 |
+| GET | `/v1/agents/{id}` | 智能体详情 |
+| PUT | `/v1/agents/{id}` | 更新智能体 |
+| DELETE | `/v1/agents/{id}` | 删除智能体 |
+| GET | `/v1/models` | 模型列表 |
+| POST | `/v1/models` | 创建模型（管理员） |
+| GET | `/v1/tools` | 工具列表 |
+| PUT | `/v1/tools/{id}` | 更新工具配置（管理员） |
+| GET | `/v1/skills` | 技能列表 |
+| POST | `/v1/skills/import-url` | 从 URL 导入技能 |
+| POST | `/v1/skills/upload` | 上传技能 ZIP |
+| DELETE | `/v1/skills/{name}` | 删除技能 |
+| POST | `/v1/chat/{agentId}/stream` | SSE 流式对话 |
+| GET | `/v1/sessions` | 会话列表 |
+| POST | `/v1/sessions` | 创建会话 |
+
+## 项目约定
+
+- **后端**: RESTful 控制器 `/v1/*`，JPA 实体 + Lombok，Service 层业务逻辑
+- **前端**: Composition API `<script setup>` 风格，Naive UI 组件，Pinia composition store
+- **管理页面**: Vue Router `beforeEach` + 后端安全过滤器双重权限控制
+- **技能系统**: 纯文件系统存储 `workspace/skills/{name}/SKILL.md`，YAML frontmatter 含 `name`、`description`、`category`
+
+## 许可证
 
 ISC

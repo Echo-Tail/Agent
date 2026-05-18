@@ -1,5 +1,6 @@
 package cafe.snails.ecomagents.service;
 
+import cafe.snails.ecomagents.config.SkillConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.model.SkillIndex;
 import cafe.snails.ecomagents.repository.SkillIndexRepository;
@@ -35,6 +36,7 @@ class SkillServiceTest {
     private SkillIndexRepository skillIndexRepository;
 
     private WorkspaceConfig workspaceConfig;
+    private SkillConfig skillConfig;
     private SkillService skillService;
 
     @Captor
@@ -44,7 +46,9 @@ class SkillServiceTest {
     void setUp() {
         workspaceConfig = new WorkspaceConfig();
         workspaceConfig.setRoot(tempDir.toString());
-        skillService = new SkillService(workspaceConfig, skillIndexRepository, new ObjectMapper());
+        skillConfig = new SkillConfig();
+        skillConfig.setGhProxyUrl("https://gh-proxy.org");
+        skillService = new SkillService(workspaceConfig, skillConfig, skillIndexRepository, new ObjectMapper());
     }
 
     @Test
