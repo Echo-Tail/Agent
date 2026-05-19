@@ -22,50 +22,25 @@ beforeEach(() => {
 
 describe('useChatStore', () => {
   describe('folderTree', () => {
-    it('builds flat list when no folders have parentId', () => {
+    it('returns flat folder list sorted by orderNum', () => {
       const store = useChatStore()
       store.folders = [
-        { id: 1, name: 'A', parentId: null, orderNum: 0 },
-        { id: 2, name: 'B', parentId: null, orderNum: 1 },
+        { id: 1, name: 'A', orderNum: 0 },
+        { id: 2, name: 'B', orderNum: 1 },
       ]
       expect(store.folderTree).toHaveLength(2)
       expect(store.folderTree[0].name).toBe('A')
       expect(store.folderTree[1].name).toBe('B')
     })
 
-    it('builds nested tree from parentId refs', () => {
-      const store = useChatStore()
-      store.folders = [
-        { id: 1, name: 'Root', parentId: null, orderNum: 0 },
-        { id: 2, name: 'Child', parentId: 1, orderNum: 0 },
-        { id: 3, name: 'Grandchild', parentId: 2, orderNum: 0 },
-      ]
-      const tree = store.folderTree as unknown as Array<{ name: string; children: Array<{ name: string; children: Array<{ name: string }> }> }>
-      expect(tree).toHaveLength(1)
-      expect(tree[0].name).toBe('Root')
-      expect(tree[0].children).toHaveLength(1)
-      expect(tree[0].children[0].name).toBe('Child')
-      expect(tree[0].children[0].children).toHaveLength(1)
-      expect(tree[0].children[0].children[0].name).toBe('Grandchild')
-    })
-
     it('sorts by orderNum', () => {
       const store = useChatStore()
       store.folders = [
-        { id: 2, name: 'Second', parentId: null, orderNum: 1 },
-        { id: 1, name: 'First', parentId: null, orderNum: 0 },
-        { id: 3, name: 'Third', parentId: null, orderNum: 2 },
+        { id: 2, name: 'Second', orderNum: 1 },
+        { id: 1, name: 'First', orderNum: 0 },
+        { id: 3, name: 'Third', orderNum: 2 },
       ]
       expect(store.folderTree.map((f) => f.name)).toEqual(['First', 'Second', 'Third'])
-    })
-
-    it('treats folders with missing parent as root', () => {
-      const store = useChatStore()
-      store.folders = [
-        { id: 1, name: 'Root', parentId: null, orderNum: 0 },
-        { id: 2, name: 'Orphan', parentId: 999, orderNum: 0 },
-      ]
-      expect(store.folderTree).toHaveLength(2)
     })
 
     it('returns empty array when no folders', () => {
@@ -78,7 +53,7 @@ describe('useChatStore', () => {
     it('populates folders on success', async () => {
       const { listFoldersApi } = await import('../../api/session')
       const mockFolders: SessionFolder[] = [
-        { id: 1, name: '客服', parentId: null, orderNum: 0 },
+        { id: 1, name: '客服', orderNum: 0 },
       ]
       vi.mocked(listFoldersApi).mockResolvedValue({
         data: { code: 200, message: 'ok', data: mockFolders },
@@ -167,7 +142,7 @@ describe('useChatStore', () => {
         data: { code: 200, message: 'ok', data: null },
       } as any)
       vi.mocked(listFoldersApi).mockResolvedValue({
-        data: { code: 200, message: 'ok', data: [{ id: 1, name: 'New', parentId: null, orderNum: 0 }] },
+        data: { code: 200, message: 'ok', data: [{ id: 1, name: 'New', orderNum: 0 }] },
       } as any)
 
       const store = useChatStore()

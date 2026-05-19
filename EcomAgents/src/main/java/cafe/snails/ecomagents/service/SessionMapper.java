@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Session;
+import cafe.snails.ecomagents.model.SessionMessage;
 import cafe.snails.ecomagents.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -92,6 +93,21 @@ public class SessionMapper {
         }
 
         sessionRepository.save(session);
+    }
+
+    /**
+     * 向 DB 会话中追加一条消息（同步写入 session_messages 表）。
+     */
+    @Transactional
+    public void saveMessage(String harnessSessionId, String role, String content) {
+        sessionRepository.findByHarnessSessionId(harnessSessionId).ifPresent(session -> {
+            session.getMessages().add(SessionMessage.builder()
+                    .role(role)
+                    .content(content)
+                    .timestamp(LocalDateTime.now())
+                    .build());
+            sessionRepository.save(session);
+        });
     }
 
     /**

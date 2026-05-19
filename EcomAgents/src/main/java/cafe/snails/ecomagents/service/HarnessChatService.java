@@ -13,10 +13,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HarnessAgent 聊天服务，封装 HarnessAgent.call() + SSE 事件推送。
@@ -46,7 +46,8 @@ public class HarnessChatService {
      * @return SseEmitter 立即返回，异步执行 ReAct 循环
      */
     public SseEmitter streamChat(Long agentId, String sessionId, String content, Long userId) {
-        SseEmitter emitter = new SseEmitter(120_000L);
+        SseEmitter emitter = new SseEmitter(600_000L);
+        AtomicBoolean completed = new AtomicBoolean(false);
 
         llmTaskExecutor.execute(() -> {
             HarnessAgent agent = null;
@@ -54,7 +55,7 @@ public class HarnessChatService {
                 agent = harnessAgentManager.createChatAgent(agentId, emitter, userId);
 
                 // 发送 reasoning 开始事件
-                sendSse(emitter, Map.of("type", SseEvent.TYPE_REASONING, "content", "开始思考..."));
+                sendSse(emitter, completed, Map.of("type", SseEvent.TYPE_REASONING, "content", "开始思考..."));
 
                 // 构造 RuntimeContext
                 RuntimeContext ctx = RuntimeContext.builder()
@@ -74,42 +75,52 @@ public class HarnessChatService {
                 if (reply != null && reply.getTextContent() != null && !reply.getTextContent().isBlank()) {
                     String fullText = reply.getTextContent();
 
+                    // 保存消息到 DB
+                    sessionMapper.saveMessage(sessionId, "user", content);
+                    sessionMapper.saveMessage(sessionId, "assistant", fullText);
+
                     // 同步会话元数据到 DB
                     sessionMapper.syncSessionMetadata(agentId, sessionId, userId, content, fullText);
 
                     // 发送 done 事件
-                    sendSse(emitter, Map.of(
+                    sendSse(emitter, completed, Map.of(
                             "type", SseEvent.TYPE_DONE,
                             "content", fullText
                     ));
-                    emitter.complete();
+                    if (completed.compareAndSet(false, true)) {
+                        emitter.complete();
+                    }
                 } else {
-                    sendSseAndError(emitter, "模型响应为空，请重试");
+                    sendSseAndError(emitter, completed, "模型响应为空，请重试");
                 }
 
             } catch (Exception e) {
                 log.error("HarnessChat failed: agentId={}, sessionId={}, error={}",
                         agentId, sessionId, e.getMessage(), e);
-                sendSseAndError(emitter, e.getMessage());
+                sendSseAndError(emitter, completed, e.getMessage());
             }
         });
 
         return emitter;
     }
 
-    private void sendSse(SseEmitter emitter, Map<String, Object> data) {
+    private void sendSse(SseEmitter emitter, AtomicBoolean completed, Map<String, Object> data) {
+        if (completed.get()) return;
         try {
             emitter.send(SseEmitter.event().data(" " + objectMapper.writeValueAsString(data)));
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.warn("SSE send failed: {}", e.getMessage());
         }
     }
 
-    private void sendSseAndError(SseEmitter emitter, String message) {
+    private void sendSseAndError(SseEmitter emitter, AtomicBoolean completed, String message) {
+        if (completed.get()) return;
         try {
-            sendSse(emitter, Map.of("type", SseEvent.TYPE_ERROR, "message", message));
+            sendSse(emitter, completed, Map.of("type", SseEvent.TYPE_ERROR, "message", message));
         } finally {
-            emitter.complete();
+            if (completed.compareAndSet(false, true)) {
+                emitter.complete();
+            }
         }
     }
 }

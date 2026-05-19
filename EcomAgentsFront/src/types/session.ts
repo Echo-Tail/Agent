@@ -31,7 +31,6 @@ export interface SessionSummary {
 export interface SessionFolder {
   id: number
   name: string
-  parentId: number | null
   orderNum: number
 }
 

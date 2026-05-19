@@ -31,7 +31,6 @@ public class SessionFolderController {
     public ApiResponse<SessionFolder> createFolder(@RequestBody Map<String, Object> body) {
         SessionFolder folder = SessionFolder.builder()
                 .name((String) body.get("name"))
-                .parentId(body.get("parentId") != null ? Long.valueOf(body.get("parentId").toString()) : null)
                 .build();
         SessionFolder saved = folderRepository.save(folder);
         return ApiResponse.success("文件夹创建成功", saved);
@@ -49,14 +48,10 @@ public class SessionFolderController {
                 .orElse(ApiResponse.error(404, "文件夹不存在"));
     }
 
-    /** 删除文件夹（有子文件夹时禁止删除） */
+    /** 删除文件夹 */
     @Transactional
     @DeleteMapping("/session-folders/{id}")
     public ApiResponse<Void> deleteFolder(@PathVariable("id") Long id) {
-        boolean hasChildren = folderRepository.existsByParentId(id);
-        if (hasChildren) {
-            return ApiResponse.error(400, "该文件夹下有子文件夹，无法删除");
-        }
         return folderRepository.findById(id)
                 .map(folder -> {
                     folderRepository.delete(folder);

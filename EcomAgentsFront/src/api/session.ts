@@ -37,7 +37,7 @@ export function listFoldersApi() {
   return http.get<ApiResponse<SessionFolder[]>>('/session-folders')
 }
 
-export function createFolderApi(data: { name: string; parentId?: number | null }) {
+export function createFolderApi(data: { name: string }) {
   return http.post<ApiResponse<SessionFolder>>('/session-folders', data)
 }
 

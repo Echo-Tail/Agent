@@ -46,21 +46,7 @@ export const useChatStore = defineStore('chat', () => {
   /* ====== Getters ====== */
 
   const folderTree = computed(() => {
-    const map = new Map<number, SessionFolder & { children: SessionFolder[] }>()
-    const roots: (SessionFolder & { children: SessionFolder[] })[] = []
-
-    for (const f of [...folders.value].sort((a, b) => a.orderNum - b.orderNum)) {
-      map.set(f.id, { ...f, children: [] })
-    }
-
-    for (const f of map.values()) {
-      if (f.parentId && map.has(f.parentId)) {
-        map.get(f.parentId)!.children.push(f)
-      } else {
-        roots.push(f)
-      }
-    }
-    return roots
+    return [...folders.value].sort((a, b) => a.orderNum - b.orderNum)
   })
 
   /* ====== Session Actions ====== */
@@ -135,8 +121,8 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function addFolder(name: string, parentId?: number | null) {
-    const res = await createFolderApi({ name, parentId })
+  async function addFolder(name: string) {
+    const res = await createFolderApi({ name })
     if (res.data.code === 200) {
       await fetchFolders()
       return true
@@ -218,13 +204,16 @@ export const useChatStore = defineStore('chat', () => {
             fetchSessions()
           },
           onError: (errorMsg) => {
+            const partialContent = streamingText.value
             streamingText.value = ''
             isStreaming.value = false
             currentToolCalls.value = []
             abortController.value = null
             messages.value.push({
               role: 'assistant',
-              content: errorMsg,
+              content: partialContent
+                ? partialContent + '\n\n---\n' + errorMsg
+                : errorMsg,
               timestamp: new Date().toISOString(),
               isError: true,
             })

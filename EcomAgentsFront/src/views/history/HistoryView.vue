@@ -82,14 +82,10 @@ async function moveSession(session: SessionSummary, folderId: number) {
 }
 
 function folderOptions() {
-  function buildDropdownTree(folders: any[]): any[] {
-    return folders.map((f) => ({
-      label: f.name,
-      key: f.id,
-      children: f.children.length > 0 ? buildDropdownTree(f.children) : undefined,
-    }))
-  }
-  const items = buildDropdownTree(chat.folderTree)
+  const items = chat.folders.map((f) => ({
+    label: f.name,
+    key: f.id,
+  }))
   items.unshift({ label: '不分类', key: -2 })
   return items
 }
@@ -139,29 +135,16 @@ async function batchMoveToFolder(folderId: number) {
   selectMode.value = false
 }
 
-/* ====== 父子文件夹 ====== */
+/* ====== 文件夹操作 ====== */
 
-const parentFolder = computed(() => {
-  if (selectedFolderId.value === undefined) return null
-  return chat.folders.find((f) => f.id === selectedFolderId.value) ?? null
-})
-
-const canCreateSubfolder = computed(() => {
-  // 未选中文件夹（创建根目录）或选中根目录文件夹 → 允许
-  return !parentFolder.value || parentFolder.value.parentId === null
-})
-
-// Folder CRUD
 function startCreateFolder() {
-  if (!canCreateSubfolder.value) return
   newFolderName.value = ''
   showCreateFolder.value = true
 }
 
 async function handleCreateFolder() {
   if (!newFolderName.value.trim()) return
-  const parentId = parentFolder.value?.id ?? undefined
-  const ok = await chat.addFolder(newFolderName.value.trim(), parentId)
+  const ok = await chat.addFolder(newFolderName.value.trim())
   if (ok) {
     message.success('文件夹创建成功')
   } else {
@@ -237,62 +220,39 @@ function confirmDeleteFolder(folderId: number) {
   const folder = chat.folders.find((f) => f.id === folderId)
   if (!folder) return
 
-  const hasSubfolders = chat.folders.some((f) => f.parentId === folderId)
   const sessionsInFolder = chat.sessions.filter((s) => s.folderId === folderId)
-
-  /** 收集文件夹及其所有子文件夹 ID（最多 2 层） */
-  function collectFolderIds(rootId: number): number[] {
-    const ids: number[] = [rootId]
-    for (const f of chat.folders) {
-      if (f.parentId === rootId) ids.push(f.id)
-    }
-    return ids
-  }
 
   if (sessionsInFolder.length > 0) {
     dialog.info({
       title: '确认删除',
-      content: `文件夹「${folder.name}」内有 ${sessionsInFolder.length} 条会话，如何处理？${hasSubfolders ? '\n注意：子文件夹也会被一并删除。' : ''}`,
+      content: `文件夹「${folder.name}」内有 ${sessionsInFolder.length} 条会话，如何处理？`,
       positiveText: '仅删除文件夹',
       negativeText: '同时删除会话',
       onPositiveClick: async () => {
-        // 仅删除文件夹（及子文件夹），会话保留
-        const allIds = collectFolderIds(folderId)
-        for (const id of allIds) {
-          await chat.removeFolder(id)
-        }
+        await chat.removeFolder(folderId)
         message.success('文件夹已删除')
         if (selectedFolderId.value === folderId) selectedFolderId.value = undefined
         await chat.fetchSessions()
       },
       onNegativeClick: async () => {
-        // 先删除文件夹内的会话
         for (const s of sessionsInFolder) {
           await chat.removeSession(s.id)
         }
-        // 再删除文件夹（及子文件夹）
-        const allIds = collectFolderIds(folderId)
-        for (const id of allIds) {
-          await chat.removeFolder(id)
-        }
+        await chat.removeFolder(folderId)
         message.success(`文件夹及 ${sessionsInFolder.length} 条会话已删除`)
         if (selectedFolderId.value === folderId) selectedFolderId.value = undefined
         await chat.fetchSessions()
       },
     })
   } else {
-    // 文件夹内无会话，简化流程
-    const folderIds = collectFolderIds(folderId)
     dialog.warning({
       title: '确认删除',
-      content: `确定要删除文件夹「${folder.name}」吗？${hasSubfolders ? '子文件夹也会被一并删除。' : ''}`,
+      content: `确定要删除文件夹「${folder.name}」吗？`,
       positiveText: '删除',
       negativeText: '取消',
       positiveButtonProps: { type: 'error' },
       onPositiveClick: async () => {
-        for (const id of folderIds) {
-          await chat.removeFolder(id)
-        }
+        await chat.removeFolder(folderId)
         message.success('文件夹已删除')
         if (selectedFolderId.value === folderId) selectedFolderId.value = undefined
         await chat.fetchSessions()
@@ -312,16 +272,12 @@ function formatTime(t: string) {
 }
 
 const menuOptions = computed(() => {
-  function buildMenuTree(folders: any[]): any[] {
-    return folders.map((f) => ({
-      label: f.name,
-      key: f.id,
-      children: f.children.length > 0 ? buildMenuTree(f.children) : undefined,
-    }))
-  }
   return [
     { label: '全部会话', key: -1 } as { label: string; key: number },
-    ...buildMenuTree(chat.folderTree),
+    ...chat.folders.map((f) => ({
+      label: f.name,
+      key: f.id,
+    })),
   ]
 })
 </script>
@@ -332,8 +288,7 @@ const menuOptions = computed(() => {
     <div class="folders-panel">
       <div class="panel-header">
         <span style="font-weight: 600; font-size: 14px;">文件夹</span>
-        <n-button type="primary" quaternary size="tiny" :disabled="!canCreateSubfolder" @click="startCreateFolder"
-          :title="parentFolder && !canCreateSubfolder ? '子文件夹下不可再创建子文件夹' : '新建文件夹'">
+        <n-button type="primary" quaternary size="tiny" @click="startCreateFolder" title="新建文件夹">
           <template #icon>
             <n-icon>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -433,8 +388,7 @@ const menuOptions = computed(() => {
     </div>
 
     <!-- Create Folder Modal -->
-    <n-modal v-model:show="showCreateFolder"
-      :title="parentFolder ? `在「${parentFolder.name}」下新建子文件夹` : '新建文件夹'"
+    <n-modal v-model:show="showCreateFolder" title="新建文件夹"
       preset="dialog" positive-text="创建" negative-text="取消"
       @positive-click="handleCreateFolder" @negative-click="showCreateFolder = false">
       <n-input v-model:value="newFolderName" placeholder="文件夹名称" @keydown.enter="handleCreateFolder" />

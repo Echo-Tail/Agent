@@ -29,10 +29,10 @@ public class SessionController {
         return sessionService.listSessions(folderId, agentId);
     }
 
-    /** 获取单个会话详情 */
+    /** 获取单个会话详情（含完整消息列表） */
     @GetMapping("/sessions/{id}")
     public ApiResponse<Session> getSession(@PathVariable("id") Long id) {
-        return sessionService.getSession(id);
+        return sessionService.getSessionWithMessages(id);
     }
 
     /** 创建新会话 */
