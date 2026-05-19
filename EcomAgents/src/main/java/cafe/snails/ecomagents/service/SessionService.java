@@ -6,6 +6,7 @@ import cafe.snails.ecomagents.model.Session;
 import cafe.snails.ecomagents.model.SessionMessage;
 import cafe.snails.ecomagents.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 /**
  * 会话业务逻辑，支持按文件夹 / Agent 筛选、消息增删等。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SessionService {
@@ -25,18 +27,18 @@ public class SessionService {
     private final SessionRepository sessionRepository;
 
     /**
-     * 查询会话列表，可按 folderId 或 agentId 筛选。
-     * 全部为空时返回全部会话。
+     * 查询非空会话列表，可按 folderId 或 agentId 筛选。
+     * 无消息的会话（空壳会话）会被自动过滤。
      */
     @Transactional(readOnly = true)
     public ApiResponse<List<SessionSummary>> listSessions(Long folderId, Long agentId) {
         List<Session> sessions;
         if (folderId != null) {
-            sessions = sessionRepository.findByFolderId(folderId);
+            sessions = sessionRepository.findNonEmptyByFolderId(folderId);
         } else if (agentId != null) {
-            sessions = sessionRepository.findByAgentId(agentId);
+            sessions = sessionRepository.findNonEmptyByAgentId(agentId);
         } else {
-            sessions = sessionRepository.findAll();
+            sessions = sessionRepository.findAllNonEmpty();
         }
 
         List<SessionSummary> summaries = sessions.stream()
@@ -116,6 +118,18 @@ public class SessionService {
                     return ApiResponse.success("消息已发送", msg);
                 })
                 .orElse(ApiResponse.error(404, "会话不存在"));
+    }
+
+    /**
+     * 清理所有无消息的空壳会话，返回删除数量。
+     */
+    @Transactional
+    public int cleanupEmptySessions() {
+        int deleted = sessionRepository.deleteAllEmpty();
+        if (deleted > 0) {
+            log.info("已清理 {} 个空会话", deleted);
+        }
+        return deleted;
     }
 
     /** 将 Session 实体转换为 SessionSummary DTO */

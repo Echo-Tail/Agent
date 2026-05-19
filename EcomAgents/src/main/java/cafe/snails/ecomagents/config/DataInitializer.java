@@ -6,6 +6,7 @@ import cafe.snails.ecomagents.model.User;
 import cafe.snails.ecomagents.repository.InviteCodeRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
+import cafe.snails.ecomagents.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -29,6 +30,7 @@ public class DataInitializer implements CommandLineRunner {
     private final InviteCodeRepository inviteCodeRepository;
     private final ToolConfigRepository toolConfigRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionService sessionService;
 
     @Override
     @Transactional
@@ -71,6 +73,17 @@ public class DataInitializer implements CommandLineRunner {
 
         log.info("数据初始化完成");
         initTools();
+        cleanupEmptySessions();
+    }
+
+    /**
+     * 清理无消息的空壳会话，避免历史记录中出现无效会话。
+     */
+    private void cleanupEmptySessions() {
+        int count = sessionService.cleanupEmptySessions();
+        if (count > 0) {
+            log.info("启动时清理了 {} 个空会话", count);
+        }
     }
 
     /**

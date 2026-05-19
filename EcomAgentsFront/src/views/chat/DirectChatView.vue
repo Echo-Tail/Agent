@@ -166,23 +166,6 @@ async function startDirectSession() {
   }
 }
 
-async function startAgentSession(agent: Agent) {
-  chat.switchToAgent(agent.id)
-  try {
-    const session = await chat.createSession(agent.id, '新对话')
-    if (session && agent.greeting) {
-      chat.messages.push({
-        role: 'assistant',
-        content: agent.greeting,
-        timestamp: new Date().toISOString(),
-      })
-    }
-  } catch (e) {
-    console.error('Failed to create agent session:', e)
-    message?.error('创建会话失败')
-  }
-}
-
 function handleNewSession() {
   chat.clearActiveSession()
   if (isDirectMode.value) {
@@ -200,7 +183,14 @@ function handleSwitchToDirect() {
 /* ====== Agent click ====== */
 function handleAgentClick(agent: Agent) {
   chat.clearActiveSession()
-  startAgentSession(agent)
+  chat.switchToAgent(agent.id)
+  if (agent.greeting) {
+    chat.messages.push({
+      role: 'assistant',
+      content: agent.greeting,
+      timestamp: new Date().toISOString(),
+    })
+  }
 }
 
 /* ====== Send message ====== */
@@ -210,6 +200,8 @@ async function handleSend() {
   if (!chat.activeSession) {
     if (isDirectMode.value && systemAgent.value) {
       await startDirectSession()
+    } else if (chat.chatMode === 'agent' && chat.activeAgentId) {
+      await chat.createSession(chat.activeAgentId)
     } else {
       return
     }
@@ -276,7 +268,15 @@ async function init() {
     try {
       const res = await getAgentApi(Number(agentIdParam))
       if (res.data.code === 200 && res.data.data) {
-        handleAgentClick(res.data.data)
+        const agent = res.data.data
+        chat.switchToAgent(agent.id)
+        if (agent.greeting) {
+          chat.messages.push({
+            role: 'assistant',
+            content: agent.greeting,
+            timestamp: new Date().toISOString(),
+          })
+        }
         return
       }
     } catch (e) {
@@ -284,10 +284,7 @@ async function init() {
     }
   }
 
-  // Default: auto-start a direct session
-  if (systemAgent.value) {
-    await startDirectSession()
-  }
+  // Default: show welcome screen — session is created on first send
 }
 
 init()
@@ -366,7 +363,7 @@ init()
       </div>
 
       <!-- Messages -->
-      <div v-if="hasSession" ref="messagesContainer" class="messages-area">
+      <div v-if="hasSession || chat.chatMode === 'agent'" ref="messagesContainer" class="messages-area">
         <div class="messages-inner">
           <MessageBubble v-for="(msg, i) in allMessages" :key="i" :msg="msg" />
           <div v-if="chat.isStreaming" class="streaming-cursor">
