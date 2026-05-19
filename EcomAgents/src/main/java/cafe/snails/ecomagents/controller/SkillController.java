@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * 技能控制器 — 基于文件系统的技能管理。
- * 仅提供列表、URL 导入、ZIP 上传、删除。
+ * 仅提供列表、GitHub URL 导入、ZIP 上传、删除。
  */
 @RestController
 @RequestMapping("/v1")
@@ -28,16 +28,17 @@ public class SkillController {
     }
 
     /**
-     * 从 skills.sh URL 导入技能。
-     * body: { "url": "https://www.skills.sh/{org}/skills/{skill-name}" }
+     * 从 GitHub URL 导入技能。
+     * body: { "url": "https://github.com/{owner}/{repo}" }
+     * 也支持 tree 路径：https://github.com/{owner}/{repo}/tree/{branch}/skills/{name}
      */
     @PostMapping("/skills/import-url")
     public ApiResponse<Void> importFromUrl(@RequestBody Map<String, String> body) {
         String url = body.get("url");
         if (url == null || url.isBlank()) {
-            return ApiResponse.error(400, "请提供 skills.sh URL");
+            return ApiResponse.error(400, "请提供 GitHub 仓库 URL");
         }
-        return skillService.importFromSkillsUrl(url);
+        return skillService.importFromGithubUrl(url);
     }
 
     /**
