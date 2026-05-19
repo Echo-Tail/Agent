@@ -29,7 +29,7 @@ public class InviteCodeController {
     /** 批量生成邀请码 */
     @PostMapping("/invite-codes/batch")
     public ApiResponse<List<InviteCode>> batchGenerate(@Valid @RequestBody BatchInviteRequest request) {
-        return inviteCodeService.batchGenerate(request.getCount(), request.getPrefix());
+        return inviteCodeService.batchGenerate(request.getCount());
     }
 
     /** 删除指定邀请码 */

@@ -7,9 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 邀请码业务逻辑，支持批量生成和删除。
@@ -17,6 +20,10 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class InviteCodeService {
+
+    private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int CODE_LENGTH = 8;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     private final InviteCodeRepository inviteCodeRepository;
 
@@ -27,14 +34,15 @@ public class InviteCodeService {
 
     /**
      * 批量生成邀请码。
-     * 每个码由指定前缀 + 随机十六进制字符串构成。
+     * 每个码为 8 位大写字母+数字组合（字符集 36），使用 SecureRandom 确保随机性。
      */
     @Transactional
-    public ApiResponse<List<InviteCode>> batchGenerate(int count, String prefix) {
+    public ApiResponse<List<InviteCode>> batchGenerate(int count) {
         List<InviteCode> codes = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (int i = 0; i < count; i++) {
-            String random = Long.toHexString(Double.doubleToLongBits(Math.random())).toUpperCase();
-            String code = prefix != null && !prefix.isEmpty() ? prefix + random.substring(0, 6) : random.substring(0, 8);
+            String code = generateUniqueCode(seen);
+            seen.add(code);
             InviteCode ic = InviteCode.builder()
                     .code(code)
                     .used(false)
@@ -44,6 +52,23 @@ public class InviteCodeService {
         }
         inviteCodeRepository.saveAll(codes);
         return ApiResponse.success("生成成功", codes);
+    }
+
+    /** 生成一个不重复的随机邀请码 */
+    private String generateUniqueCode(Set<String> seen) {
+        StringBuilder sb = new StringBuilder(CODE_LENGTH);
+        for (int attempt = 0; attempt < 10; attempt++) {
+            sb.setLength(0);
+            for (int j = 0; j < CODE_LENGTH; j++) {
+                sb.append(CODE_CHARS.charAt(secureRandom.nextInt(CODE_CHARS.length())));
+            }
+            String code = sb.toString();
+            if (!seen.contains(code) && inviteCodeRepository.findById(code).isEmpty()) {
+                return code;
+            }
+        }
+        // Fallback: extremely unlikely to reach here
+        return sb.toString();
     }
 
     /** 删除指定邀请码（已使用的不可删除） */

@@ -2,12 +2,14 @@
 import { h, ref, computed, onMounted } from 'vue'
 import type { DataTableColumn } from 'naive-ui'
 import { useMessage, NButton } from 'naive-ui'
+import { useAuthStore } from '../../stores/auth'
 import { listUsersApi, toggleUserStatusApi } from '../../api/user'
 import { listInviteCodesApi, batchGenerateApi, deleteInviteCodeApi } from '../../api/invite'
 import type { UserDTO, InviteCode, UserStats } from '../../types/api'
 import { UserRoleLabels, UserStatusLabels } from '../../types/enums'
 
 const message = useMessage()
+const authStore = useAuthStore()
 
 const users = ref<UserDTO[]>([])
 const loading = ref(false)
@@ -19,7 +21,6 @@ const inviteCodes = ref<InviteCode[]>([])
 const inviteLoading = ref(false)
 const inviteTab = ref<'unused' | 'used'>('unused')
 const batchCount = ref(5)
-const batchPrefix = ref('')
 const batchLoading = ref(false)
 const deletingCode = ref<Set<string>>(new Set())
 
@@ -86,7 +87,7 @@ async function fetchInviteCodes() {
 async function handleBatchGenerate() {
   batchLoading.value = true
   try {
-    const res = await batchGenerateApi(batchCount.value, batchPrefix.value || undefined)
+    const res = await batchGenerateApi(batchCount.value)
     if (res.data.code === 200) {
       message.success(`已生成 ${batchCount.value} 个邀请码`)
       await fetchInviteCodes()
@@ -150,12 +151,26 @@ const columns: DataTableColumn<UserDTO>[] = [
     title: '操作',
     key: 'actions',
     width: 100,
-    render: (row: UserDTO) =>
-      row.status === 'active'
-        ? h(NButton, { size: 'tiny', type: 'warning', loading: toggling.value.has(row.id), onClick: () => handleToggleStatus(row) },
-            { default: () => '禁用' })
-        : h(NButton, { size: 'tiny', type: 'success', loading: toggling.value.has(row.id), onClick: () => handleToggleStatus(row) },
-            { default: () => '启用' }),
+    render: (row: UserDTO) => {
+      const isSelf = row.id === authStore.currentUser?.id
+      const isAdmin = row.role === 'admin'
+      const disabled = isSelf || isAdmin
+      return row.status === 'active'
+        ? h(NButton, {
+            size: 'tiny',
+            type: 'warning',
+            disabled,
+            loading: toggling.value.has(row.id),
+            onClick: () => handleToggleStatus(row),
+          }, { default: () => '禁用' })
+        : h(NButton, {
+            size: 'tiny',
+            type: 'success',
+            disabled: isAdmin,
+            loading: toggling.value.has(row.id),
+            onClick: () => handleToggleStatus(row),
+          }, { default: () => '启用' })
+    },
   },
 ]
 </script>
@@ -251,7 +266,6 @@ const columns: DataTableColumn<UserDTO>[] = [
         <n-card title="批量生成" size="small" :bordered="true">
           <n-space align="center">
             <n-input-number v-model:value="batchCount" :min="1" :max="100" style="width: 100px;" />
-            <n-input v-model:value="batchPrefix" placeholder="前缀（选填）" style="width: 140px;" />
             <n-button type="primary" :loading="batchLoading" @click="handleBatchGenerate">
               生成
             </n-button>

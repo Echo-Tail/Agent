@@ -95,9 +95,14 @@ public class UserService {
                 .orElse(ApiResponse.error(404, "用户不存在"));
     }
 
-    /** 更新用户状态（active / disabled） */
+    /**
+     * 更新用户状态（active / disabled）。
+     * 不允许禁用自己或其他管理员账号。
+     */
     @Transactional
-    public ApiResponse<UserDTO> updateStatus(Long id, String status) {
+    public ApiResponse<UserDTO> updateStatus(Long id, String status, Long currentUserId) {
+        ApiResponse<UserDTO> guard = guardAgainstSelfOrAdmin(id, currentUserId);
+        if (guard != null) return guard;
         return userRepository.findById(id)
                 .map(user -> {
                     user.setStatus(status);
@@ -107,9 +112,14 @@ public class UserService {
                 .orElse(ApiResponse.error(404, "用户不存在"));
     }
 
-    /** 切换用户启用/禁用状态 */
+    /**
+     * 切换用户启用/禁用状态。
+     * 不允许禁用自己或其他管理员账号。
+     */
     @Transactional
-    public ApiResponse<UserDTO> toggleStatus(Long id) {
+    public ApiResponse<UserDTO> toggleStatus(Long id, Long currentUserId) {
+        ApiResponse<UserDTO> guard = guardAgainstSelfOrAdmin(id, currentUserId);
+        if (guard != null) return guard;
         return userRepository.findById(id)
                 .map(user -> {
                     user.setStatus("active".equals(user.getStatus()) ? "disabled" : "active");
@@ -119,6 +129,20 @@ public class UserService {
                             toDTO(user));
                 })
                 .orElse(ApiResponse.error(404, "用户不存在"));
+    }
+
+    /**
+     * 检查是否试图禁用自己或其他管理员。
+     * @return 如果被阻止则返回错误响应，否则返回 null
+     */
+    private ApiResponse<UserDTO> guardAgainstSelfOrAdmin(Long targetId, Long currentUserId) {
+        if (targetId.equals(currentUserId)) {
+            return ApiResponse.error(400, "不能禁用自己");
+        }
+        return userRepository.findById(targetId)
+                .filter(user -> "admin".equals(user.getRole()))
+                .map(user -> ApiResponse.<UserDTO>error(400, "不能禁用管理员账号"))
+                .orElse(null);
     }
 
     /** 将 User 实体转换为 UserDTO（过滤密码等敏感字段） */

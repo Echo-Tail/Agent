@@ -5,8 +5,8 @@ export function listInviteCodesApi() {
   return http.get<ApiResponse<InviteCode[]>>('/invite-codes')
 }
 
-export function batchGenerateApi(count: number, prefix?: string) {
-  return http.post<ApiResponse<InviteCode[]>>('/invite-codes/batch', { count, prefix })
+export function batchGenerateApi(count: number) {
+  return http.post<ApiResponse<InviteCode[]>>('/invite-codes/batch', { count })
 }
 
 export function deleteInviteCodeApi(code: string) {

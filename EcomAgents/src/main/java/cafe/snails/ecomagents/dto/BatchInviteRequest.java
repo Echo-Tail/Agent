@@ -11,7 +11,4 @@ public class BatchInviteRequest {
     /** 生成数量 */
     @Min(value = 1, message = "数量至少为1")
     private int count;
-
-    /** 邀请码前缀（可选） */
-    private String prefix;
 }
