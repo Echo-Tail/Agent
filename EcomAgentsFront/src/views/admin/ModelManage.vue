@@ -62,6 +62,7 @@ function openCreate() {
     apiKey: '',
     maxTokens: 131072,
     temperature: 0.7,
+    modelType: 'TEXT',
     isDefault: false,
     enabled: true,
   }
@@ -184,6 +185,15 @@ const providerLabels: Record<string, string> = {
 const columns: DataTableColumn<AiModel>[] = [
   { title: 'ID', key: 'id', width: 70 },
   { title: '名称', key: 'name', width: 120 },
+  {
+    title: '类型',
+    key: 'modelType',
+    width: 80,
+    render: (row) =>
+      row.modelType === 'IMAGE'
+        ? h('n-tag', { type: 'info', size: 'tiny', bordered: false }, { default: () => '图片' })
+        : h('n-tag', { size: 'tiny', bordered: false }, { default: () => '文本' }),
+  },
   {
     title: '供应商',
     key: 'provider',
@@ -328,6 +338,14 @@ const columns: DataTableColumn<AiModel>[] = [
           <n-gi>
             <n-form-item label="最大 Token">
               <n-select v-model:value="editingModel.maxTokens" :options="tokenOptions" :disabled="saving" />
+            </n-form-item>
+          </n-gi>
+          <n-gi>
+            <n-form-item label="模型类型">
+              <n-radio-group v-model:value="editingModel.modelType">
+                <n-radio-button value="TEXT">文本</n-radio-button>
+                <n-radio-button value="IMAGE">图片</n-radio-button>
+              </n-radio-group>
             </n-form-item>
           </n-gi>
         </n-grid>

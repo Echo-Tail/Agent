@@ -68,6 +68,11 @@ public class AiModel {
     @Column(name = "is_default")
     private Boolean isDefault = false;
 
+    /** 模型类型：TEXT / IMAGE */
+    @Column(name = "model_type", length = 10)
+    @Builder.Default
+    private String modelType = "TEXT";
+
     /** 是否启用 */
     @Builder.Default
     private Boolean enabled = true;

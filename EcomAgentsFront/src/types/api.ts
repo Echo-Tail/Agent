@@ -77,6 +77,7 @@ export interface AiModel {
   temperature: number
   isDefault: boolean
   enabled: boolean
+  modelType: string
   createdAt: string
   createdBy: number
 }

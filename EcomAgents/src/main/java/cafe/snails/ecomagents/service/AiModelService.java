@@ -76,6 +76,7 @@ public class AiModelService {
                     if (updates.getApiKey() != null) model.setApiKey(updates.getApiKey());
                     if (updates.getMaxTokens() != null) model.setMaxTokens(updates.getMaxTokens());
                     if (updates.getTemperature() != null) model.setTemperature(updates.getTemperature());
+                    if (updates.getModelType() != null) model.setModelType(updates.getModelType());
                     if (updates.getEnabled() != null) model.setEnabled(updates.getEnabled());
                     if (updates.getIsDefault() != null && updates.getIsDefault()) {
                         clearDefault();

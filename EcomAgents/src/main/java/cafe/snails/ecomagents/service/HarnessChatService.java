@@ -1,6 +1,11 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.harness.SseEvent;
+import cafe.snails.ecomagents.model.Agent;
+import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.TokenUsageRecord;
+import cafe.snails.ecomagents.repository.AgentRepository;
+import cafe.snails.ecomagents.repository.AiModelRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -23,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * 每次 chat 请求创建 per-request 的 HarnessAgent 实例（含 per-request Hook），
  * 在异步线程中执行 ReAct 循环，通过 SSE 推送步骤事件和最终结果。
+ * 完成后自动记录 Token 用量到 token_usage_records 表。
  * </p>
  */
 @Service
@@ -35,6 +41,10 @@ public class HarnessChatService {
     private final ObjectMapper objectMapper;
     private final Executor llmTaskExecutor;
     private final SessionMapper sessionMapper;
+    private final AgentRepository agentRepository;
+    private final AiModelRepository aiModelRepository;
+    private final TokenUsageService tokenUsageService;
+    private final TokenCounter tokenCounter;
 
     /**
      * 启动 HarnessAgent 流式对话。
@@ -72,8 +82,14 @@ public class HarnessChatService {
                 // 执行 ReAct 循环（阻塞，但在异步线程中）
                 Msg reply = agent.call(userMsg, ctx).block();
 
+                // 获取模型信息用于 Token 记录
+                AiModel model = resolveModel(agentId);
+
                 if (reply != null && reply.getTextContent() != null && !reply.getTextContent().isBlank()) {
                     String fullText = reply.getTextContent();
+
+                    // 计数并记录 Token 用量
+                    recordTokenUsage(model, agentId, userId, content, fullText, true, null);
 
                     // 保存消息到 DB
                     sessionMapper.saveMessage(sessionId, "user", content);
@@ -91,12 +107,17 @@ public class HarnessChatService {
                         emitter.complete();
                     }
                 } else {
+                    // 记录失败
+                    recordTokenUsage(model, agentId, userId, content, null, false, "模型响应为空");
                     sendSseAndError(emitter, completed, "模型响应为空，请重试");
                 }
 
             } catch (Exception e) {
                 log.error("HarnessChat failed: agentId={}, sessionId={}, error={}",
                         agentId, sessionId, e.getMessage(), e);
+                // 记录失败
+                AiModel model = resolveModel(agentId);
+                recordTokenUsage(model, agentId, userId, content, null, false, e.getMessage());
                 sendSseAndError(emitter, completed, e.getMessage());
             }
         });
@@ -122,5 +143,47 @@ public class HarnessChatService {
                 emitter.complete();
             }
         }
+    }
+
+    // ===== Token 用量记录 =====
+
+    private AiModel resolveModel(Long agentId) {
+        Agent agent = agentRepository.findById(agentId).orElse(null);
+        if (agent == null || agent.getModelId() == null) return null;
+        return aiModelRepository.findById(agent.getModelId()).orElse(null);
+    }
+
+    private void recordTokenUsage(AiModel model, Long agentId, Long userId,
+                                  String inputText, String outputText, boolean success, String errorMessage) {
+        try {
+            String modelName = model != null ? model.getName() : "unknown";
+            String modelType = model != null && model.getModelType() != null ? model.getModelType() : "TEXT";
+            String apiModelName = model != null ? model.getModelName() : "unknown";
+
+            int promptTokens = tokenCounter.count(apiModelName, inputText);
+            int completionTokens = outputText != null ? tokenCounter.count(apiModelName, outputText) : 0;
+
+            TokenUsageRecord record = TokenUsageRecord.builder()
+                    .modelId(model != null ? model.getId() : null)
+                    .modelName(modelName)
+                    .modelType(modelType)
+                    .userId(userId)
+                    .agentId(agentId)
+                    .promptTokens(promptTokens)
+                    .completionTokens(completionTokens)
+                    .totalTokens(promptTokens + completionTokens)
+                    .success(success)
+                    .errorMessage(success ? null : truncate(errorMessage, 500))
+                    .build();
+
+            tokenUsageService.record(record);
+        } catch (Exception e) {
+            log.warn("Failed to record token usage: {}", e.getMessage());
+        }
+    }
+
+    private static String truncate(String s, int maxLen) {
+        if (s == null) return null;
+        return s.length() > maxLen ? s.substring(0, maxLen) : s;
     }
 }

@@ -98,6 +98,11 @@ const router = createRouter({
           component: () => import('../views/settings/SettingsView.vue'),
         },
         {
+          path: 'admin/token-usage',
+          name: 'TokenUsage',
+          component: () => import('../views/admin/TokenUsage.vue'),
+        },
+        {
           path: 'logs',
           name: 'Logs',
           component: () => import('../views/log/LogViewer.vue'),
@@ -126,7 +131,7 @@ router.beforeEach((to, _from) => {
   }
 
   // Admin-only routes
-  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage') {
+  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage' || to.name === 'TokenUsage') {
     if (!isAdmin) {
       return { name: 'Dashboard' }
     }

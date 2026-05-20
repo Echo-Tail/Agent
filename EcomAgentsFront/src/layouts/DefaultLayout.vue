@@ -27,6 +27,7 @@ const pageTitles: Record<string, string> = {
   ModelManage: '模型管理',
   ToolManage: '工具管理',
   SkillManage: '技能管理',
+  TokenUsage: 'Token 用量',
   KnowledgeBase: '知识库',
   Logs: '日志',
   Settings: '设置',
@@ -49,6 +50,7 @@ const menuOptions = computed<MenuOption[]>(() => {
   ]
   if (auth.isAdmin) {
     items.push(
+      { label: 'Token 用量', key: 'TokenUsage' },
       { label: '用户管理', key: 'UserManage' },
       { label: '模型管理', key: 'ModelManage' },
       { label: '工具管理', key: 'ToolManage' },
