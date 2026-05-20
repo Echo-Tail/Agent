@@ -3,6 +3,8 @@ export interface SessionMessage {
   content: string
   timestamp: string
   isError?: boolean
+  /** 流中断前已产生的部分内容（仅当 isError 且有部分响应时设置） */
+  partialContent?: string
 }
 
 export interface Session {

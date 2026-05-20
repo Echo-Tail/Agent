@@ -315,6 +315,11 @@ async function handleSend() {
   }
 }
 
+function handleRetry(msg: any) {
+  chat.retryMessage(msg)
+  scrollToBottom()
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
@@ -376,6 +381,7 @@ function handleStop() {
             v-for="(msg, i) in allMessages"
             :key="i"
             :msg="msg"
+            @retry="handleRetry(msg)"
           />
           <div v-if="chat.isStreaming" class="streaming-cursor">
             <span class="cursor-dot">▍</span>

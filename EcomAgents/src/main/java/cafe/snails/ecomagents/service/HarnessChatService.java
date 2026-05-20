@@ -1,6 +1,9 @@
 package cafe.snails.ecomagents.service;
 
+import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.harness.SseEvent;
+import java.time.Duration;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.AiModel;
 import cafe.snails.ecomagents.model.TokenUsageRecord;
@@ -45,6 +48,7 @@ public class HarnessChatService {
     private final AiModelRepository aiModelRepository;
     private final TokenUsageService tokenUsageService;
     private final TokenCounter tokenCounter;
+    private final LlmConfig llmConfig;
 
     /**
      * 启动 HarnessAgent 流式对话。
@@ -58,11 +62,12 @@ public class HarnessChatService {
     public SseEmitter streamChat(Long agentId, String sessionId, String content, Long userId) {
         SseEmitter emitter = new SseEmitter(600_000L);
         AtomicBoolean completed = new AtomicBoolean(false);
+        StringBuilder partialContent = new StringBuilder();
 
         llmTaskExecutor.execute(() -> {
             HarnessAgent agent = null;
             try {
-                agent = harnessAgentManager.createChatAgent(agentId, emitter, userId);
+                agent = harnessAgentManager.createChatAgent(agentId, emitter, userId, completed, partialContent);
 
                 // 发送 reasoning 开始事件
                 sendSse(emitter, completed, Map.of("type", SseEvent.TYPE_REASONING, "content", "开始思考..."));
@@ -80,7 +85,7 @@ public class HarnessChatService {
                         .build();
 
                 // 执行 ReAct 循环（阻塞，但在异步线程中）
-                Msg reply = agent.call(userMsg, ctx).block();
+                Msg reply = agent.call(userMsg, ctx).block(Duration.ofSeconds(llmConfig.getStreamTimeout()));
 
                 // 获取模型信息用于 Token 记录
                 AiModel model = resolveModel(agentId);
@@ -115,10 +120,20 @@ public class HarnessChatService {
             } catch (Exception e) {
                 log.error("HarnessChat failed: agentId={}, sessionId={}, error={}",
                         agentId, sessionId, e.getMessage(), e);
-                // 记录失败
-                AiModel model = resolveModel(agentId);
-                recordTokenUsage(model, agentId, userId, content, null, false, e.getMessage());
-                sendSseAndError(emitter, completed, e.getMessage());
+
+                // 保存流中断前已产生的部分内容到 DB
+                String partial = partialContent.toString();
+                if (!partial.isEmpty()) {
+                    sessionMapper.saveMessage(sessionId, "assistant", partial);
+                }
+
+                // 如果 Hook 已经处理了 ErrorEvent 并 completed，不再重复发送
+                if (!completed.get()) {
+                    String friendly = HarnessHooks.friendlyError(e.getMessage());
+                    AiModel model = resolveModel(agentId);
+                    recordTokenUsage(model, agentId, userId, content, partial, false, friendly);
+                    sendSseAndError(emitter, completed, friendly);
+                }
             }
         });
 

@@ -164,18 +164,20 @@ export const useChatStore = defineStore('chat', () => {
 
   /* ====== Chat / Streaming ====== */
 
-  async function sendMessage(agentId: number, content: string) {
+  async function sendMessage(agentId: number, content: string, skipUserPush = false) {
     if (!activeSession.value) {
       console.warn('sendMessage skipped: no active session (agentId=%s)', agentId)
       throw new Error('没有活跃会话，请重新选择 Agent')
     }
 
-    const userMsg: SessionMessage = {
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString(),
+    if (!skipUserPush) {
+      const userMsg: SessionMessage = {
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString(),
+      }
+      messages.value.push(userMsg)
     }
-    messages.value.push(userMsg)
 
     isStreaming.value = true
     streamingText.value = ''
@@ -204,18 +206,17 @@ export const useChatStore = defineStore('chat', () => {
             fetchSessions()
           },
           onError: (errorMsg) => {
-            const partialContent = streamingText.value
+            const pc = streamingText.value
             streamingText.value = ''
             isStreaming.value = false
             currentToolCalls.value = []
             abortController.value = null
             messages.value.push({
               role: 'assistant',
-              content: partialContent
-                ? partialContent + '\n\n---\n' + errorMsg
-                : errorMsg,
+              content: errorMsg,
               timestamp: new Date().toISOString(),
               isError: true,
+              partialContent: pc || undefined,
             })
           },
           onToolCall: (tool) => {
@@ -256,6 +257,29 @@ export const useChatStore = defineStore('chat', () => {
     abortController.value = null
   }
 
+  /** 重试发送：找到触发 error 的上一条用户消息，重新发送 */
+  async function retryMessage(errorMsg: SessionMessage) {
+    if (isStreaming.value || !activeAgentId.value) return
+    const errIdx = messages.value.indexOf(errorMsg)
+    if (errIdx < 0 || !messages.value[errIdx]?.isError) return
+
+    // 找到该 error 之前的最后一条用户消息
+    let lastUserContent = ''
+    for (let i = errIdx - 1; i >= 0; i--) {
+      if (messages.value[i].role === 'user') {
+        lastUserContent = messages.value[i].content
+        break
+      }
+    }
+    if (!lastUserContent) return
+
+    // 移除 error 消息
+    messages.value.splice(errIdx, 1)
+
+    // 重新发送（不重复 push 用户消息）
+    await sendMessage(activeAgentId.value, lastUserContent, true)
+  }
+
   function clearActiveSession() {
     activeSession.value = null
     messages.value = []
@@ -293,6 +317,7 @@ export const useChatStore = defineStore('chat', () => {
     removeFolder,
     // chat
     sendMessage,
+    retryMessage,
     stopStreaming,
     clearActiveSession,
   }

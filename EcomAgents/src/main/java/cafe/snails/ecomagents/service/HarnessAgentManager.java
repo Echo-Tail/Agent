@@ -23,6 +23,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HarnessAgent 工厂，为每次 chat 请求创建带 per-request Hook 的 HarnessAgent 实例。
@@ -48,7 +49,8 @@ public class HarnessAgentManager {
      * 为指定 Agent 创建带 per-request Hook 的 HarnessAgent 实例。
      * 每次 chat 请求调用一次，用完即弃。
      */
-    public HarnessAgent createChatAgent(Long agentId, SseEmitter emitter, Long userId) {
+    public HarnessAgent createChatAgent(Long agentId, SseEmitter emitter, Long userId,
+                                        AtomicBoolean completed, StringBuilder partialContent) {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
@@ -77,7 +79,7 @@ public class HarnessAgentManager {
         java.nio.file.Path workspacePath = java.nio.file.Path.of(
                 workspaceConfig.getRoot(), "agent-" + agentId);
 
-        HarnessHooks hooks = new HarnessHooks(emitter, objectMapper, agentId);
+        HarnessHooks hooks = new HarnessHooks(emitter, objectMapper, agentId, completed, partialContent);
 
         HarnessAgent harnessAgent = HarnessAgent.builder()
                 .name(agent.getName() != null ? agent.getName() : "agent-" + agentId)

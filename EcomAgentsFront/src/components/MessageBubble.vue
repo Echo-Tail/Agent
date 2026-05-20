@@ -7,6 +7,10 @@ const props = defineProps<{
   msg: SessionMessage
 }>()
 
+const emit = defineEmits<{
+  retry: []
+}>()
+
 const msgCopied = ref(false)
 
 async function copyMessage() {
@@ -43,11 +47,20 @@ async function copyMessage() {
     </div>
     <div class="message-bubble">
       <div class="message-content">
+        <!-- Partial content (streamed before error) -->
+        <div v-if="msg.isError && msg.partialContent" class="partial-content">
+          <MarkdownRenderer :content="msg.partialContent" class="message-text" />
+          <div class="partial-badge">⏸ 内容不完整</div>
+        </div>
+        <!-- Error message -->
+        <pre v-if="msg.isError" class="message-text error-text">{{ msg.content }}</pre>
+        <!-- Normal assistant message -->
         <MarkdownRenderer
-          v-if="msg.role === 'assistant' && !msg.isError"
+          v-else-if="msg.role === 'assistant'"
           :content="msg.content"
           class="message-text"
         />
+        <!-- Normal user message -->
         <pre v-else class="message-text">{{ msg.content }}</pre>
         <button
           v-if="msg.role === 'assistant' && !msg.isError"
@@ -68,6 +81,13 @@ async function copyMessage() {
       <div class="message-time">
         {{ new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}
       </div>
+      <button v-if="msg.isError" class="retry-btn" title="重新发送" @click="emit('retry')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        <span>重新发送</span>
+      </button>
     </div>
   </div>
 </template>
@@ -169,5 +189,48 @@ async function copyMessage() {
 .msg-copy-btn.copied {
   opacity: 1;
   color: #4CAF50;
+}
+
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--message-error-border, #F5C6B8);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--message-error-color, #B84A2A);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.retry-btn:hover {
+  background: rgba(184, 74, 42, 0.08);
+}
+
+.partial-content {
+  margin-bottom: 8px;
+}
+
+.partial-content .message-text {
+  color: var(--text-color, #333);
+}
+
+.partial-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: #B84A2A;
+  background: rgba(184, 74, 42, 0.08);
+  border: 1px solid var(--message-error-border, #F5C6B8);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-top: 4px;
+}
+
+.error-text {
+  color: var(--message-error-color, #B84A2A) !important;
+  font-size: 13px;
 }
 </style>

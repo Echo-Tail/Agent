@@ -23,6 +23,10 @@ public class LlmConfig {
     private double temperature = 0.7;
     /** LLM 流式调用超时时间（秒） */
     private long streamTimeout = 60;
+    /** 模型 API 连接超时时间（秒） */
+    private long connectionTimeout = 30;
+    /** 模型 API 读取超时时间（秒） */
+    private long readTimeout = 55;
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
@@ -36,4 +40,8 @@ public class LlmConfig {
     public void setTemperature(double temperature) { this.temperature = temperature; }
     public long getStreamTimeout() { return streamTimeout; }
     public void setStreamTimeout(long streamTimeout) { this.streamTimeout = streamTimeout; }
+    public long getConnectionTimeout() { return connectionTimeout; }
+    public void setConnectionTimeout(long connectionTimeout) { this.connectionTimeout = connectionTimeout; }
+    public long getReadTimeout() { return readTimeout; }
+    public void setReadTimeout(long readTimeout) { this.readTimeout = readTimeout; }
 }
