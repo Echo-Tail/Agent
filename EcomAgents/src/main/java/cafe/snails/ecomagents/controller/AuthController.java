@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.*;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,5 +37,11 @@ public class AuthController {
     @PostMapping("/logout")
     public ApiResponse<?> logout(@RequestHeader(value = "Authorization", required = false) String token) {
         return ApiResponse.success(null);
+    }
+
+    /** 获取当前登录用户信息，用于前端验证 token 有效性 */
+    @GetMapping("/auth/me")
+    public ApiResponse<UserDTO> getCurrentUser(@CurrentUserId Long userId) {
+        return userService.getUser(userId);
     }
 }

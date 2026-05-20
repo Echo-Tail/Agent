@@ -8,3 +8,7 @@ export function loginApi(req: LoginRequest) {
 export function registerApi(req: RegisterRequest) {
   return http.post<ApiResponse<UserDTO>>('/register', req)
 }
+
+export function getCurrentUserApi() {
+  return http.get<ApiResponse<UserDTO>>('/auth/me')
+}

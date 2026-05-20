@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants'
+import { useAuthStore } from '../stores/auth'
 import BlankLayout from '../layouts/BlankLayout.vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 
@@ -113,7 +114,7 @@ const router = createRouter({
 })
 
 // Navigation guard: auth check + role check
-router.beforeEach((to, _from) => {
+router.beforeEach(async (to, _from) => {
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
   const userStr = localStorage.getItem(STORAGE_KEY_USER)
   const user = userStr ? JSON.parse(userStr) : null
@@ -130,9 +131,22 @@ router.beforeEach((to, _from) => {
     return { name: 'Dashboard' }
   }
 
+  // Verify token with backend on first navigation (catch deleted/disabled users)
+  if (isAuthenticated && to.name !== 'Login' && to.name !== 'Register') {
+    const auth = useAuthStore()
+    if (!auth.initialized) {
+      auth.initialized = true
+      const valid = await auth.verifyAuth()
+      if (!valid) {
+        return { name: 'Login' }
+      }
+    }
+  }
+
   // Admin-only routes
   if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage' || to.name === 'TokenUsage') {
-    if (!isAdmin) {
+    const auth = useAuthStore()
+    if (!auth.isAdmin) {
       return { name: 'Dashboard' }
     }
   }

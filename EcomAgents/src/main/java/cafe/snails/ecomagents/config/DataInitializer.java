@@ -49,15 +49,6 @@ public class DataInitializer implements CommandLineRunner {
         }
         userRepository.save(admin);
 
-        // 删除除管理员外的所有用户
-        Long adminId = admin.getId();
-        var toDelete = userRepository.findAll().stream()
-                .filter(u -> !u.getId().equals(adminId)).toList();
-        if (!toDelete.isEmpty()) {
-            userRepository.deleteAll(toDelete);
-            log.info("已删除 {} 个非管理员用户", toDelete.size());
-        }
-
         // 初始化邀请码（仅当不存在时）
         if (inviteCodeRepository.count() == 0) {
             log.info("初始化邀请码...");

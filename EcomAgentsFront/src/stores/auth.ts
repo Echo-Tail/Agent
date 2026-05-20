@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { loginApi, registerApi } from '../api/auth'
+import { loginApi, registerApi, getCurrentUserApi } from '../api/auth'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER } from '../constants'
 import type { UserDTO, LoginRequest, RegisterRequest } from '../types/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem(STORAGE_KEY_TOKEN))
   const currentUser = ref<UserDTO | null>(_loadUser())
+  const initialized = ref(false)
 
   function _loadUser(): UserDTO | null {
     try {
@@ -65,14 +66,31 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser.value = _loadUser()
   }
 
+  /** 向后端验证当前 token 是否仍有效（用户未被删除/禁用），否则清除登录状态 */
+  async function verifyAuth(): Promise<boolean> {
+    if (!token.value) return false
+    try {
+      const res = await getCurrentUserApi()
+      if (res.data.code === 200 && res.data.data) {
+        currentUser.value = res.data.data
+        _persist()
+        return true
+      }
+    } catch { /* 网络错误或 401，下方统一清理 */ }
+    logout()
+    return false
+  }
+
   return {
     token,
     currentUser,
+    initialized,
     isAuthenticated,
     isAdmin,
     login,
     register,
     logout,
     initFromStorage,
+    verifyAuth,
   }
 })
