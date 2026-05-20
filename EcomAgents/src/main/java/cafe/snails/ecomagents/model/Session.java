@@ -26,6 +26,10 @@ public class Session {
     @Column(nullable = false)
     private Long agentId;
 
+    /** 创建者用户 ID */
+    @Column(nullable = false)
+    private Long userId;
+
     /** 会话标题，由用户第一条消息自动生成或手动命名 */
     @Column(nullable = false, length = 200)
     private String title;

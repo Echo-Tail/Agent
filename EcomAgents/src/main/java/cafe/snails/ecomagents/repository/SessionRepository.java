@@ -31,9 +31,17 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages")
     List<Session> findAllNonEmpty();
 
+    /** 按用户查找非空会话 */
+    @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.userId = :userId")
+    List<Session> findNonEmptyByUserId(@Param("userId") Long userId);
+
     /** 按文件夹查找非空会话 */
     @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.folderId = :folderId")
     List<Session> findNonEmptyByFolderId(@Param("folderId") Long folderId);
+
+    /** 按用户和文件夹查找非空会话 */
+    @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.folderId = :folderId AND s.userId = :userId")
+    List<Session> findNonEmptyByFolderIdAndUserId(@Param("folderId") Long folderId, @Param("userId") Long userId);
 
     /** 按 Agent 查找非空会话 */
     @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.agentId = :agentId")

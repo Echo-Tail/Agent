@@ -7,6 +7,8 @@ import cafe.snails.ecomagents.repository.AiModelRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,11 +105,14 @@ public class AgentService {
         return ApiResponse.success("创建成功", saved);
     }
 
-    /** 部分更新 Agent，同步 workspace 文件 */
+    /** 部分更新 Agent，同步 workspace 文件（仅创建者或管理员可操作） */
     @Transactional
-    public ApiResponse<Agent> updateAgent(Long id, Agent update) {
+    public ApiResponse<Agent> updateAgent(Long id, Agent update, Long userId) {
         return agentRepository.findById(id)
                 .map(existing -> {
+                    if (!hasAgentPermission(existing, userId)) {
+                        return ApiResponse.<Agent>error(403, "没有权限修改此 Agent");
+                    }
                     boolean promptChanged = false;
                     boolean knowledgeChanged = false;
 
@@ -143,11 +148,14 @@ public class AgentService {
                 .orElse(ApiResponse.error(404, "Agent不存在"));
     }
 
-    /** 删除 Agent，清理 workspace 和相关缓存 */
+    /** 删除 Agent，清理 workspace 和相关缓存（仅创建者或管理员可操作） */
     @Transactional
-    public ApiResponse<Agent> deleteAgent(Long id) {
+    public ApiResponse<Agent> deleteAgent(Long id, Long userId) {
         return agentRepository.findById(id)
                 .map(agent -> {
+                    if (!hasAgentPermission(agent, userId)) {
+                        return ApiResponse.<Agent>error(403, "没有权限删除此 Agent");
+                    }
                     agentRepository.delete(agent);
 
                     // 清理 workspace 目录
@@ -157,5 +165,15 @@ public class AgentService {
                     return ApiResponse.success("删除成功", agent);
                 })
                 .orElse(ApiResponse.error(404, "Agent不存在"));
+    }
+
+    /** 检查当前用户是否有权限操作该 Agent（创建者或管理员） */
+    private boolean hasAgentPermission(Agent agent, Long userId) {
+        if (agent.getCreatedBy().equals(userId)) {
+            return true;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 }

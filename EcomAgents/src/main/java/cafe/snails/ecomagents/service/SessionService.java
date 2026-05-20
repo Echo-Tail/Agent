@@ -29,16 +29,17 @@ public class SessionService {
     /**
      * 查询非空会话列表，可按 folderId 或 agentId 筛选。
      * 无消息的会话（空壳会话）会被自动过滤。
+     * 始终按 userId 做用户隔离。
      */
     @Transactional(readOnly = true)
-    public ApiResponse<List<SessionSummary>> listSessions(Long folderId, Long agentId) {
+    public ApiResponse<List<SessionSummary>> listSessions(Long userId, Long folderId, Long agentId) {
         List<Session> sessions;
         if (folderId != null) {
-            sessions = sessionRepository.findNonEmptyByFolderId(folderId);
+            sessions = sessionRepository.findNonEmptyByFolderIdAndUserId(folderId, userId);
         } else if (agentId != null) {
             sessions = sessionRepository.findNonEmptyByAgentId(agentId);
         } else {
-            sessions = sessionRepository.findAllNonEmpty();
+            sessions = sessionRepository.findNonEmptyByUserId(userId);
         }
 
         List<SessionSummary> summaries = sessions.stream()
@@ -64,9 +65,10 @@ public class SessionService {
 
     /** 创建新会话 */
     @Transactional
-    public ApiResponse<Session> createSession(Long agentId, String title, Long folderId) {
+    public ApiResponse<Session> createSession(Long agentId, String title, Long folderId, Long userId) {
         Session session = Session.builder()
                 .agentId(agentId)
+                .userId(userId)
                 .title(title != null ? title : "新对话")
                 .folderId(folderId)
                 .messages(new ArrayList<>())

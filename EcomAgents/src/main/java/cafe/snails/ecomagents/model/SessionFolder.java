@@ -27,4 +27,8 @@ public class SessionFolder {
     @Column(nullable = false)
     @Builder.Default
     private Integer orderNum = 0;
+
+    /** 创建者用户 ID */
+    @Column(nullable = false)
+    private Long userId;
 }

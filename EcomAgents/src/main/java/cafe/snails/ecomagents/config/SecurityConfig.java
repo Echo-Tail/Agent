@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 管理员端点
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/v1/models", "/v1/models/**").authenticated()
                         .requestMatchers("/v1/models/**").hasRole("ADMIN")
                         .requestMatchers("/v1/tools/**").hasRole("ADMIN")
                         .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")

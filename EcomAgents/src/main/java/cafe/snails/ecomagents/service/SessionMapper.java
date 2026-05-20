@@ -60,6 +60,7 @@ public class SessionMapper {
         String harnessId = generateHarnessSessionId(agentId);
         Session session = Session.builder()
                 .agentId(agentId)
+                .userId(userId)
                 .title("新对话")
                 .harnessSessionId(harnessId)
                 .createdAt(LocalDateTime.now())

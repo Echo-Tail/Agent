@@ -44,15 +44,18 @@ public class AgentController {
         return agentService.createAgent(agent, userId);
     }
 
-    /** 更新 Agent */
+    /** 更新 Agent（仅创建者或管理员可操作） */
     @PutMapping("/agents/{id}")
-    public ApiResponse<Agent> updateAgent(@PathVariable("id") Long id, @RequestBody Agent agent) {
-        return agentService.updateAgent(id, agent);
+    public ApiResponse<Agent> updateAgent(@PathVariable("id") Long id,
+                                          @RequestBody Agent agent,
+                                          @CurrentUserId Long userId) {
+        return agentService.updateAgent(id, agent, userId);
     }
 
-    /** 删除 Agent */
+    /** 删除 Agent（仅创建者或管理员可操作） */
     @DeleteMapping("/agents/{id}")
-    public ApiResponse<Agent> deleteAgent(@PathVariable("id") Long id) {
-        return agentService.deleteAgent(id);
+    public ApiResponse<Agent> deleteAgent(@PathVariable("id") Long id,
+                                          @CurrentUserId Long userId) {
+        return agentService.deleteAgent(id, userId);
     }
 }

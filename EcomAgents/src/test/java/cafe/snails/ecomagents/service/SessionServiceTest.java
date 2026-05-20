@@ -34,7 +34,7 @@ class SessionServiceTest {
         service = new SessionService(sessionRepository);
 
         nonEmptySession = Session.builder()
-                .id(1L).agentId(1L).title("有消息的会话")
+                .id(1L).agentId(1L).userId(1L).title("有消息的会话")
                 .messages(new ArrayList<>(List.of(
                         SessionMessage.builder().role("user").content("你好").timestamp(LocalDateTime.now()).build(),
                         SessionMessage.builder().role("assistant").content("你好！有什么可以帮助你的？").timestamp(LocalDateTime.now()).build()
@@ -45,7 +45,7 @@ class SessionServiceTest {
                 .build();
 
         emptySession = Session.builder()
-                .id(2L).agentId(1L).title("新对话")
+                .id(2L).agentId(1L).userId(1L).title("新对话")
                 .messages(new ArrayList<>())
                 .tags(new ArrayList<>())
                 .createdAt(LocalDateTime.now().minusHours(1))
@@ -54,10 +54,10 @@ class SessionServiceTest {
     }
 
     @Test
-    void listSessions_shouldReturnOnlyNonEmptySessions() {
-        when(sessionRepository.findAllNonEmpty()).thenReturn(List.of(nonEmptySession));
+    void listSessions_shouldReturnOnlyNonEmptySessionsForUser() {
+        when(sessionRepository.findNonEmptyByUserId(1L)).thenReturn(List.of(nonEmptySession));
 
-        ApiResponse<List<SessionSummary>> result = service.listSessions(null, null);
+        ApiResponse<List<SessionSummary>> result = service.listSessions(1L, null, null);
 
         assertEquals(200, result.getCode());
         assertEquals(1, result.getData().size());
@@ -67,20 +67,20 @@ class SessionServiceTest {
 
     @Test
     void listSessions_withFolderId_shouldUseNonEmptyQuery() {
-        when(sessionRepository.findNonEmptyByFolderId(1L)).thenReturn(List.of(nonEmptySession));
+        when(sessionRepository.findNonEmptyByFolderIdAndUserId(1L, 1L)).thenReturn(List.of(nonEmptySession));
 
-        ApiResponse<List<SessionSummary>> result = service.listSessions(1L, null);
+        ApiResponse<List<SessionSummary>> result = service.listSessions(1L, 1L, null);
 
         assertEquals(200, result.getCode());
         assertEquals(1, result.getData().size());
-        verify(sessionRepository).findNonEmptyByFolderId(1L);
+        verify(sessionRepository).findNonEmptyByFolderIdAndUserId(1L, 1L);
     }
 
     @Test
     void listSessions_withAgentId_shouldUseNonEmptyQuery() {
         when(sessionRepository.findNonEmptyByAgentId(1L)).thenReturn(List.of(nonEmptySession));
 
-        ApiResponse<List<SessionSummary>> result = service.listSessions(null, 1L);
+        ApiResponse<List<SessionSummary>> result = service.listSessions(1L, null, 1L);
 
         assertEquals(200, result.getCode());
         assertEquals(1, result.getData().size());
@@ -89,9 +89,9 @@ class SessionServiceTest {
 
     @Test
     void listSessions_whenAllEmpty_shouldReturnEmptyList() {
-        when(sessionRepository.findAllNonEmpty()).thenReturn(List.of());
+        when(sessionRepository.findNonEmptyByUserId(1L)).thenReturn(List.of());
 
-        ApiResponse<List<SessionSummary>> result = service.listSessions(null, null);
+        ApiResponse<List<SessionSummary>> result = service.listSessions(1L, null, null);
 
         assertEquals(200, result.getCode());
         assertTrue(result.getData().isEmpty());

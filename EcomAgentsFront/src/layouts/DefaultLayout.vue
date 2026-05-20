@@ -51,13 +51,13 @@ const menuOptions = computed<MenuOption[]>(() => {
   if (auth.isAdmin) {
     items.push(
       { label: 'Token 用量', key: 'TokenUsage' },
+      { label: '日志', key: 'Logs' },
       { label: '用户管理', key: 'UserManage' },
       { label: '模型管理', key: 'ModelManage' },
       { label: '工具管理', key: 'ToolManage' },
       { label: '技能管理', key: 'SkillManage' },
     )
   }
-  items.push({ label: '日志', key: 'Logs' })
   items.push({ label: '设置', key: 'Settings' })
   return items
 })

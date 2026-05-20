@@ -9,4 +9,5 @@ import java.util.List;
  * 会话文件夹数据访问层。
  */
 public interface SessionFolderRepository extends JpaRepository<SessionFolder, Long> {
+    List<SessionFolder> findByUserIdOrderByOrderNum(Long userId);
 }

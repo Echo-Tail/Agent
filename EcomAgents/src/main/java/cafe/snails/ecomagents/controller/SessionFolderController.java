@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.controller;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.SessionFolder;
 import cafe.snails.ecomagents.repository.SessionFolderRepository;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -20,17 +21,20 @@ public class SessionFolderController {
 
     private final SessionFolderRepository folderRepository;
 
-    /** 获取所有文件夹 */
+    /** 获取所有文件夹（当前用户） */
     @GetMapping("/session-folders")
-    public ApiResponse<List<SessionFolder>> listFolders() {
-        return ApiResponse.success(folderRepository.findAll());
+    public ApiResponse<List<SessionFolder>> listFolders(@CurrentUserId Long userId) {
+        return ApiResponse.success(folderRepository.findByUserIdOrderByOrderNum(userId));
     }
 
     /** 创建文件夹 */
     @PostMapping("/session-folders")
-    public ApiResponse<SessionFolder> createFolder(@RequestBody Map<String, Object> body) {
+    public ApiResponse<SessionFolder> createFolder(
+            @RequestBody Map<String, Object> body,
+            @CurrentUserId Long userId) {
         SessionFolder folder = SessionFolder.builder()
                 .name((String) body.get("name"))
+                .userId(userId)
                 .build();
         SessionFolder saved = folderRepository.save(folder);
         return ApiResponse.success("文件夹创建成功", saved);

@@ -93,7 +93,7 @@ class AgentServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
         Agent updates = Agent.builder().name("New Name").modelId(2L).build();
-        ApiResponse<Agent> result = service.updateAgent(1L, updates);
+        ApiResponse<Agent> result = service.updateAgent(1L, updates, 1L);
         assertEquals("New Name", result.getData().getName());
         assertEquals(2L, result.getData().getModelId());
         assertEquals("bi-robot", result.getData().getIcon());
@@ -106,21 +106,21 @@ class AgentServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
         Agent updates = Agent.builder().systemPrompt("新的系统提示词").build();
-        service.updateAgent(1L, updates);
+        service.updateAgent(1L, updates, 1L);
         verify(workspaceInitService).updateAgentsMd(eq(1L), eq("新的系统提示词"));
     }
 
     @Test
     void updateAgent_notFound_shouldReturn404() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
-        ApiResponse<Agent> result = service.updateAgent(99L, Agent.builder().build());
+        ApiResponse<Agent> result = service.updateAgent(99L, Agent.builder().build(), 1L);
         assertEquals(404, result.getCode());
     }
 
     @Test
     void deleteAgent_shouldDeleteAndCleanWorkspace() {
         when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
-        ApiResponse<Agent> result = service.deleteAgent(1L);
+        ApiResponse<Agent> result = service.deleteAgent(1L, 1L);
         assertEquals(200, result.getCode());
         verify(repository).delete(sampleAgent);
         verify(workspaceInitService).deleteWorkspace(1L);
@@ -129,7 +129,7 @@ class AgentServiceTest {
     @Test
     void deleteAgent_notFound_shouldReturn404() {
         when(repository.findById(99L)).thenReturn(Optional.empty());
-        ApiResponse<Agent> result = service.deleteAgent(99L);
+        ApiResponse<Agent> result = service.deleteAgent(99L, 1L);
         assertEquals(404, result.getCode());
         verify(repository, never()).delete(any());
         verify(workspaceInitService, never()).deleteWorkspace(any());

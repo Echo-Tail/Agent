@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import { useAgentStore } from '../../stores/agent'
+import { useAuthStore } from '../../stores/auth'
 import { deleteAgentApi } from '../../api/agent'
 import AgentCard from '../../components/AgentCard.vue'
 import type { Agent } from '../../types/agent'
@@ -11,6 +12,13 @@ const router = useRouter()
 const dialog = useDialog()
 const message = useMessage()
 const agentStore = useAgentStore()
+const auth = useAuthStore()
+
+const currentUserId = computed(() => auth.currentUser?.id)
+const isAdmin = computed(() => auth.isAdmin)
+function canEdit(agent: Agent) {
+  return isAdmin.value || agent.createdBy === currentUserId.value
+}
 
 onMounted(() => {
   agentStore.fetchAgents()
@@ -89,7 +97,7 @@ function handleDelete(agent: Agent) {
     <!-- Agent Grid -->
     <n-grid v-else :cols="2" :x-gap="16" :y-gap="16">
       <n-gi v-for="agent in agentStore.agents" :key="agent.id">
-        <AgentCard :agent="agent" editable @delete="handleDelete" />
+        <AgentCard :agent="agent" :editable="canEdit(agent)" @delete="handleDelete" />
       </n-gi>
     </n-grid>
   </n-space>
