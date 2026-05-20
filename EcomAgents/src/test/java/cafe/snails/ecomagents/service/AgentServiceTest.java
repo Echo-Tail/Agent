@@ -75,7 +75,7 @@ class AgentServiceTest {
 
     @Test
     void createAgent_shouldSetDefaultsAndInitWorkspace() {
-        Agent input = Agent.builder().name("New Agent").build();
+        Agent input = Agent.builder().name("New Agent").modelId(1L).build();
         when(repository.save(any())).thenAnswer(i -> {
             Agent a = i.getArgument(0);
             a.setId(2L);

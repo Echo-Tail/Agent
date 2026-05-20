@@ -135,6 +135,31 @@ async function batchMoveToFolder(folderId: number) {
   selectMode.value = false
 }
 
+async function batchDeleteSessions() {
+  if (selectedIds.value.length === 0) return
+  dialog.warning({
+    title: '确认删除',
+    content: `确定要删除选中的 ${selectedIds.value.length} 条会话吗？此操作不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    positiveButtonProps: { type: 'error' },
+    onPositiveClick: async () => {
+      let successCount = 0
+      for (const id of selectedIds.value) {
+        const ok = await chat.removeSession(id)
+        if (ok) successCount++
+      }
+      selectedIds.value = []
+      selectMode.value = false
+      if (successCount === selectedIds.value.length) {
+        message.success(`已删除 ${successCount} 条会话`)
+      } else {
+        message.warning(`已删除 ${successCount} 条，部分删除失败`)
+      }
+    },
+  })
+}
+
 /* ====== 文件夹操作 ====== */
 
 function startCreateFolder() {
@@ -181,7 +206,7 @@ function renderMenuExtra(option: { key: unknown }) {
       default: () =>
         h(
           NButton,
-          { quaternary: true, size: 'tiny', onClick: (e: Event) => e.stopPropagation() },
+          { quaternary: true, size: 'tiny', style: 'margin-left: 12px;', onClick: (e: Event) => e.stopPropagation() },
           {
             icon: () =>
               h(NIcon, null, {
@@ -335,6 +360,9 @@ const menuOptions = computed(() => {
         <n-dropdown trigger="click" :options="folderOptions()" @select="batchMoveToFolder">
           <n-button size="tiny" secondary>移动到文件夹</n-button>
         </n-dropdown>
+        <n-button size="tiny" type="error" secondary @click="batchDeleteSessions" :disabled="selectedIds.length === 0">
+          删除
+        </n-button>
       </div>
 
       <n-spin v-if="chat.sessionLoading" style="margin-top: 40px;" />

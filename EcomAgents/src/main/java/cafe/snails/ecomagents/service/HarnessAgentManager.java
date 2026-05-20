@@ -52,6 +52,17 @@ public class HarnessAgentManager {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
+        // Check if the agent's model exists and is enabled
+        if (agent.getModelId() != null) {
+            AiModel model = aiModelRepository.findById(agent.getModelId()).orElse(null);
+            if (model == null) {
+                throw new IllegalArgumentException("Agent 绑定的模型不存在，请在 Agent 编辑页面重新选择模型");
+            }
+            if (!model.getEnabled()) {
+                throw new IllegalArgumentException("Agent 绑定的模型「" + model.getName() + "」已被管理员禁用，请联系管理员或切换模型");
+            }
+        }
+
         var model = OpenAIChatModel.builder()
                 .apiKey(resolveApiKey(agent))
                 .modelName(resolveModelName(agent))

@@ -110,6 +110,11 @@ async function handleSubmit() {
     return
   }
 
+  if (!selectedModelId.value) {
+    message.warning('请选择一个模型')
+    return
+  }
+
   loading.value = true
   try {
     const payload: AgentCreateRequest = {
@@ -239,15 +244,18 @@ function handleTagsChange(v: string[]) {
           </n-form-item>
 
           <!-- Model -->
-          <n-form-item label="模型">
+          <n-form-item label="模型" required>
             <n-select
               v-model:value="selectedModelId"
               :options="modelOptions"
               :disabled="loading || models.length === 0"
-              placeholder="选择一个模型（可在对话时切换）"
+              :placeholder="models.length === 0 ? '暂无可用模型，请先配置' : '选择一个模型（可在对话时切换）'"
               clearable
               filterable
             />
+            <template v-if="models.length === 0" #feedback>
+              暂无可用模型，请先在<router-link :to="{ name: 'ModelManage' }" style="text-decoration: underline;">模型管理</router-link>中配置
+            </template>
           </n-form-item>
 
           <!-- Status (edit only) -->

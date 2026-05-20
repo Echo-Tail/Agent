@@ -66,8 +66,9 @@ const modelMenuOptions = computed(() => {
       grouped.set(m.provider, [])
     }
     grouped.get(m.provider)!.push({
-      label: m.name,
+      label: m.enabled ? m.name : `${m.name}（已禁用）`,
       key: `model_${m.id}`,
+      disabled: !m.enabled,
     })
   }
   return Array.from(grouped.entries()).map(([provider, children]) => ({
@@ -78,10 +79,21 @@ const modelMenuOptions = computed(() => {
   }))
 })
 
+const currentModelDisabled = computed(() => {
+  if (!systemAgent.value?.modelId) return false
+  const m = models.value.find((x) => x.id === systemAgent.value!.modelId)
+  return m ? !m.enabled : false
+})
+
 async function handleModelSelect(key: string) {
   if (!key.startsWith('model_')) return
   const modelId = Number(key.slice(6))
   if (!systemAgent.value || modelId === systemAgent.value.modelId) return
+  const model = models.value.find((m) => m.id === modelId)
+  if (model && !model.enabled) {
+    message?.warning('该模型已被禁用，无法切换')
+    return
+  }
   try {
     const res = await updateAgentApi(systemAgent.value.id, { modelId })
     if (res.data.code === 200) {
@@ -197,6 +209,13 @@ function handleAgentClick(agent: Agent) {
 async function handleSend() {
   const textContent = chat.inputText.trim()
   if ((!textContent && !attachedFile.value) || chat.isStreaming) return
+
+  // Check if model is disabled before sending
+  if (currentModelDisabled.value) {
+    message?.warning('当前模型已被禁用，无法发送消息')
+    return
+  }
+
   if (!chat.activeSession) {
     if (isDirectMode.value && systemAgent.value) {
       await startDirectSession()
@@ -349,6 +368,20 @@ init()
             </n-button>
           </template>
         </n-empty>
+      </div>
+
+      <!-- Model disabled warning -->
+      <div v-else-if="currentModelDisabled" class="empty-state">
+        <n-alert type="warning" title="当前模型已被禁用" :bordered="false">
+          <template #default>
+            默认助手绑定的模型已被管理员禁用，请切换模型或联系管理员。
+          </template>
+          <template #footer>
+            <n-button size="small" @click="$router.push({ name: 'ModelManage' })">
+              管理模型
+            </n-button>
+          </template>
+        </n-alert>
       </div>
 
       <!-- Loading -->

@@ -87,6 +87,9 @@ public class AgentService {
     /** 创建新 Agent，自动填充创建时间和创建人，并初始化 workspace */
     @Transactional
     public ApiResponse<Agent> createAgent(Agent agent, Long userId) {
+        if (agent.getModelId() == null) {
+            return ApiResponse.error(400, "模型不能为空");
+        }
         agent.setId(null);
         agent.setCreatedAt(LocalDate.now());
         agent.setCreatedBy(userId);
