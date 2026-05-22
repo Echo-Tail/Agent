@@ -23,11 +23,13 @@ const pageTitles: Record<string, string> = {
   AgentCreate: '创建Agent',
   Chat: '对话',
   History: '历史会话',
+  MyTickets: '我的工单',
   UserManage: '用户管理',
   ModelManage: '模型管理',
   ToolManage: '工具管理',
   SkillManage: '技能管理',
   TokenUsage: 'Token 用量',
+  TicketManage: '工单管理',
   KnowledgeBase: '知识库',
   Logs: '日志',
   Settings: '设置',
@@ -46,11 +48,13 @@ const menuOptions = computed<MenuOption[]>(() => {
     { label: '对话', key: 'Chat' },
     { label: '我的Agent', key: 'AgentList' },
     { label: '历史会话', key: 'History' },
+    { label: '我的工单', key: 'MyTickets' },
     { label: '知识库', key: 'KnowledgeBase' },
   ]
   if (auth.isAdmin) {
     items.push(
       { label: 'Token 用量', key: 'TokenUsage' },
+      { label: '工单管理', key: 'TicketManage' },
       { label: '日志', key: 'Logs' },
       { label: '用户管理', key: 'UserManage' },
       { label: '模型管理', key: 'ModelManage' },

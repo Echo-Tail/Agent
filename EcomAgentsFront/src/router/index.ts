@@ -64,6 +64,11 @@ const router = createRouter({
           component: () => import('../views/history/HistoryView.vue'),
         },
         {
+          path: 'tickets',
+          name: 'MyTickets',
+          component: () => import('../views/ticket/MyTickets.vue'),
+        },
+        {
           path: 'admin/users',
           name: 'UserManage',
           component: () => import('../views/admin/UserManage.vue'),
@@ -104,6 +109,11 @@ const router = createRouter({
           component: () => import('../views/admin/TokenUsage.vue'),
         },
         {
+          path: 'admin/tickets',
+          name: 'TicketManage',
+          component: () => import('../views/admin/TicketManage.vue'),
+        },
+        {
           path: 'logs',
           name: 'Logs',
           component: () => import('../views/log/LogViewer.vue'),
@@ -119,7 +129,6 @@ router.beforeEach(async (to, _from) => {
   const userStr = localStorage.getItem(STORAGE_KEY_USER)
   const user = userStr ? JSON.parse(userStr) : null
   const isAuthenticated = !!(token && user)
-  const isAdmin = isAuthenticated && user.role === 'admin'
 
   // Redirect to login if not authenticated (except login/register)
   if (!isAuthenticated && to.name !== 'Login' && to.name !== 'Register') {
@@ -144,7 +153,7 @@ router.beforeEach(async (to, _from) => {
   }
 
   // Admin-only routes
-  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage' || to.name === 'TokenUsage') {
+  if (to.name === 'UserManage' || to.name === 'ModelManage' || to.name === 'ToolManage' || to.name === 'SkillManage' || to.name === 'TokenUsage' || to.name === 'TicketManage') {
     const auth = useAuthStore()
     if (!auth.isAdmin) {
       return { name: 'Dashboard' }
