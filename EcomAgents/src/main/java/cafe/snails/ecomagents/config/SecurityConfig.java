@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/models/**").hasRole("ADMIN")
                         .requestMatchers("/v1/tools/**").hasRole("ADMIN")
                         .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")
+                        .requestMatchers("/v1/admin/tickets/**").hasRole("ADMIN")
                         // 其余端点需认证
                         .anyRequest().authenticated()
                 )
