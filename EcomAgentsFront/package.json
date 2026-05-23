@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "企业电商智能体管理平台 - Vue 3 + Naive UI",
-  "license": "ISC",
+  "license": "MIT",
   "author": "EchoTail",
   "scripts": {
     "dev": "vite",

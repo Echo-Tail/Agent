@@ -11,21 +11,27 @@ A full-featured SPA for managing AI agents in an enterprise e-commerce context. 
 - **Routing**: Vue Router (named routes, lazy-loaded views, auth guard)
 - **State Management**: Pinia (composition stores)
 - **HTTP Client**: Axios (token injection + 401 redirect interceptors)
-- **Testing**: Vitest + happy-dom + @vue/test-utils (88 tests)
+- **Testing**: Vitest + happy-dom + @vue/test-utils (167 tests across 17 files)
 
 ## Project Structure
 
 ```
 src/
-├── api/                      # Axios API layer
+├── api/                      # Axios API layer (14 modules)
 │   ├── request.ts            # Axios instance with interceptors
 │   ├── auth.ts               # Login/register APIs
-│   ├── agent.ts              # Agent CRUD APIs
+│   ├── agent.ts              # Agent CRUD + scope APIs
 │   ├── session.ts            # Session CRUD + SSE streaming
 │   ├── user.ts               # User management APIs
 │   ├── invite.ts             # Invite code APIs
 │   ├── model.ts              # AI model CRUD APIs
-│   └── knowledge.ts          # Knowledge base CRUD + upload
+│   ├── tool.ts               # Tool management APIs
+│   ├── skill.ts              # Skill management APIs
+│   ├── knowledge.ts          # Knowledge base CRUD + upload
+│   ├── systemLog.ts          # System log query APIs
+│   ├── ticket.ts             # Ticket management APIs
+│   ├── token-usage.ts        # Token usage stats APIs
+│   └── file.ts               # File upload/download APIs
 ├── components/               # Reusable components
 │   ├── AgentCard.vue         # Agent card with icon, tags, status
 │   ├── MessageBubble.vue     # Chat message bubble
@@ -37,7 +43,7 @@ src/
 │   ├── DefaultLayout.vue     # Sidebar + header + main content
 │   └── BlankLayout.vue       # Full-screen layout (login/register)
 ├── router/
-│   └── index.ts              # 12 named routes, lazy-loaded, auth guard
+│   └── index.ts              # Named routes, lazy-loaded, auth guard
 ├── stores/                   # Pinia stores
 │   ├── auth.ts               # Auth state, login/register/logout
 │   ├── theme.ts              # Dark/light theme toggle
@@ -48,27 +54,35 @@ src/
 │   ├── components/
 │   ├── stores/
 │   └── utils/
-├── types/                    # TypeScript definitions
+├── types/                    # TypeScript definitions (6 modules)
 │   ├── api.ts                # ApiResponse, DTOs
 │   ├── agent.ts              # Agent, AgentSummary, create/update requests
 │   ├── session.ts            # Session, SseEvent
 │   ├── knowledge.ts          # KnowledgeBase, KnowledgeDocument
+│   ├── ticket.ts             # Ticket, TicketAttachment
 │   └── enums.ts              # AgentStatus, roles
 ├── utils/
 │   └── validation.ts         # Form validation rules
-├── views/                    # Route-level page components
+├── views/                    # Route-level page components (19 views)
 │   ├── login/
 │   ├── register/
 │   ├── dashboard/
 │   ├── agent/
-│   │   ├── AgentList.vue
-│   │   └── AgentCreate.vue
+│   │   ├── AgentList.vue     # My Agents (own scope)
+│   │   ├── AgentPlaza.vue    # Agent Plaza (others' agents)
+│   │   └── AgentCreate.vue   # Create/edit with tools, skills, KB, RAG mode
 │   ├── chat/
 │   ├── history/
 │   ├── admin/
 │   │   ├── UserManage.vue
-│   │   └── ModelManage.vue
+│   │   ├── ModelManage.vue
+│   │   ├── ToolManage.vue
+│   │   ├── SkillManage.vue
+│   │   ├── TicketManage.vue
+│   │   └── TokenUsage.vue
 │   ├── knowledge/
+│   ├── ticket/
+│   ├── log/
 │   └── settings/
 ├── App.vue                   # Root component (Naive UI providers)
 └── main.ts                   # App entry point
@@ -132,7 +146,7 @@ npm run test:watch
 | `npm run dev` | Start Vite dev server (port 5173) |
 | `npm run build` | Type-check + production build |
 | `npm run preview` | Preview production build |
-| `npm test` | Run Vitest tests |
+| `npm test` | Run Vitest tests (167 tests) |
 | `npm run test:watch` | Vitest watch mode |
 
 ## Architecture
@@ -141,7 +155,7 @@ npm run test:watch
 
 Two communication channels:
 
-- **Custom REST APIs** (`/v1/*`) — CRUD for agents, users, knowledge bases, models
+- **Custom REST APIs** (`/v1/*`) — CRUD for agents, users, knowledge bases, models, tools, skills, tickets
 - **Real-time chat** (`/chat/:agentId/stream`) — SSE streaming for agent conversations
 
 ### Auth Flow
@@ -151,14 +165,22 @@ Two communication channels:
 3. Axios request interceptor injects `Authorization: Bearer` header
 4. Axios response interceptor catches 401 → clears token → redirects to `/login`
 
+### Key Features
+
+- **Agent Ownership**: Agents are scoped per-user. "My Agents" shows only agents created by the current user. "Agent Plaza" lists agents created by others, available for conversation but not editable.
+- **Per-Agent Binding**: Each agent has its own set of tools, skills (copied from global pool), knowledge bases, and RAG mode.
+- **Knowledge Base**: Admin-managed knowledge bases with document upload (TXT, MD, JSON), RAG-powered search, PgVector embeddings, and audit logging.
+- **Skill Management**: File-system-based skills with GitHub URL import (git clone) and ZIP upload. Skills are stored in the global pool and can be bound to individual agents.
+
 ### Testing
 
-88 tests across 11 files covering:
+167 tests across 17 files covering:
 
 - **Store tests**: Auth, agent, chat, knowledge, theme stores
 - **Component tests**: AgentCard interactions (edit, delete, navigation)
 - **View tests**: Login, Register, Dashboard, AgentList rendering and state
 - **Utility tests**: Form validation rules (username, password, email, invite code)
+- **API tests**: Agent scope queries, session management
 
 Test runner: Vitest with happy-dom DOM environment.
 
