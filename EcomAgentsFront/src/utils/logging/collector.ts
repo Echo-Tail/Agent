@@ -21,6 +21,8 @@ export function setupLogCollector(app: App, router: Router, http: AxiosInstance)
 
   // --- Axios logging ---
   http.interceptors.request.use((config) => {
+    // Skip logging for log submission itself to avoid infinite loops
+    if (config.url?.includes('/system-logs')) return config
     ;(config as unknown as Record<string, number>).__logStart = Date.now()
     log('INFO', 'API', `${(config.method || 'GET').toUpperCase()} ${config.url}`, {
       method: config.method,
@@ -32,6 +34,8 @@ export function setupLogCollector(app: App, router: Router, http: AxiosInstance)
 
   http.interceptors.response.use(
     (response) => {
+      // Skip logging for log submission itself
+      if (response.config.url?.includes('/system-logs')) return response
       const start = (response.config as unknown as Record<string, number>).__logStart || Date.now()
       const duration = Date.now() - start
       const level: LogLevel = response.status >= 400 ? 'WARN' : 'INFO'
@@ -43,6 +47,8 @@ export function setupLogCollector(app: App, router: Router, http: AxiosInstance)
       return response
     },
     (error) => {
+      // Skip logging for log submission itself
+      if (error.config?.url?.includes('/system-logs')) return Promise.reject(error)
       const start = (error.config as unknown as Record<string, number>).__logStart || Date.now()
       const duration = Date.now() - start
       const status = error.response?.status || 0

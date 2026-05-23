@@ -9,6 +9,7 @@ import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +29,19 @@ public class ToolService {
 
     /**
      * 获取系统所有可用工具（含未启用）。
+     * 非管理员不返回 configJson（避免泄露 API Key 等敏感配置）。
      */
     public ApiResponse<List<ToolDefinition>> listTools() {
+        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         return ApiResponse.success(repository.findAll().stream()
-                .map(this::toDefinition)
+                .map(config -> {
+                    ToolDefinition def = toDefinition(config);
+                    if (!isAdmin) {
+                        def.setConfigJson("");
+                    }
+                    return def;
+                })
                 .toList());
     }
 

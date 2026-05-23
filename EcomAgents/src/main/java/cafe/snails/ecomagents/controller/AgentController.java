@@ -19,9 +19,16 @@ public class AgentController {
 
     private final AgentService agentService;
 
-    /** 获取 Agent 列表 */
+    /**
+     * 获取 Agent 列表。
+     * @param scope my-仅自己创建的 / plaza-其他人创建的 / 不传-全部
+     */
     @GetMapping("/agents")
-    public ApiResponse<List<Agent>> listAgents() {
+    public ApiResponse<List<Agent>> listAgents(@RequestParam(value = "scope", required = false) String scope,
+                                                @CurrentUserId Long userId) {
+        if (scope != null) {
+            return agentService.listAgents(userId, scope);
+        }
         return agentService.listAgents();
     }
 

@@ -9,6 +9,7 @@ import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
+import cafe.snails.ecomagents.tool.RetrieveKnowledgeTool;
 import cafe.snails.ecomagents.tool.WebSearchTool;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,16 +22,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HarnessAgent 工厂，为每次 chat 请求创建带 per-request Hook 的 HarnessAgent 实例。
- * <p>
- * HarnessAgent 本身不缓存（因为 Hook 需要绑定 per-request 的 SseEmitter），
- * 但 Model 构建逻辑集中在此，避免分散到多处。
- * </p>
  */
 @Service
 @RequiredArgsConstructor
@@ -41,20 +40,19 @@ public class HarnessAgentManager {
     private final AgentRepository agentRepository;
     private final AiModelRepository aiModelRepository;
     private final ToolConfigRepository toolConfigRepository;
+    private final KnowledgeBaseService knowledgeBaseService;
     private final WorkspaceConfig workspaceConfig;
     private final LlmConfig llmConfig;
     private final ObjectMapper objectMapper;
 
     /**
      * 为指定 Agent 创建带 per-request Hook 的 HarnessAgent 实例。
-     * 每次 chat 请求调用一次，用完即弃。
      */
     public HarnessAgent createChatAgent(Long agentId, SseEmitter emitter, Long userId,
                                         AtomicBoolean completed, StringBuilder partialContent) {
         Agent agent = agentRepository.findById(agentId)
                 .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
 
-        // Check if the agent's model exists and is enabled
         if (agent.getModelId() != null) {
             AiModel model = aiModelRepository.findById(agent.getModelId()).orElse(null);
             if (model == null) {
@@ -65,7 +63,7 @@ public class HarnessAgentManager {
             }
         }
 
-        var model = OpenAIChatModel.builder()
+        var chatModel = OpenAIChatModel.builder()
                 .apiKey(resolveApiKey(agent))
                 .modelName(resolveModelName(agent))
                 .baseUrl(resolveBaseUrl(agent))
@@ -74,7 +72,7 @@ public class HarnessAgentManager {
                 .build();
 
         Toolkit toolkit = new Toolkit();
-        registerAgentTools(toolkit);
+        registerAgentTools(toolkit, agent);
 
         java.nio.file.Path workspacePath = java.nio.file.Path.of(
                 workspaceConfig.getRoot(), "agent-" + agentId);
@@ -83,7 +81,7 @@ public class HarnessAgentManager {
 
         HarnessAgent harnessAgent = HarnessAgent.builder()
                 .name(agent.getName() != null ? agent.getName() : "agent-" + agentId)
-                .model(model)
+                .model(chatModel)
                 .workspace(workspacePath)
                 .toolkit(toolkit)
                 .hooks(List.of(hooks))
@@ -97,18 +95,33 @@ public class HarnessAgentManager {
     // ===== Tool registration =====
 
     /**
-     * 从 DB 加载所有已启用的外部工具，注册到 Toolkit。
-     * 所有 Agent 共享同一套已启用的工具。
+     * 为指定 Agent 注册工具。
+     * 只注册 Agent 绑定的工具（per-agent 过滤），且必须是全局启用状态。
      */
-    private void registerAgentTools(Toolkit toolkit) {
+    private void registerAgentTools(Toolkit toolkit, Agent agent) {
+        Set<String> agentToolIds = agent.getTools() != null
+                ? new HashSet<>(agent.getTools())
+                : Set.of();
+        if (agentToolIds.isEmpty()) return;
+
         List<ToolConfig> enabledTools = toolConfigRepository.findByEnabledTrue();
         if (enabledTools == null || enabledTools.isEmpty()) return;
 
         for (ToolConfig tool : enabledTools) {
+            if (!agentToolIds.contains(tool.getId())) continue;
+
             switch (tool.getId()) {
                 case "web_search" -> registerWebSearch(toolkit, tool);
                 default -> log.debug("Tool '{}' not yet implemented, skipping", tool.getId());
             }
+        }
+
+        // Register retrieve_knowledge tool if agent has knowledge bases and RAG mode is AGENTIC
+        if ("AGENTIC".equals(agent.getRagMode())
+                && agent.getKnowledgeBaseIds() != null
+                && !agent.getKnowledgeBaseIds().isEmpty()) {
+            toolkit.registerTool(new RetrieveKnowledgeTool(knowledgeBaseService, agent.getKnowledgeBaseIds()));
+            log.info("RetrieveKnowledgeTool registered for agent {}", agent.getId());
         }
     }
 
@@ -166,7 +179,6 @@ public class HarnessAgentManager {
         String path = extractPath(apiUrl);
         if (!path.isBlank()) return path;
 
-        // Bare domain URL — use apiVersion (if set) + /chat/completions
         String version = aiModel != null ? aiModel.getApiVersion() : null;
         if (version != null && !version.isBlank()) {
             return version + "/chat/completions";

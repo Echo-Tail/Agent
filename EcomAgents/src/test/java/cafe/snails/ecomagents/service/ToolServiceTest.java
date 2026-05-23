@@ -7,11 +7,15 @@ import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -43,6 +47,10 @@ class ToolServiceTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         service = new ToolService(repository, aiModelRepository, objectMapper);
+        // Default: admin role so configJson is returned; override in specific tests for non-admin
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("admin", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         sampleConfig = ToolConfig.builder()
                 .id("web_search").name("网页搜索")
                 .description("搜索互联网获取最新信息")
@@ -51,6 +59,11 @@ class ToolServiceTest {
                 .id("image_generation").name("图片生成")
                 .description("根据文字描述生成图片")
                 .category("media").enabled(false).configJson("").build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -248,6 +261,22 @@ class ToolServiceTest {
         assertEquals(200, result.getCode());
         // Verify AiModelRepository was never called
         verify(aiModelRepository, never()).findById(any());
+    }
+
+    @Test
+    void listTools_nonAdmin_shouldStripConfigJson() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("user", null,
+                        List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+        ToolConfig config = ToolConfig.builder()
+                .id("test_tool").name("Test Tool")
+                .description("A test tool").category("test")
+                .enabled(true).configJson("{\"secret\":\"sk-xxx\"}").build();
+        when(repository.findAll()).thenReturn(List.of(config));
+        ApiResponse<List<ToolDefinition>> result = service.listTools();
+        assertEquals(1, result.getData().size());
+        assertEquals("test_tool", result.getData().get(0).getId());
+        assertTrue(result.getData().get(0).getConfigJson().isEmpty());
     }
 
     @Test

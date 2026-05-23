@@ -18,8 +18,9 @@ provide('dialog', dialog)
 const collapsed = ref(false)
 
 const pageTitles: Record<string, string> = {
-  Dashboard: '工作台',
+  Dashboard: '我的 Agent',
   AgentList: '我的Agent',
+  AgentPlaza: 'Agent 广场',
   AgentCreate: '创建Agent',
   Chat: '对话',
   History: '历史会话',
@@ -44,9 +45,9 @@ interface MenuOption {
 
 const menuOptions = computed<MenuOption[]>(() => {
   const items: MenuOption[] = [
-    { label: '工作台', key: 'Dashboard' },
+    { label: '我的 Agent', key: 'Dashboard' },
     { label: '对话', key: 'Chat' },
-    { label: '我的Agent', key: 'AgentList' },
+    { label: 'Agent 广场', key: 'AgentPlaza' },
     { label: '历史会话', key: 'History' },
     { label: '我的工单', key: 'MyTickets' },
     { label: '知识库', key: 'KnowledgeBase' },

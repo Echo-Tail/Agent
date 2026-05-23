@@ -2,11 +2,14 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Agent;
+import cafe.snails.ecomagents.model.KnowledgeAuditLog;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
 import cafe.snails.ecomagents.repository.AgentRepository;
+import cafe.snails.ecomagents.repository.KnowledgeAuditLogRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 知识库业务逻辑，包括知识库 CRUD、文档管理、全文搜索和 RAG 上下文构建。
+ * 知识库业务逻辑，包括知识库 CRUD、文档管理、全文搜索、RAG 上下文构建和审计日志。
  */
 @Service
 @RequiredArgsConstructor
@@ -32,24 +35,23 @@ public class KnowledgeBaseService {
 
     private final KnowledgeBaseRepository kbRepository;
     private final KnowledgeDocumentRepository docRepository;
+    private final KnowledgeAuditLogRepository auditLogRepository;
     private final AgentRepository agentRepository;
     private final WorkspaceInitService workspaceInitService;
+    private final VectorEmbeddingService vectorEmbeddingService;
 
     // ========== Knowledge Base CRUD ==========
 
-    /** 获取所有知识库 */
     public ApiResponse<List<KnowledgeBase>> listKnowledgeBases() {
         return ApiResponse.success(kbRepository.findAll());
     }
 
-    /** 根据 ID 获取知识库详情 */
     public ApiResponse<KnowledgeBase> getKnowledgeBase(Long id) {
         return kbRepository.findById(id)
                 .map(ApiResponse::success)
                 .orElse(ApiResponse.error(404, "知识库不存在"));
     }
 
-    /** 创建知识库，自动填充创建时间和创建者 */
     public ApiResponse<KnowledgeBase> createKnowledgeBase(KnowledgeBase kb, Long userId) {
         kb.setId(null);
         kb.setCreatedAt(LocalDate.now());
@@ -57,7 +59,6 @@ public class KnowledgeBaseService {
         return ApiResponse.success("知识库创建成功", kbRepository.save(kb));
     }
 
-    /** 更新知识库名称和描述 */
     public ApiResponse<KnowledgeBase> updateKnowledgeBase(Long id, KnowledgeBase updates) {
         return kbRepository.findById(id)
                 .map(kb -> {
@@ -68,18 +69,17 @@ public class KnowledgeBaseService {
                 .orElseGet(() -> ApiResponse.error(404, "知识库不存在"));
     }
 
-    /** 删除知识库及其下所有文档，同步清除 Agent workspace 中的知识库内容 */
     @Transactional
     public ApiResponse<Void> deleteKnowledgeBase(Long id) {
         if (!kbRepository.existsById(id)) {
             return ApiResponse.error(404, "知识库不存在");
         }
-        // 先同步清空关联 Agent 的知识库内容
         List<Agent> agents = agentRepository.findByKnowledgeBaseId(id);
         for (Agent agent : agents) {
             workspaceInitService.updateKnowledgeMd(agent.getId(), null);
         }
 
+        vectorEmbeddingService.deleteByKbId(id);
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(id);
         docRepository.deleteAll(docs);
         kbRepository.deleteById(id);
@@ -88,7 +88,6 @@ public class KnowledgeBaseService {
 
     // ========== Document Management ==========
 
-    /** 获取指定知识库下的所有文档 */
     public ApiResponse<List<KnowledgeDocument>> listDocuments(Long kbId) {
         if (!kbRepository.existsById(kbId)) {
             return ApiResponse.error(404, "知识库不存在");
@@ -96,8 +95,9 @@ public class KnowledgeBaseService {
         return ApiResponse.success(docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId));
     }
 
-    /** 上传文档到知识库，自动提取文本内容 */
-    public ApiResponse<KnowledgeDocument> uploadDocument(Long kbId, MultipartFile file, Long userId) {
+    @Transactional
+    public ApiResponse<KnowledgeDocument> uploadDocument(Long kbId, MultipartFile file, Long userId,
+                                                         String username, HttpServletRequest request) {
         if (!kbRepository.existsById(kbId)) {
             return ApiResponse.error(404, "知识库不存在");
         }
@@ -128,31 +128,42 @@ public class KnowledgeBaseService {
 
         KnowledgeDocument saved = docRepository.save(doc);
 
-        // 同步知识库内容到关联 Agent workspace
+        // Reindex vector embeddings
+        vectorEmbeddingService.reindexDocument(kbId, saved.getId(), content);
+
+        // Sync to agent workspaces
         syncKnowledgeBaseToAgents(kbId);
+
+        // Audit log
+        writeAuditLog(kbId, userId, username, "UPLOAD", fileName, request);
 
         return ApiResponse.success("文档上传成功", saved);
     }
 
-    /** 删除指定知识库下的某个文档 */
-    public ApiResponse<Void> deleteDocument(Long kbId, Long docId) {
+    @Transactional
+    public ApiResponse<Void> deleteDocument(Long kbId, Long docId, Long userId,
+                                            String username, HttpServletRequest request) {
         if (!kbRepository.existsById(kbId)) {
             return ApiResponse.error(404, "知识库不存在");
         }
-        if (!docRepository.existsById(docId)) {
+        var docOpt = docRepository.findById(docId);
+        if (docOpt.isEmpty()) {
             return ApiResponse.error(404, "文档不存在");
         }
-        docRepository.deleteById(docId);
+        KnowledgeDocument doc = docOpt.get();
 
-        // 同步知识库内容到关联 Agent workspace
+        vectorEmbeddingService.deleteEmbeddings(docId);
+        docRepository.deleteById(docId);
         syncKnowledgeBaseToAgents(kbId);
+
+        // Audit log
+        writeAuditLog(kbId, userId, username, "DELETE", doc.getFileName(), request);
 
         return ApiResponse.success("文档已删除", null);
     }
 
     // ========== Search ==========
 
-    /** 全量搜索知识库文档内容 */
     public ApiResponse<List<KnowledgeDocument>> search(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return ApiResponse.success(List.of());
@@ -160,7 +171,6 @@ public class KnowledgeBaseService {
         return ApiResponse.success(docRepository.searchByKeyword(keyword.trim()));
     }
 
-    /** 在指定知识库范围内搜索文档内容 */
     public ApiResponse<List<KnowledgeDocument>> searchInKbs(String keyword, List<Long> kbIds) {
         if (keyword == null || keyword.isBlank() || kbIds == null || kbIds.isEmpty()) {
             return ApiResponse.success(List.of());
@@ -170,10 +180,6 @@ public class KnowledgeBaseService {
 
     // ========== Chat Integration ==========
 
-    /**
-     * 构建 RAG 知识库上下文文本，用于注入 LLM 提示词。
-     * 从关联的知识库中检索与用户查询相关的文档片段，最多返回 5 段。
-     */
     public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
@@ -193,12 +199,38 @@ public class KnowledgeBaseService {
         return context.toString();
     }
 
+    // ========== Audit Log ==========
+
+    public List<KnowledgeAuditLog> getAuditLogs(Long kbId) {
+        return auditLogRepository.findByKbIdOrderByCreatedAtDesc(kbId);
+    }
+
+    public List<KnowledgeAuditLog> getAllAuditLogs() {
+        return auditLogRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    private void writeAuditLog(Long kbId, Long userId, String username,
+                               String operation, String fileName, HttpServletRequest request) {
+        try {
+            String ip = request != null ? request.getRemoteAddr() : "unknown";
+            KnowledgeAuditLog logEntry = KnowledgeAuditLog.builder()
+                    .kbId(kbId)
+                    .userId(userId)
+                    .username(username != null ? username : String.valueOf(userId))
+                    .operation(operation)
+                    .fileName(fileName)
+                    .ipAddress(ip)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            auditLogRepository.save(logEntry);
+            log.debug("Audit: {} {} in KB {} by user {}", operation, fileName, kbId, userId);
+        } catch (Exception e) {
+            log.warn("Failed to write audit log: {}", e.getMessage());
+        }
+    }
+
     // ========== Workspace Sync ==========
 
-    /**
-     * 构建知识库的完整内容文本，用于写入 workspace knowledge/KNOWLEDGE.md。
-     * 包含知识库名称和所有文档的完整内容。
-     */
     public String buildKnowledgeMdContent(Long kbId) {
         var kbOpt = kbRepository.findById(kbId);
         if (kbOpt.isEmpty()) return "";
@@ -222,10 +254,6 @@ public class KnowledgeBaseService {
         return sb.toString().trim();
     }
 
-    /**
-     * 同步指定知识库到所有关联的 Agent workspace。
-     * 当知识库文档新增/删除时调用。
-     */
     @Transactional
     public void syncKnowledgeBaseToAgents(Long kbId) {
         String content = buildKnowledgeMdContent(kbId);
@@ -238,23 +266,19 @@ public class KnowledgeBaseService {
 
     // ========== Helpers ==========
 
-    /** 获取文件扩展名 */
     private String getExtension(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(dot + 1) : "";
     }
 
-    /** 根据扩展名提取文本内容 */
     private String extractText(MultipartFile file, String ext) throws Exception {
         return switch (ext) {
             case "txt", "md", "csv" -> readTextFile(file);
             case "json", "xml", "yaml", "yml", "properties", "log" -> readTextFile(file);
-            default -> "[暂不支持自动提取 " + ext.toUpperCase() + " 格式内容，请在下方手动输入文本内容]\n\n"
-                    + readTextFile(file);
+            default -> "[暂不支持自动提取 " + ext.toUpperCase() + " 格式内容，请在下方手动输入文本内容]\n\n" + readTextFile(file);
         };
     }
 
-    /** 以 UTF-8 读取上传文件的文本内容 */
     private String readTextFile(MultipartFile file) throws Exception {
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(

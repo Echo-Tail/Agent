@@ -1,6 +1,7 @@
 import type { LogEntry, LogLevel, LogCategory, ILogStorage, LogFilters, LogStats } from './types'
 import { maskPII } from './pii'
 import { InMemoryStorage } from './storage'
+import { submitLogApi } from '../../api/systemLog'
 
 let storage: ILogStorage = new InMemoryStorage()
 let currentRoute = ''
@@ -35,6 +36,18 @@ function createEntry(level: LogLevel, category: LogCategory, message: string, da
 export async function log(level: LogLevel, category: LogCategory, message: string, data?: Record<string, unknown>, duration?: number) {
   const entry = createEntry(level, category, message, data, duration)
   await storage.add(entry)
+  // Fire-and-forget backend submission
+  submitLogApi({
+    level: entry.level,
+    category: entry.category,
+    message: entry.message,
+    data: entry.data ? JSON.stringify(entry.data) : undefined,
+    duration: entry.duration,
+    route: entry.route,
+    userId: entry.userId,
+  }).catch(() => {
+    // silently ignore backend errors (network down, 403, etc.)
+  })
 }
 
 export async function getLogs(filters: LogFilters = {}): Promise<LogEntry[]> {

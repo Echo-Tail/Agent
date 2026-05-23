@@ -7,12 +7,14 @@ export interface Agent {
   systemPrompt: string
   greeting: string
   tools: string[]
+  skills: string[]
   knowledgeBaseIds: number[]
   modelId: number
   isSystem?: boolean
   status: 'active' | 'disabled'
   createdAt: string
   createdBy: number
+  ragMode: 'GENERIC' | 'AGENTIC'
 }
 
 export interface AgentSummary {
@@ -29,8 +31,10 @@ export interface AgentCreateRequest {
   systemPrompt?: string
   greeting?: string
   tools?: string[]
+  skills?: string[]
   knowledgeBaseIds?: number[]
   modelId?: number
+  ragMode?: 'GENERIC' | 'AGENTIC'
 }
 
 export interface AgentUpdateRequest {
@@ -41,7 +45,9 @@ export interface AgentUpdateRequest {
   systemPrompt?: string
   greeting?: string
   tools?: string[]
+  skills?: string[]
   knowledgeBaseIds?: number[]
   modelId?: number
   status?: 'active' | 'disabled'
+  ragMode?: 'GENERIC' | 'AGENTIC'
 }

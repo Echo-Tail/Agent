@@ -24,7 +24,10 @@ http.interceptors.response.use(
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem(STORAGE_KEY_TOKEN)
       localStorage.removeItem(STORAGE_KEY_USER)
-      window.location.href = '/login'
+      // Avoid redirect loop: if already on /login, don't redirect again
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   },

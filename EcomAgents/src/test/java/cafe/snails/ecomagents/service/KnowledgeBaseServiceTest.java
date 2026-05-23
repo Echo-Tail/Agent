@@ -5,8 +5,10 @@ import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.repository.AgentRepository;
+import cafe.snails.ecomagents.repository.KnowledgeAuditLogRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,14 +37,18 @@ class KnowledgeBaseServiceTest {
     @Mock
     private AgentRepository agentRepository;
     @Mock
+    private KnowledgeAuditLogRepository auditLogRepository;
+    @Mock
     private WorkspaceInitService workspaceInitService;
+    @Mock
+    private VectorEmbeddingService vectorEmbeddingService;
 
     private KnowledgeBaseService service;
     private KnowledgeBase sampleKb;
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeBaseService(kbRepository, docRepository, agentRepository, workspaceInitService);
+        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, vectorEmbeddingService);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();

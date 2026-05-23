@@ -15,6 +15,7 @@ vi.mock('vue-router', () => ({
 
 vi.mock('../api/agent', () => ({
   listAgentsApi: mockListAgentsApi,
+  listAgentsByScopeApi: mockListAgentsApi,
   deleteAgentApi: vi.fn(),
 }))
 
@@ -23,8 +24,8 @@ const mockAgents: Agent[] = [
     id: 1, name: '客服助手', icon: 'bi-robot',
     description: '处理客户咨询', tags: ['对话'],
     systemPrompt: '客服助手', greeting: '你好',
-    tools: ['web'], knowledgeBaseIds: [],
-    modelId: 1, status: 'active',
+    tools: ['web'], skills: [], knowledgeBaseIds: [],
+    modelId: 1, status: 'active', ragMode: 'AGENTIC',
     createdAt: '2024-01-01', createdBy: 1,
   },
 ]

@@ -1,7 +1,7 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
-import cafe.snails.ecomagents.model.SkillIndex;
+import cafe.snails.ecomagents.model.Skills;
 import cafe.snails.ecomagents.service.SkillService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -11,8 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 技能控制器 — 基于文件系统的技能管理。
- * 仅提供列表、GitHub URL 导入、ZIP 上传、删除。
+ * 技能控制器 — 全局技能池管理 + per-Agent 技能绑定查询。
  */
 @RestController
 @RequestMapping("/v1")
@@ -21,17 +20,19 @@ public class SkillController {
 
     private final SkillService skillService;
 
-    /** 列出所有技能 */
+    /** 列出所有技能（全局池） */
     @GetMapping("/skills")
-    public ApiResponse<List<SkillIndex>> listSkills() {
+    public ApiResponse<List<Skills>> listSkills() {
         return skillService.listSkills();
     }
 
-    /**
-     * 从 GitHub URL 导入技能。
-     * body: { "url": "https://github.com/{owner}/{repo}" }
-     * 也支持 tree 路径：https://github.com/{owner}/{repo}/tree/{branch}/skills/{name}
-     */
+    /** 获取指定 Agent 绑定的技能名称列表 */
+    @GetMapping("/agents/{agentId}/skills")
+    public ApiResponse<List<String>> getAgentSkills(@PathVariable("agentId") Long agentId) {
+        return ApiResponse.success(skillService.getSkillsForAgent(agentId));
+    }
+
+    /** 从 GitHub URL 导入技能 */
     @PostMapping("/skills/import-url")
     public ApiResponse<Void> importFromUrl(@RequestBody Map<String, String> body) {
         String url = body.get("url");
@@ -41,17 +42,20 @@ public class SkillController {
         return skillService.importFromGithubUrl(url);
     }
 
-    /**
-     * 上传 ZIP 文件导入技能。
-     */
+    /** 上传 ZIP 文件导入技能 */
     @PostMapping("/skills/upload")
     public ApiResponse<Void> uploadSkillZip(@RequestParam("file") MultipartFile file) {
         return skillService.uploadSkillZip(file);
     }
 
-    /** 删除技能 */
+    /**
+     * 删除技能。
+     * @param name  技能名称
+     * @param force 为 true 时强制删除（同时清理所有 Agent 引用），默认 false
+     */
     @DeleteMapping("/skills/{name}")
-    public ApiResponse<Void> deleteSkill(@PathVariable("name") String name) {
-        return skillService.deleteSkill(name);
+    public ApiResponse<Void> deleteSkill(@PathVariable("name") String name,
+                                         @RequestParam(value = "force", defaultValue = "false") boolean force) {
+        return skillService.deleteSkill(name, force);
     }
 }

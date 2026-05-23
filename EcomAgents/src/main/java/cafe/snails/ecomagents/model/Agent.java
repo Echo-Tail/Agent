@@ -50,11 +50,17 @@ public class Agent {
     @Column(length = 200)
     private String greeting;
 
-    /** 启用的工具列表（dialog / query / order / track / marketing 等） */
+    /** 启用的工具列表（web_search / image_generation 等） */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "agent_tools", joinColumns = @JoinColumn(name = "agent_id"))
     @Column(name = "tool", length = 50)
     private List<String> tools;
+
+    /** 绑定的技能名称列表（从全局技能池复制到 workspace） */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "agent_skill_names", joinColumns = @JoinColumn(name = "agent_id"))
+    @Column(name = "skill_name", length = 100)
+    private List<String> skills;
 
     /** 关联的知识库 ID 列表 */
     @ElementCollection(fetch = FetchType.EAGER)
@@ -83,4 +89,9 @@ public class Agent {
     /** 创建者用户 ID */
     @Column(nullable = false)
     private Long createdBy;
+
+    /** RAG 检索模式：GENERIC（自动检索）/ AGENTIC（Agent 自主检索） */
+    @Column(length = 20)
+    @Builder.Default
+    private String ragMode = "AGENTIC";
 }

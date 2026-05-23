@@ -5,8 +5,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage, useDialog, NButton, NSpace } from 'naive-ui'
 import { useKnowledgeStore } from '../../stores/knowledge'
 import type { KnowledgeBase } from '../../types/knowledge'
+import { useAuthStore } from '../../stores/auth'
 import DocPreview from '../../components/DocPreview.vue'
 
+const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
@@ -237,7 +239,7 @@ function formatDate(dateStr: string) {
               </n-icon>
             </template>
           </n-input>
-          <n-button type="primary" @click="openCreate">
+          <n-button v-if="authStore.isAdmin" type="primary" @click="openCreate">
             <template #icon>
               <n-icon>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -291,7 +293,7 @@ function formatDate(dateStr: string) {
                     {{ kb.description }}
                   </n-ellipsis>
                 </div>
-                <n-button circle size="small" type="primary" quaternary @click.stop="openEdit(kb)">
+                <n-button v-if="authStore.isAdmin" circle size="small" type="primary" quaternary @click.stop="openEdit(kb)">
                   <template #icon>
                     <n-icon>
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -300,7 +302,7 @@ function formatDate(dateStr: string) {
                     </n-icon>
                   </template>
                 </n-button>
-                <n-button circle size="small" type="error" quaternary @click.stop="handleDeleteKb(kb)">
+                <n-button v-if="authStore.isAdmin" circle size="small" type="error" quaternary @click.stop="handleDeleteKb(kb)">
                   <template #icon>
                     <n-icon color="#ef4444">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -339,7 +341,7 @@ function formatDate(dateStr: string) {
             {{ store.currentKb.name }}
           </n-h3>
         </n-space>
-        <n-space>
+        <n-space v-if="authStore.isAdmin">
           <n-button size="small" type="primary" quaternary @click="store.currentKb && openEdit(store.currentKb)">
             编辑
           </n-button>

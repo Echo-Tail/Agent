@@ -44,9 +44,18 @@ public class SecurityConfig {
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/models", "/v1/models/**").authenticated()
                         .requestMatchers("/v1/models/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/v1/tools", "/v1/tools/**").authenticated()
                         .requestMatchers("/v1/tools/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/v1/knowledge-bases").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/v1/knowledge-bases", "/v1/knowledge-bases/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/v1/knowledge-bases/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/v1/knowledge-bases/audit-logs").hasRole("ADMIN")
                         .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")
                         .requestMatchers("/v1/admin/tickets/**").hasRole("ADMIN")
+                        // 系统日志：写入需登录，查询/清空仅管理员
+                        .requestMatchers(HttpMethod.GET, "/v1/system-logs", "/v1/system-logs/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/v1/system-logs").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/v1/system-logs").authenticated()
                         // 其余端点需认证
                         .anyRequest().authenticated()
                 )

@@ -44,6 +44,11 @@ const router = createRouter({
           component: () => import('../views/agent/AgentList.vue'),
         },
         {
+          path: 'agents/plaza',
+          name: 'AgentPlaza',
+          component: () => import('../views/agent/AgentPlaza.vue'),
+        },
+        {
           path: 'agents/create',
           name: 'AgentCreate',
           component: () => import('../views/agent/AgentCreate.vue'),

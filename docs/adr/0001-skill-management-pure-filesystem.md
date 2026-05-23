@@ -1,4 +1,7 @@
-# 技能管理采用纯文件系统而非数据库存储
+# [SUPERSEDED] 技能管理采用纯文件系统而非数据库存储
+
+> 本 ADR「所有 Agent 共享全部技能，无 per-agent 分配」部分已被 [ADR-0003](0003-per-agent-skill-binding.md) 取代。
+> 保留此文件作为历史记录。文件系统 SSOT 原则仍然有效。
 
 技能本质是 Markdown 文件（`SKILL.md` + 可选附属资源），不适合将文件内容存入数据库表字段。同时 AgentScope Java SDK 提供了 `FileSystemSkillRepository` 作为第一方支持，无额外依赖。因此决定：以 `workspace/skills/` 目录为技能 SSOT，不建 `skill_pool` 表，仅保留轻量 `skill_index` 表作为文件系统的只读缓存供前端列表展示。
 

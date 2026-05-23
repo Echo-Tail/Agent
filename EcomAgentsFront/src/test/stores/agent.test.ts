@@ -15,14 +15,14 @@ const mockAgents: Agent[] = [
   {
     id: 1, name: '客服助手', icon: 'bi-headset', description: '客服',
     tags: ['对话'], systemPrompt: 'prompt', greeting: '你好',
-    tools: ['web'], knowledgeBaseIds: [], modelId: 1,
-    status: 'active', createdAt: '2024-01-01', createdBy: 1,
+    tools: ['web'], skills: [], knowledgeBaseIds: [], modelId: 1,
+    status: 'active', ragMode: 'AGENTIC', createdAt: '2024-01-01', createdBy: 1,
   },
   {
     id: 2, name: '订单管家', icon: 'bi-cart', description: '订单',
     tags: ['订单'], systemPrompt: 'prompt', greeting: '你好',
-    tools: ['web'], knowledgeBaseIds: [], modelId: 1,
-    status: 'disabled', createdAt: '2024-01-15', createdBy: 1,
+    tools: ['web'], skills: [], knowledgeBaseIds: [], modelId: 1,
+    status: 'disabled', ragMode: 'AGENTIC', createdAt: '2024-01-15', createdBy: 1,
   },
 ]
 

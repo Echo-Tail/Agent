@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.service;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.repository.AgentRepository;
+import cafe.snails.ecomagents.repository.AgentSkillRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,10 @@ class AgentServiceTest {
 
     @Mock
     private WorkspaceInitService workspaceInitService;
+    @Mock
+    private SkillService skillService;
+    @Mock
+    private AgentSkillRepository agentSkillRepository;
 
     private AgentService service;
 
@@ -39,7 +44,7 @@ class AgentServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AgentService(repository, aiModelRepository, workspaceInitService);
+        service = new AgentService(repository, aiModelRepository, workspaceInitService, skillService, agentSkillRepository);
         sampleAgent = Agent.builder()
                 .id(1L).name("客服助手").icon("bi-headset")
                 .description("客服Agent")
@@ -53,7 +58,7 @@ class AgentServiceTest {
     @Test
     void listAgents_shouldReturnAll() {
         when(repository.findAll()).thenReturn(List.of(sampleAgent));
-        ApiResponse<List<Agent>> result = service.listAgents();
+        ApiResponse<List<Agent>> result = service.listAgents(1L, null);
         assertEquals(200, result.getCode());
         assertEquals(1, result.getData().size());
     }

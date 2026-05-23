@@ -21,7 +21,7 @@ function canEdit(agent: Agent) {
 }
 
 onMounted(() => {
-  agentStore.fetchAgents()
+  agentStore.fetchMyAgents()
 })
 
 function handleDelete(agent: Agent) {

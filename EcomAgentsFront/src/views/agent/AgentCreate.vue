@@ -4,9 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getAgentApi, createAgentApi, updateAgentApi } from '../../api/agent'
 import { listModelsApi } from '../../api/model'
+import { listToolsApi } from '../../api/tool'
+import { listSkillsApi } from '../../api/skill'
+import { listKnowledgeBasesApi } from '../../api/knowledge'
 import { validate, usernameRules } from '../../utils/validation'
 import type { AgentCreateRequest } from '../../types/agent'
-import type { AiModel } from '../../types/api'
+import type { AiModel, SkillDefinition } from '../../types/api'
+import type { ToolDefinition } from '../../api/tool'
+import type { KnowledgeBase } from '../../types/knowledge'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +33,14 @@ const tags = ref<string[]>([])
 const status = ref<'active' | 'disabled'>('active')
 const models = ref<AiModel[]>([])
 const selectedModelId = ref<number | null>(null)
+const tools = ref<string[]>([])
+const skills = ref<string[]>([])
+const knowledgeBaseIds = ref<number[]>([])
+const ragMode = ref<'GENERIC' | 'AGENTIC'>('AGENTIC')
+const availableTools = ref<ToolDefinition[]>([])
+const availableSkills = ref<SkillDefinition[]>([])
+const availableKbs = ref<KnowledgeBase[]>([])
+
 const availableIcons = [
   { value: 'bi-robot', label: '机器人', path: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z' },
   { value: 'bi-chat-dots', label: '对话', path: 'M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z' },
@@ -54,16 +67,30 @@ const modelOptions = computed(() => {
   }))
 })
 
+const enabledTools = computed(() => availableTools.value.filter(t => t.enabled))
+
 async function fetchAgent() {
   if (!isEdit.value) return
   fetching.value = true
   try {
-    const [res, modelRes] = await Promise.all([
+    const [res, modelRes, toolRes, skillRes, kbRes] = await Promise.all([
       getAgentApi(agentId.value),
       listModelsApi(),
+      listToolsApi(),
+      listSkillsApi(),
+      listKnowledgeBasesApi(),
     ])
     if (modelRes.data.code === 200) {
       models.value = modelRes.data.data ?? []
+    }
+    if (toolRes.data.code === 200) {
+      availableTools.value = toolRes.data.data ?? []
+    }
+    if (skillRes.data.code === 200) {
+      availableSkills.value = skillRes.data.data ?? []
+    }
+    if (kbRes.data.code === 200) {
+      availableKbs.value = kbRes.data.data ?? []
     }
     const body = res.data
     if (body.code === 200 && body.data) {
@@ -76,22 +103,40 @@ async function fetchAgent() {
       tags.value = a.tags || []
       status.value = a.status || 'active'
       selectedModelId.value = a.modelId ?? null
+      tools.value = a.tools || []
+      skills.value = a.skills || []
+      knowledgeBaseIds.value = a.knowledgeBaseIds || []
+      ragMode.value = a.ragMode || 'AGENTIC'
     } else {
       message.error('Agent 不存在')
-      router.push({ name: 'AgentList' })
+      router.push({ name: 'Dashboard' })
     }
   } catch {
     message.error('加载失败')
-    router.push({ name: 'AgentList' })
+    router.push({ name: 'Dashboard' })
   } finally {
     fetching.value = false
   }
 }
 
-async function loadModels() {
-  const res = await listModelsApi()
-  if (res.data.code === 200) {
-    models.value = res.data.data ?? []
+async function loadFormData() {
+  const [modelRes, toolRes, skillRes, kbRes] = await Promise.all([
+    listModelsApi(),
+    listToolsApi(),
+    listSkillsApi(),
+    listKnowledgeBasesApi(),
+  ])
+  if (modelRes.data.code === 200) {
+    models.value = modelRes.data.data ?? []
+  }
+  if (toolRes.data.code === 200) {
+    availableTools.value = toolRes.data.data ?? []
+  }
+  if (skillRes.data.code === 200) {
+    availableSkills.value = skillRes.data.data ?? []
+  }
+  if (kbRes.data.code === 200) {
+    availableKbs.value = kbRes.data.data ?? []
   }
 }
 
@@ -99,7 +144,7 @@ onMounted(() => {
   if (isEdit.value) {
     fetchAgent()
   } else {
-    loadModels()
+    loadFormData()
   }
 })
 
@@ -125,13 +170,17 @@ async function handleSubmit() {
       greeting: greeting.value || undefined,
       tags: tags.value.length ? tags.value : undefined,
       modelId: selectedModelId.value ?? undefined,
+      tools: tools.value.length ? tools.value : undefined,
+      skills: skills.value.length ? skills.value : undefined,
+      knowledgeBaseIds: knowledgeBaseIds.value.length ? knowledgeBaseIds.value : undefined,
+      ragMode: ragMode.value,
     }
 
     if (isEdit.value) {
       const res = await updateAgentApi(agentId.value, { ...payload, status: status.value })
       if (res.data.code === 200) {
         message.success('更新成功')
-        router.push({ name: 'AgentList' })
+        router.push({ name: 'Dashboard' })
       } else {
         message.error(res.data.message || '更新失败')
       }
@@ -139,7 +188,7 @@ async function handleSubmit() {
       const res = await createAgentApi(payload)
       if (res.data.code === 200) {
         message.success('创建成功')
-        router.push({ name: 'AgentList' })
+        router.push({ name: 'Dashboard' })
       } else {
         message.error(res.data.message || '创建失败')
       }
@@ -258,6 +307,105 @@ function handleTagsChange(v: string[]) {
             </template>
           </n-form-item>
 
+          <!-- Tools -->
+          <n-form-item label="工具">
+            <template #feedback>
+              选择 Agent 可使用的工具，仅显示已启用的工具
+            </template>
+            <n-checkbox-group v-model:value="tools" :disabled="loading">
+              <n-space>
+                <n-checkbox
+                  v-for="tool in enabledTools"
+                  :key="tool.id"
+                  :value="tool.id"
+                  :label="tool.name"
+                >
+                  <n-tooltip :trigger="'hover'" placement="right">
+                    <template #trigger>
+                      <span>{{ tool.name }}</span>
+                    </template>
+                    {{ tool.description }}
+                  </n-tooltip>
+                </n-checkbox>
+              </n-space>
+            </n-checkbox-group>
+            <n-empty v-if="enabledTools.length === 0" description="暂无可用工具" :size="'small'" style="padding: 8px 0;" />
+          </n-form-item>
+
+          <!-- Skills -->
+          <n-form-item label="技能">
+            <template #feedback>
+              选择要绑定到 Agent 的技能，技能内容将从全局技能池复制到 Agent 的工作空间
+            </template>
+            <n-checkbox-group v-model:value="skills" :disabled="loading">
+              <n-space>
+                <n-checkbox
+                  v-for="skill in availableSkills"
+                  :key="skill.name"
+                  :value="skill.name"
+                >
+                  <span>{{ skill.name }}</span>
+                  <n-tag v-if="skill.category" size="tiny" :bordered="false" style="margin-left: 4px;">
+                    {{ skill.category }}
+                  </n-tag>
+                </n-checkbox>
+              </n-space>
+            </n-checkbox-group>
+            <n-empty v-if="availableSkills.length === 0" description="暂无可用技能" :size="'small'" style="padding: 8px 0;" />
+          </n-form-item>
+
+          <!-- Knowledge Bases -->
+          <n-form-item label="知识库">
+            <template #feedback>
+              选择 Agent 可查询的知识库，关联后 Agent 可在对话中检索知识库内容
+            </template>
+            <n-checkbox-group v-model:value="knowledgeBaseIds" :disabled="loading">
+              <n-space>
+                <n-checkbox
+                  v-for="kb in availableKbs"
+                  :key="kb.id"
+                  :value="kb.id"
+                  :label="kb.name"
+                >
+                  <n-tooltip :trigger="'hover'" placement="right">
+                    <template #trigger>
+                      <span>{{ kb.name }}</span>
+                    </template>
+                    {{ kb.description || '暂无描述' }}
+                  </n-tooltip>
+                </n-checkbox>
+              </n-space>
+            </n-checkbox-group>
+            <n-empty v-if="availableKbs.length === 0" description="暂无可用知识库，请联系管理员创建" :size="'small'" style="padding: 8px 0;" />
+          </n-form-item>
+
+          <!-- RAG Mode -->
+          <n-form-item label="RAG 检索模式">
+            <template #feedback>
+              知识库检索策略，关联知识库后生效
+            </template>
+            <n-radio-group v-model:value="ragMode" :disabled="loading">
+              <n-space vertical>
+                <n-radio value="AGENTIC">
+                  <n-space vertical :size="2">
+                    <span style="font-weight: 500;">Agentic（推荐）</span>
+                    <span style="font-size: 12px; color: #888;">
+                      Agent 在对话过程中自主判断是否需要从知识库检索信息，通过调用 retrieve_knowledge 工具获取相关知识。适合需要灵活控制检索时机的场景。
+                    </span>
+                  </n-space>
+                </n-radio>
+                <n-radio value="GENERIC">
+                  <n-space vertical :size="2">
+                    <span style="font-weight: 500;">Generic</span>
+                    <span style="font-size: 12px; color: #888;">
+                      每次对话前系统自动从知识库检索相关信息并注入到上下文中，Agent 无需主动调用检索工具。适合需要始终参考知识的场景。
+                    </span>
+                  </n-space>
+                </n-radio>
+              </n-space>
+            </n-radio-group>
+          </n-form-item>
+
           <!-- Status (edit only) -->
           <n-form-item v-if="isEdit" label="状态">
             <n-switch v-model:value="status" :checked-value="'active'" :unchecked-value="'disabled'">
@@ -268,7 +416,7 @@ function handleTagsChange(v: string[]) {
 
           <!-- Submit -->
           <div style="display: flex; gap: 12px; justify-content: flex-end;">
-            <n-button @click="router.push({ name: 'AgentList' })" :disabled="loading">
+            <n-button @click="router.push({ name: 'Dashboard' })" :disabled="loading">
               取消
             </n-button>
             <n-button type="primary" attr-type="submit" :loading="loading">

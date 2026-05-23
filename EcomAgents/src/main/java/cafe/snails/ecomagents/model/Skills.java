@@ -4,20 +4,19 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
-/**
- * 技能索引表 — 文件系统 workspace/skills/ 的只读缓存。
- * <p>SSOT 是文件系统，此表仅在技能变更时刷新，供前端列表展示。</p>
- */
 @Entity
-@Table(name = "skill_index")
+@Table(name = "skills")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SkillIndex {
+public class Skills {
 
     @Id
-    @Column(length = 100)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true, length = 100)
     private String name;
 
     @Column(columnDefinition = "TEXT")
@@ -25,6 +24,12 @@ public class SkillIndex {
 
     @Column(length = 50)
     private String category;
+
+    @Column(length = 50)
+    private String version;
+
+    @Column(name = "source_url", length = 500)
+    private String sourceUrl;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

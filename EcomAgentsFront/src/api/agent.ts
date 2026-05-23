@@ -2,8 +2,13 @@ import http from './request'
 import type { ApiResponse } from '../types/api'
 import type { Agent, AgentCreateRequest, AgentUpdateRequest } from '../types/agent'
 
-export function listAgentsApi() {
-  return http.get<ApiResponse<Agent[]>>('/agents')
+export function listAgentsApi(scope?: string) {
+  const params = scope ? { scope } : undefined
+  return http.get<ApiResponse<Agent[]>>('/agents', { params })
+}
+
+export function listAgentsByScopeApi(scope: string) {
+  return http.get<ApiResponse<Agent[]>>('/agents', { params: { scope } })
 }
 
 export function getAgentApi(id: number) {

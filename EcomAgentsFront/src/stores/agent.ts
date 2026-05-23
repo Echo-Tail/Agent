@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import { listAgentsApi } from '../api/agent'
+import { listAgentsApi, listAgentsByScopeApi } from '../api/agent'
 import type { Agent, AgentSummary } from '../types/agent'
 
 export const useAgentStore = defineStore('agent', () => {
@@ -15,11 +15,11 @@ export const useAgentStore = defineStore('agent', () => {
     disabled: agents.value.filter((a) => a.status === 'disabled').length,
   }))
 
-  async function fetchAgents() {
+  async function fetchAgents(scope?: string) {
     loading.value = true
     error.value = null
     try {
-      const res = await listAgentsApi()
+      const res = scope ? await listAgentsByScopeApi(scope) : await listAgentsApi()
       const body = res.data
       if (body.code === 200) {
         agents.value = (body.data ?? []).filter(a => !a.isSystem)
@@ -37,5 +37,13 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  return { agents, loading, error, summary, fetchAgents }
+  async function fetchMyAgents() {
+    return fetchAgents('my')
+  }
+
+  async function fetchPlazaAgents() {
+    return fetchAgents('plaza')
+  }
+
+  return { agents, loading, error, summary, fetchAgents, fetchMyAgents, fetchPlazaAgents }
 })

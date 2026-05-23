@@ -18,9 +18,11 @@ const activeAgent: Agent = {
   systemPrompt: '你是一个客服助手',
   greeting: '你好',
   tools: ['web'],
+  skills: [],
   knowledgeBaseIds: [],
   modelId: 1,
   status: 'active',
+  ragMode: 'AGENTIC',
   createdAt: '2024-01-01',
   createdBy: 1,
 }

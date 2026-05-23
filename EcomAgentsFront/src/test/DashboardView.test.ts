@@ -11,9 +11,10 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ name: 'Dashboard' }),
 }))
 
-const mockListAgentsApi = vi.hoisted(() => vi.fn())
+const mockListAgentsByScopeApi = vi.hoisted(() => vi.fn())
 vi.mock('../api/agent', () => ({
-  listAgentsApi: mockListAgentsApi,
+  listAgentsApi: vi.fn(),
+  listAgentsByScopeApi: mockListAgentsByScopeApi,
 }))
 
 const mockAgents: Agent[] = [
@@ -21,8 +22,8 @@ const mockAgents: Agent[] = [
     id: 1, name: '客服助手', icon: 'bi-robot',
     description: '处理客户咨询', tags: ['对话'],
     systemPrompt: '客服助手', greeting: '你好',
-    tools: ['web'], knowledgeBaseIds: [],
-    modelId: 1, status: 'active',
+    tools: ['web'], skills: [], knowledgeBaseIds: [],
+    modelId: 1, status: 'active', ragMode: 'AGENTIC',
     createdAt: '2024-01-01', createdBy: 1,
   },
 ]
@@ -30,7 +31,7 @@ const mockAgents: Agent[] = [
 describe('DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    mockListAgentsApi.mockResolvedValue({
+    mockListAgentsByScopeApi.mockResolvedValue({
       data: { code: 200, message: 'ok', data: [] },
     })
   })
@@ -60,13 +61,13 @@ describe('DashboardView', () => {
     })
   }
 
-  it('renders welcome message', () => {
+  it('shows my agents title', () => {
     const wrapper = createWrapper()
-    expect(wrapper.text()).toContain('欢迎使用 EcomAgents')
+    expect(wrapper.text()).toContain('我的 Agent')
   })
 
   it('shows agent list when store has data', async () => {
-    mockListAgentsApi.mockResolvedValue({
+    mockListAgentsByScopeApi.mockResolvedValue({
       data: { code: 200, message: 'ok', data: mockAgents },
     })
     const wrapper = createWrapper()
