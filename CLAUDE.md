@@ -2,12 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## User Preferences
+
+- **语言**: 中文回复。与用户交流、代码注释、commit message 均使用中文。
+- **代码索引**: 项目已配置 CodeGraph (`codegraph_*` MCP 工具)。所有符号查询、调用链分析、影响范围评估优先使用 CodeGraph，而非 grep/文件搜索。
+
 ## Project Overview
 
-企业电商智能体管理平台 (Enterprise E-commerce Agent Management Platform). A two-module project:
+企业电商智能体管理平台 (Enterprise E-commerce Agent Management Platform). A three-module project:
 
 - **`EcomAgents/`** — Java/Spring Boot backend (Gradle, Java 17, AgentScope Java SDK)
 - **`EcomAgentsFront/`** — Vue 3 + Naive UI + TypeScript SPA (Vite, Pinia, Vue Router, Vitest)
+- **`ShadcnAgentUI/`** — 新的 shadcn-vue 前端 (Vue 3 + shadcn-vue + TypeScript, 逐步替换 EcomAgentsFront)
 
 ## Commands
 
