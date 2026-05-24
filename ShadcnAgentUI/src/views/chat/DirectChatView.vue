@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
 import { useAgentStore } from '@/stores/agent'
+import { getAgentApi } from '@/api/agent'
+import type { Agent } from '@/types/agent'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
@@ -109,7 +111,7 @@ function removeFile(index: number) {
   }
 }
 
-const selectedAgent = ref(agentStore.myAgents.find(a => a.id === Number(route.query.agentId)) ?? null)
+const selectedAgent = ref<Agent | null>(null)
 
 onMounted(async () => {
   const agentId = Number(route.query.agentId)
@@ -120,7 +122,13 @@ onMounted(async () => {
   }
 
   if (agentId) {
+    // Look in myAgents first, then try fetching individually (plaza agents)
     selectedAgent.value = agentStore.myAgents.find(a => a.id === agentId) || null
+    if (!selectedAgent.value) {
+      try {
+        selectedAgent.value = await getAgentApi(agentId)
+      } catch { /* agent not found */ }
+    }
     if (selectedAgent.value) {
       chatStore.switchToAgent(agentId)
       // Create a session if none exists

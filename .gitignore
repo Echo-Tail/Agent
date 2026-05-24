@@ -57,6 +57,7 @@ CONTEXT.md
 back
 io
 .codegraph
+*/uploads
 
 # Local env files
 .env
