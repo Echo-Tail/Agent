@@ -37,7 +37,7 @@ onMounted(() => {
 
     <!-- Empty -->
     <n-result
-      v-else-if="agentStore.agents.length === 0"
+      v-else-if="agentStore.plazaAgents.length === 0"
       status="info"
       title="Agent 广场空空如也"
       description="目前还没有其他用户创建 Agent，稍后再来看看吧"
@@ -45,7 +45,7 @@ onMounted(() => {
 
     <!-- Agent Grid (not editable, click navigates to chat) -->
     <n-grid v-else :cols="2" :x-gap="16" :y-gap="16">
-      <n-gi v-for="agent in agentStore.agents" :key="agent.id">
+      <n-gi v-for="agent in agentStore.plazaAgents" :key="agent.id">
         <AgentCard :agent="agent" :editable="false" />
       </n-gi>
     </n-grid>

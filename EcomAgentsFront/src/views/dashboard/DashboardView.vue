@@ -1,15 +1,43 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDialog, useMessage } from 'naive-ui'
 import { useAgentStore } from '../../stores/agent'
+import { deleteAgentApi } from '../../api/agent'
 import AgentCard from '../../components/AgentCard.vue'
+import type { Agent } from '../../types/agent'
 
 const router = useRouter()
+const dialog = useDialog()
+const message = useMessage()
 const agentStore = useAgentStore()
 
 onMounted(() => {
   agentStore.fetchMyAgents()
 })
+
+function handleDelete(agent: Agent) {
+  dialog.warning({
+    title: '确认删除',
+    content: `确定要删除 Agent「${agent.name}」吗？此操作不可撤销。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    positiveButtonProps: { type: 'error' },
+    onPositiveClick: async () => {
+      try {
+        const res = await deleteAgentApi(agent.id)
+        if (res.data.code === 200) {
+          message.success('删除成功')
+          agentStore.fetchMyAgents()
+        } else {
+          message.error(res.data.message || '删除失败')
+        }
+      } catch {
+        message.error('网络异常')
+      }
+    },
+  })
+}
 </script>
 
 <template>
@@ -46,7 +74,7 @@ onMounted(() => {
 
     <!-- Empty -->
     <n-result
-      v-else-if="agentStore.agents.length === 0"
+      v-else-if="agentStore.myAgents.length === 0"
       status="info"
       title="暂无 Agent"
       description="还没有创建任何 Agent，点击上方按钮开始创建"
@@ -60,8 +88,8 @@ onMounted(() => {
 
     <!-- Agent Grid -->
     <n-grid v-else :cols="2" :x-gap="16" :y-gap="16">
-      <n-gi v-for="agent in agentStore.agents" :key="agent.id">
-        <AgentCard :agent="agent" />
+      <n-gi v-for="agent in agentStore.myAgents" :key="agent.id">
+        <AgentCard :agent="agent" :editable="true" @delete="handleDelete" />
       </n-gi>
     </n-grid>
   </n-space>

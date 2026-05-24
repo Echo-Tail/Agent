@@ -7,6 +7,7 @@ import AgentList from '../views/agent/AgentList.vue'
 import type { Agent } from '../types/agent'
 
 const mockListAgentsApi = vi.hoisted(() => vi.fn())
+const mockListAgentsByScopeApi = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -15,7 +16,7 @@ vi.mock('vue-router', () => ({
 
 vi.mock('../api/agent', () => ({
   listAgentsApi: mockListAgentsApi,
-  listAgentsByScopeApi: mockListAgentsApi,
+  listAgentsByScopeApi: mockListAgentsByScopeApi,
   deleteAgentApi: vi.fn(),
 }))
 
@@ -34,6 +35,9 @@ describe('AgentList', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockListAgentsApi.mockResolvedValue({
+      data: { code: 200, message: 'ok', data: [] },
+    })
+    mockListAgentsByScopeApi.mockResolvedValue({
       data: { code: 200, message: 'ok', data: [] },
     })
   })
@@ -76,7 +80,7 @@ describe('AgentList', () => {
   })
 
   it('renders agent list when store has data', async () => {
-    mockListAgentsApi.mockResolvedValue({
+    mockListAgentsByScopeApi.mockResolvedValue({
       data: { code: 200, message: 'ok', data: mockAgents },
     })
     const wrapper = createWrapper()
@@ -87,5 +91,11 @@ describe('AgentList', () => {
   it('shows create button linking to AgentCreate', () => {
     const wrapper = createWrapper()
     expect(wrapper.text()).toContain('创建 Agent')
+  })
+
+  it('calls fetchMyAgents (scope=my) on mount', async () => {
+    createWrapper()
+    await new Promise(resolve => setTimeout(resolve))
+    expect(mockListAgentsByScopeApi).toHaveBeenCalledWith('my')
   })
 })

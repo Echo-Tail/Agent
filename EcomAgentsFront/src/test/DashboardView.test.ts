@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
-import { NConfigProvider, NMessageProvider, zhCN, dateZhCN } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, zhCN, dateZhCN } from 'naive-ui'
 import DashboardView from '../views/dashboard/DashboardView.vue'
 import type { Agent } from '../types/agent'
 
@@ -42,7 +42,9 @@ describe('DashboardView', () => {
         return () =>
           h(NConfigProvider, { locale: zhCN, 'date-locale': dateZhCN }, () =>
             h(NMessageProvider, null, () =>
-              h(DashboardView),
+              h(NDialogProvider, null, () =>
+                h(DashboardView),
+              ),
             ),
           )
       },

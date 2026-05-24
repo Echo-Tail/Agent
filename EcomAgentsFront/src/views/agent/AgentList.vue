@@ -36,7 +36,7 @@ function handleDelete(agent: Agent) {
         const res = await deleteAgentApi(agent.id)
         if (res.data.code === 200) {
           message.success('删除成功')
-          agentStore.fetchAgents()
+          agentStore.fetchMyAgents()
         } else {
           message.error(res.data.message || '删除失败')
         }
@@ -76,13 +76,13 @@ function handleDelete(agent: Agent) {
       :description="agentStore.error"
     >
       <template #footer>
-        <n-button @click="agentStore.fetchAgents()">重试</n-button>
+        <n-button @click="agentStore.fetchMyAgents()">重试</n-button>
       </template>
     </n-result>
 
     <!-- Empty -->
     <n-result
-      v-else-if="agentStore.agents.length === 0"
+      v-else-if="agentStore.myAgents.length === 0"
       status="info"
       title="暂无 Agent"
       description="还没有创建任何 Agent"
@@ -96,7 +96,7 @@ function handleDelete(agent: Agent) {
 
     <!-- Agent Grid -->
     <n-grid v-else :cols="2" :x-gap="16" :y-gap="16">
-      <n-gi v-for="agent in agentStore.agents" :key="agent.id">
+      <n-gi v-for="agent in agentStore.myAgents" :key="agent.id">
         <AgentCard :agent="agent" :editable="canEdit(agent)" @delete="handleDelete" />
       </n-gi>
     </n-grid>

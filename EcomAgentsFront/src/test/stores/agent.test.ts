@@ -5,6 +5,7 @@ import type { Agent } from '../../types/agent'
 
 vi.mock('../../api/agent', () => ({
   listAgentsApi: vi.fn(),
+  listAgentsByScopeApi: vi.fn(),
   getAgentApi: vi.fn(),
   createAgentApi: vi.fn(),
   updateAgentApi: vi.fn(),
@@ -34,6 +35,8 @@ describe('useAgentStore', () => {
   it('starts with empty state', () => {
     const store = useAgentStore()
     expect(store.agents).toEqual([])
+    expect(store.myAgents).toEqual([])
+    expect(store.plazaAgents).toEqual([])
     expect(store.loading).toBe(false)
     expect(store.error).toBeNull()
     expect(store.summary).toEqual({ total: 0, active: 0, disabled: 0 })
@@ -94,5 +97,65 @@ describe('useAgentStore', () => {
     const store = useAgentStore()
     store.agents = mockAgents
     expect(store.summary).toEqual({ total: 2, active: 1, disabled: 1 })
+  })
+
+  it('fetchMyAgents calls listAgentsByScopeApi with "my" and populates myAgents', async () => {
+    const { listAgentsByScopeApi } = await import('../../api/agent')
+    vi.mocked(listAgentsByScopeApi).mockResolvedValue({
+      data: { code: 200, message: 'success', data: [mockAgents[0]] },
+    } as any)
+
+    const store = useAgentStore()
+    await store.fetchMyAgents()
+
+    expect(listAgentsByScopeApi).toHaveBeenCalledWith('my')
+    expect(store.myAgents).toHaveLength(1)
+  })
+
+  it('fetchPlazaAgents calls listAgentsByScopeApi with "plaza" and populates plazaAgents', async () => {
+    const { listAgentsByScopeApi } = await import('../../api/agent')
+    vi.mocked(listAgentsByScopeApi).mockResolvedValue({
+      data: { code: 200, message: 'success', data: [mockAgents[1]] },
+    } as any)
+
+    const store = useAgentStore()
+    await store.fetchPlazaAgents()
+
+    expect(listAgentsByScopeApi).toHaveBeenCalledWith('plaza')
+    expect(store.plazaAgents).toHaveLength(1)
+  })
+
+  it('fetchMyAgents filters out system agents', async () => {
+    const { listAgentsByScopeApi } = await import('../../api/agent')
+    const systemAgent = { ...mockAgents[0], id: 99, isSystem: true }
+    vi.mocked(listAgentsByScopeApi).mockResolvedValue({
+      data: { code: 200, message: 'success', data: [mockAgents[0], systemAgent] },
+    } as any)
+
+    const store = useAgentStore()
+    await store.fetchMyAgents()
+
+    expect(store.myAgents).toHaveLength(1)
+    expect(store.myAgents[0].id).toBe(1)
+  })
+
+  it('fetchMyAgents and fetchPlazaAgents do not pollute each other', async () => {
+    const { listAgentsByScopeApi } = await import('../../api/agent')
+    vi.mocked(listAgentsByScopeApi)
+      .mockResolvedValueOnce({
+        data: { code: 200, message: 'success', data: [mockAgents[0]] },
+      } as any)
+      .mockResolvedValueOnce({
+        data: { code: 200, message: 'success', data: [mockAgents[1]] },
+      } as any)
+
+    const store = useAgentStore()
+    await store.fetchMyAgents()
+    await store.fetchPlazaAgents()
+
+    expect(store.myAgents).toHaveLength(1)
+    expect(store.myAgents[0].id).toBe(1)
+    expect(store.plazaAgents).toHaveLength(1)
+    expect(store.plazaAgents[0].id).toBe(2)
   })
 })
