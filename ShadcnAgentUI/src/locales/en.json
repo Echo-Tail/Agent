@@ -532,8 +532,8 @@
       "usedBy": "Used By",
       "createdAt": "Created At"
     },
-    "inviteCodeUsed": "Yes",
-    "inviteCodeUnused": "No",
+    "inviteCodeUsed": "Used",
+    "inviteCodeUnused": "Unused",
     "batchGenerate": "Batch Generate",
     "batchGenerateCount": "Generate Count",
     "batchGenerateConfirm": "Are you sure you want to generate {count} invite codes?",

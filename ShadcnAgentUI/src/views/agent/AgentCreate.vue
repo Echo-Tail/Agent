@@ -6,9 +6,10 @@ import { createAgentApi, updateAgentApi, getAgentApi } from '@/api/agent'
 import { listModelsApi } from '@/api/model'
 import { listToolsApi } from '@/api/tool'
 import { listSkillsApi } from '@/api/skill'
-import type { AiModel } from '@/types/api'
+import { listKnowledgeBasesApi } from '@/api/knowledge'
+import type { AiModel, SkillDefinition } from '@/types/api'
 import type { ToolDefinition } from '@/api/tool'
-import type { SkillDefinition } from '@/types/api'
+import type { KnowledgeBase } from '@/types/knowledge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,6 +39,7 @@ const saving = ref(false)
 const models = ref<AiModel[]>([])
 const tools = ref<ToolDefinition[]>([])
 const skills = ref<SkillDefinition[]>([])
+const kbs = ref<KnowledgeBase[]>([])
 
 const form = ref({
   name: '',
@@ -49,6 +51,7 @@ const form = ref({
   tags: [] as string[],
   tools: [] as string[],
   skills: [] as string[],
+  knowledgeBaseIds: [] as number[],
   ragMode: 'AGENTIC' as 'GENERIC' | 'AGENTIC',
 })
 
@@ -57,14 +60,16 @@ const tagInput = ref('')
 onMounted(async () => {
   loading.value = true
   try {
-    const [modelsData, toolsData, skillsData] = await Promise.all([
+    const [modelsData, toolsData, skillsData, kbsData] = await Promise.all([
       listModelsApi(),
       listToolsApi(),
       listSkillsApi(),
+      listKnowledgeBasesApi(),
     ])
     models.value = modelsData ?? []
     tools.value = (toolsData ?? []).filter(t => t.enabled)
     skills.value = skillsData ?? []
+    kbs.value = kbsData ?? []
 
     if (isEdit) {
       const id = Number(route.params.id)
@@ -80,6 +85,7 @@ onMounted(async () => {
           tags: a.tags || [],
           tools: a.tools || [],
           skills: a.skills || [],
+          knowledgeBaseIds: a.knowledgeBaseIds || [],
           ragMode: a.ragMode || 'AGENTIC',
         }
       }
@@ -115,6 +121,12 @@ function toggleSkill(name: string) {
   else form.value.skills.push(name)
 }
 
+function toggleKb(id: number) {
+  const idx = form.value.knowledgeBaseIds.indexOf(id)
+  if (idx >= 0) form.value.knowledgeBaseIds.splice(idx, 1)
+  else form.value.knowledgeBaseIds.push(id)
+}
+
 async function handleSave() {
   if (!form.value.name.trim()) {
     toast.error(t('agent.nameRequired'))
@@ -137,6 +149,7 @@ async function handleSave() {
       tags: form.value.tags.length ? form.value.tags : undefined,
       tools: form.value.tools.length ? form.value.tools : undefined,
       skills: form.value.skills.length ? form.value.skills : undefined,
+      knowledgeBaseIds: form.value.knowledgeBaseIds.length ? form.value.knowledgeBaseIds : undefined,
       ragMode: form.value.ragMode,
     }
 
@@ -222,6 +235,24 @@ async function handleSave() {
               :checked="form.ragMode === 'AGENTIC'"
               @update:checked="(v: boolean) => form.ragMode = v ? 'AGENTIC' : 'GENERIC'"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Knowledge Bases -->
+      <Card v-if="kbs.length">
+        <CardHeader><CardTitle class="text-lg">{{ $t('agent.knowledgeBase') }}</CardTitle></CardHeader>
+        <CardContent>
+          <div class="flex flex-wrap gap-2">
+            <Badge
+              v-for="kb in kbs"
+              :key="kb.id"
+              :variant="form.knowledgeBaseIds.includes(kb.id) ? 'default' : 'outline'"
+              class="cursor-pointer"
+              @click="toggleKb(kb.id)"
+            >
+              {{ kb.name }}
+            </Badge>
           </div>
         </CardContent>
       </Card>

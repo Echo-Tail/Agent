@@ -532,8 +532,8 @@
       "usedBy": "使用人",
       "createdAt": "创建时间"
     },
-    "inviteCodeUsed": "是",
-    "inviteCodeUnused": "否",
+    "inviteCodeUsed": "已使用",
+    "inviteCodeUnused": "未使用",
     "batchGenerate": "批量生成",
     "batchGenerateCount": "生成数量",
     "batchGenerateConfirm": "确定要生成 {count} 个邀请码吗？",
