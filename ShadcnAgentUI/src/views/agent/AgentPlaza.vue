@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import AgentIcon from '@/components/AgentIcon.vue'
 import { MessageSquare, Users } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -41,8 +42,9 @@ function goToChat(agentId: number) {
       <Card v-for="agent in agentStore.plazaAgents" :key="agent.id" class="cursor-pointer hover:shadow-md transition-shadow" @click="goToChat(agent.id)">
         <CardContent class="p-5">
           <div class="flex items-center gap-3 mb-3">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary text-lg font-bold">
-              {{ agent.icon || agent.name.charAt(0).toUpperCase() }}
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden">
+              <AgentIcon v-if="agent.icon" :icon="agent.icon" class="h-6 w-6" />
+              <span v-else class="text-lg font-bold">{{ agent.name.charAt(0).toUpperCase() }}</span>
             </div>
             <div>
               <h3 class="font-semibold">{{ agent.name }}</h3>

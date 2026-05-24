@@ -60,7 +60,7 @@ public class VectorEmbeddingService {
      * @param threshold 相似度阈值
      * @return 匹配的文档片段文本列表
      */
-    @SuppressWarnings("unchecked")
+  
     public List<String> searchSimilar(List<Long> kbIds, String query, int limit, double threshold) {
         // TODO: implement when embedding API is integrated
         // This would use a native pgvector query like:

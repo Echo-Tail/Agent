@@ -17,6 +17,7 @@ import {
   MessageSquare,
 } from 'lucide-vue-next'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AgentIcon from '@/components/AgentIcon.vue'
 import { deleteAgentApi } from '@/api/agent'
 import { toast } from 'sonner'
 
@@ -92,8 +93,9 @@ async function handleDelete() {
         <CardContent class="p-5">
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-3" @click="goToChat(agent.id)">
-              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary text-lg font-bold cursor-pointer">
-                {{ agent.icon || agent.name.charAt(0).toUpperCase() }}
+              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden cursor-pointer">
+                <AgentIcon v-if="agent.icon" :icon="agent.icon" class="h-6 w-6" />
+                <span v-else class="text-lg font-bold">{{ agent.name.charAt(0).toUpperCase() }}</span>
               </div>
               <div class="cursor-pointer">
                 <h3 class="font-semibold">{{ agent.name }}</h3>

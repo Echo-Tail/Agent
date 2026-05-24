@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Loader2, Save } from 'lucide-vue-next'
 import { toast } from 'sonner'
+import AvatarPicker from '@/components/AvatarPicker.vue'
 import {
   Select,
   SelectContent,
@@ -181,7 +182,7 @@ async function handleSave() {
             </div>
             <div class="space-y-2">
               <Label>{{ $t('agent.icon') }}</Label>
-              <Input v-model="form.icon" placeholder="Emoji or text icon" />
+              <AvatarPicker v-model="form.icon" />
             </div>
           </div>
           <div class="space-y-2">
@@ -214,8 +215,8 @@ async function handleSave() {
           </div>
           <div class="flex items-center justify-between">
             <div>
-              <Label>Agentic RAG</Label>
-              <p class="text-xs text-muted-foreground">{{ $t('agent.description') }}</p>
+              <Label>{{ $t('agent.ragMode') }}</Label>
+              <p class="text-xs text-muted-foreground">{{ $t('agent.ragModeDesc') }}</p>
             </div>
             <Switch
               :checked="form.ragMode === 'AGENTIC'"

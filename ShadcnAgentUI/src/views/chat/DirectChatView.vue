@@ -10,16 +10,21 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import {
   Send,
   Square,
   Bot,
   RefreshCw,
   Wrench,
+  Paperclip,
+  X,
+  File,
+  Copy,
+  Check,
 } from 'lucide-vue-next'
 import { toast } from 'sonner'
+import { uploadFileApi } from '@/api/file'
 
 const { t } = useI18n()
 
@@ -30,6 +35,79 @@ const agentStore = useAgentStore()
 const inputText = ref('')
 const messagesEnd = ref<HTMLDivElement | null>(null)
 const initializing = ref(true)
+const msgCopiedIdx = ref<number | null>(null)
+
+interface FileAttachment {
+  file: File
+  record?: { id: number; originalName: string; fileSize: number; mimeType: string }
+  error?: string
+}
+
+const attachments = ref<FileAttachment[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadError = ref<string | null>(null)
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function getUniqueFileName(originalName: string, existingNames: string[]): string {
+  const dotIndex = originalName.lastIndexOf('.')
+  const baseName = dotIndex > 0 ? originalName.substring(0, dotIndex) : originalName
+  const ext = dotIndex > 0 ? originalName.substring(dotIndex) : ''
+  let counter = 1
+  let newName = originalName
+  while (existingNames.includes(newName)) {
+    newName = `${baseName}(${counter})${ext}`
+    counter++
+  }
+  return newName
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (files.length === 0) return
+
+  uploadError.value = null
+  const existingNames = attachments.value.map(a => a.file.name)
+
+  for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      uploadError.value = t('chat.fileTooLarge', { size: '10MB' })
+      continue
+    }
+    const uniqueName = getUniqueFileName(file.name, existingNames)
+    const renamedFile = new File([file], uniqueName, { type: file.type })
+    existingNames.push(uniqueName)
+    const attachment: FileAttachment = { file: renamedFile }
+    attachments.value.push(attachment)
+    uploadFile(attachment)
+  }
+
+  input.value = ''
+}
+
+async function uploadFile(attachment: FileAttachment) {
+  try {
+    const record = await uploadFileApi(attachment.file)
+    attachment.record = record
+  } catch {
+    attachment.error = t('error.uploadFailed')
+    toast.error(t('error.uploadFailed') + ': ' + attachment.file.name)
+  }
+}
+
+function removeFile(index: number) {
+  attachments.value.splice(index, 1)
+  if (attachments.value.length === 0) {
+    uploadError.value = null
+  }
+}
 
 const selectedAgent = ref(agentStore.myAgents.find(a => a.id === Number(route.query.agentId)) ?? null)
 
@@ -62,9 +140,12 @@ watch(() => chatStore.messages.length, () => {
   nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
 })
 
-function renderMarkdown(text: string): string {
-  const raw = marked.parse(text, { async: false }) as string
-  return DOMPurify.sanitize(raw)
+async function copyMessage(idx: number, content: string) {
+  try {
+    await navigator.clipboard.writeText(content)
+    msgCopiedIdx.value = idx
+    setTimeout(() => { msgCopiedIdx.value = null }, 1500)
+  } catch { /* ignore */ }
 }
 
 async function handleSend() {
@@ -157,9 +238,19 @@ function newSession() {
                 {{ selectedAgent?.name?.charAt(0) || 'A' }}
               </AvatarFallback>
             </Avatar>
-            <div :class="['max-w-[80%] rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
-              <div v-if="msg.role === 'assistant' && !msg.isError" class="prose prose-sm max-w-none dark:prose-invert" v-html="renderMarkdown(msg.content)" />
+            <div :class="['group relative max-w-[80%] rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
+              <MarkdownRenderer v-if="msg.role === 'assistant' && !msg.isError" :content="msg.content" />
               <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
+              <button
+                v-if="msg.role === 'assistant' && !msg.isError"
+                class="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
+                :class="msgCopiedIdx === idx ? 'text-green-500 opacity-100' : 'text-muted-foreground'"
+                :title="msgCopiedIdx === idx ? '已复制' : '复制消息'"
+                @click="copyMessage(idx, msg.content)"
+              >
+                <Check v-if="msgCopiedIdx === idx" class="h-3.5 w-3.5" />
+                <Copy v-else class="h-3.5 w-3.5" />
+              </button>
               <div v-if="msg.isError && msg.partialContent" class="mt-2 text-xs opacity-70 border-t pt-1">
                 {{ $t('chat.errorPartial') }}: {{ msg.partialContent }}
               </div>
@@ -188,7 +279,7 @@ function newSession() {
                   <Wrench class="mr-1 h-3 w-3" /> {{ tool }}
                 </Badge>
               </div>
-              <div class="prose prose-sm max-w-none dark:prose-invert" v-html="renderMarkdown(chatStore.streamingText)" />
+              <MarkdownRenderer :content="chatStore.streamingText" />
               <span class="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
             </div>
           </div>
@@ -199,11 +290,52 @@ function newSession() {
     </Card>
 
     <!-- Input -->
-    <div class="mt-4 flex gap-2">
-      <Textarea
+    <div class="mt-4">
+      <!-- File preview chips -->
+      <div v-if="attachments.length > 0" class="flex gap-2 mb-2 overflow-x-auto pb-1">
+        <div
+          v-for="(att, idx) in attachments"
+          :key="att.file.name + idx"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted rounded-md text-xs whitespace-nowrap shrink-0"
+        >
+          <File class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span class="max-w-[120px] truncate">{{ att.file.name }}</span>
+          <span class="text-muted-foreground shrink-0">{{ formatFileSize(att.file.size) }}</span>
+          <span v-if="!att.record && !att.error" class="text-muted-foreground shrink-0">{{ $t('chat.uploading') }}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-4 w-4 shrink-0"
+            @click="removeFile(idx)"
+          >
+            <X class="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+      <div v-if="uploadError && attachments.length === 0" class="mb-2 text-xs text-destructive">{{ uploadError }}</div>
+      <div class="flex gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          class="h-[44px] w-[44px] shrink-0"
+          :disabled="chatStore.isStreaming || !selectedAgent"
+          :title="$t('chat.attachFile')"
+          @click="fileInput?.click()"
+        >
+          <Paperclip class="h-4 w-4" />
+        </Button>
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          accept=".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.xml,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.zip"
+          class="hidden"
+          @change="handleFileSelect"
+        />
+        <Textarea
         ref="textareaRef"
         v-model="inputText"
-        placeholder="{{ $t('chat.inputPlaceholder') }}"
+        :placeholder="$t('chat.inputPlaceholder')"
         :disabled="chatStore.isStreaming || !selectedAgent"
         class="min-h-[44px] max-h-[120px] resize-none"
         @keydown="handleKeydown"
@@ -228,6 +360,7 @@ function newSession() {
           <Square class="h-4 w-4" />
         </Button>
       </div>
+    </div>
     </div>
 
     <!-- Agent selector when no agent selected -->

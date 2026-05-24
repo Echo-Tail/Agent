@@ -78,25 +78,40 @@ interface NavItem {
   adminOnly?: boolean
 }
 
-const navItems: NavItem[] = [
-  { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
-  { translationKey: 'nav.chat', key: 'Chat', icon: MessageSquare },
-  { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
-  { translationKey: 'nav.history', key: 'History', icon: History },
-  { translationKey: 'nav.myTickets', key: 'MyTickets', icon: Ticket },
-  { translationKey: 'nav.knowledgeBase', key: 'KnowledgeBase', icon: BookOpen },
-  { translationKey: 'nav.tokenUsage', key: 'TokenUsage', icon: BarChart3, adminOnly: true },
-  { translationKey: 'nav.ticketManage', key: 'TicketManage', icon: TicketCheck, adminOnly: true },
-  { translationKey: 'nav.logs', key: 'Logs', icon: FileText, adminOnly: true },
-  { translationKey: 'nav.userManage', key: 'UserManage', icon: UserCog, adminOnly: true },
-  { translationKey: 'nav.modelManage', key: 'ModelManage', icon: Brain, adminOnly: true },
-  { translationKey: 'nav.toolManage', key: 'ToolManage', icon: Wrench, adminOnly: true },
-  { translationKey: 'nav.skillManage', key: 'SkillManage', icon: GraduationCap, adminOnly: true },
-  { translationKey: 'nav.settings', key: 'Settings', icon: Settings },
+// 分组导航 — 组之间显示分割线
+const navGroups: NavItem[][] = [
+  // 核心 AI 交互
+  [
+    { translationKey: 'nav.chat', key: 'Chat', icon: MessageSquare },
+    { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
+    { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
+  ],
+  // 数据与记录
+  [
+    { translationKey: 'nav.history', key: 'History', icon: History },
+    { translationKey: 'nav.knowledgeBase', key: 'KnowledgeBase', icon: BookOpen },
+    { translationKey: 'nav.myTickets', key: 'MyTickets', icon: Ticket },
+  ],
+  // 管理后台
+  [
+    { translationKey: 'nav.tokenUsage', key: 'TokenUsage', icon: BarChart3, adminOnly: true },
+    { translationKey: 'nav.userManage', key: 'UserManage', icon: UserCog, adminOnly: true },
+    { translationKey: 'nav.modelManage', key: 'ModelManage', icon: Brain, adminOnly: true },
+    { translationKey: 'nav.skillManage', key: 'SkillManage', icon: GraduationCap, adminOnly: true },
+    { translationKey: 'nav.toolManage', key: 'ToolManage', icon: Wrench, adminOnly: true },
+    { translationKey: 'nav.ticketManage', key: 'TicketManage', icon: TicketCheck, adminOnly: true },
+    { translationKey: 'nav.logs', key: 'Logs', icon: FileText, adminOnly: true },
+  ],
+  // 设置
+  [
+    { translationKey: 'nav.settings', key: 'Settings', icon: Settings },
+  ],
 ]
 
-const visibleNavItems = computed(() =>
-  navItems.filter(item => !item.adminOnly || auth.isAdmin)
+const visibleNavGroups = computed(() =>
+  navGroups
+    .map(group => group.filter(item => !item.adminOnly || auth.isAdmin))
+    .filter(group => group.length > 0)
 )
 
 const activeKey = computed(() => (route.name as string) || 'Dashboard')
@@ -145,10 +160,12 @@ const userAvatar = computed(() => {
 
       <!-- Nav -->
       <nav class="flex-1 overflow-y-auto py-2 px-2 space-y-1">
-        <button
-          v-for="item in visibleNavItems"
-          :key="item.key"
-          @click="navigate(item.key)"
+        <template v-for="(group, groupIndex) in visibleNavGroups" :key="groupIndex">
+          <div v-if="groupIndex > 0" class="border-t border-sidebar-border my-2" />
+          <button
+            v-for="item in group"
+            :key="item.key"
+            @click="navigate(item.key)"
           :class="[
             'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors',
             activeKey === item.key
@@ -161,6 +178,7 @@ const userAvatar = computed(() => {
           <component :is="item.icon" class="h-4 w-4 shrink-0" />
           <span v-show="!sidebarCollapsed" class="truncate">{{ $t(item.translationKey) }}</span>
         </button>
+        </template>
       </nav>
 
       <!-- Bottom section -->

@@ -326,7 +326,9 @@
     "unpublish": "Unpublish",
     "unpublishConfirm": "Are you sure you want to unpublish this Agent?",
     "useAgent": "Use this Agent",
-    "startChat": "Start Chat"
+    "startChat": "Start Chat",
+    "ragMode": "AGENTIC Mode",
+    "ragModeDesc": "When enabled, the Agent autonomously decides when to retrieve knowledge via tools. When disabled, the system automatically injects relevant knowledge before each message."
   },
   "session": {
     "title": "History",
@@ -353,11 +355,14 @@
     "startChat": "Start Chat",
     "selectAgent": "Select an Agent to start chatting:",
     "newChat": "New Chat",
-    "inputPlaceholder": "Type a message... (Enter to send, Shift+Enter for new line)",
+    "inputPlaceholder": "What would you like to chat about?",
     "send": "Send",
     "stop": "Stop",
     "errorRetry": "Retry",
-    "errorPartial": "Partial response"
+    "errorPartial": "Partial response",
+    "attachFile": "Attach file",
+    "uploading": "Uploading...",
+    "fileTooLarge": "File size must not exceed {size}"
   },
   "log": {
     "level": {

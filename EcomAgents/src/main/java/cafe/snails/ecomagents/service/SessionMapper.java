@@ -1,6 +1,5 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Session;
 import cafe.snails.ecomagents.model.SessionMessage;
 import cafe.snails.ecomagents.repository.SessionRepository;

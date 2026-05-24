@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                         // 公开端点
                         .requestMatchers("/v1/login", "/v1/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/files/*/download").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 管理员端点

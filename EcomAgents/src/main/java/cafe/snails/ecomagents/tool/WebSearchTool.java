@@ -31,7 +31,6 @@ public class WebSearchTool {
         this.objectMapper = new ObjectMapper();
     }
 
-    @SuppressWarnings("unused")
     @Tool(name = "web_search", description = "搜索互联网获取最新信息。当需要了解实时新闻、最新数据或不在知识范围内的问题时使用此工具")
     public String search(
             @ToolParam(name = "query", description = "搜索关键词，应该简洁明确") String query,

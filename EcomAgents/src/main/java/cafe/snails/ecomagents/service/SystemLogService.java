@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -83,7 +82,6 @@ public class SystemLogService {
 
         long total = systemLogRepository.count();
         long totalErrors = systemLogRepository.countErrorsSince(last24h);
-        long totalIn24h = systemLogRepository.countByCreatedAtAfter(last24h);
 
         Map<String, Long> byLevel = new HashMap<>();
         for (String lv : LOG_LEVELS) {

@@ -14,9 +14,16 @@ import {
   Plus,
   Sparkles,
   Users,
+  Pencil,
+  Trash2,
+  MessageSquare,
 } from 'lucide-vue-next'
+import { deleteAgentApi } from '@/api/agent'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AgentIcon from '@/components/AgentIcon.vue'
 
-useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const agentStore = useAgentStore()
 
@@ -24,7 +31,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   loading.value = true
-  await agentStore.fetchAgents()
+  await agentStore.fetchAgents('my')
   loading.value = false
 })
 
@@ -34,6 +41,33 @@ function goToCreate() {
 
 function goToChat(agentId: number) {
   router.push({ name: 'Chat', query: { agentId: agentId.toString() } })
+}
+
+const deletingId = ref<number | null>(null)
+const showDeleteDialog = ref(false)
+const deleteTarget = ref<number | null>(null)
+
+function goToEdit(id: number) {
+  router.push({ name: 'AgentEdit', params: { id } })
+}
+
+function confirmDelete(id: number) {
+  deleteTarget.value = id
+  showDeleteDialog.value = true
+}
+
+async function handleDelete() {
+  if (deleteTarget.value === null) return
+  deletingId.value = deleteTarget.value
+  try {
+    await deleteAgentApi(deleteTarget.value)
+    toast.success(t('toast.deleteSuccess'))
+    await agentStore.fetchAgents()
+  } catch { /* interceptor handles toast */ } finally {
+    deletingId.value = null
+    showDeleteDialog.value = false
+    deleteTarget.value = null
+  }
 }
 </script>
 
@@ -101,17 +135,13 @@ function goToChat(agentId: number) {
     </EmptyState>
 
     <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <Card
-        v-for="agent in agentStore.agents"
-        :key="agent.id"
-        class="cursor-pointer hover:shadow-md transition-shadow"
-        @click="goToChat(agent.id)"
-      >
-        <CardContent class="p-6">
-          <div class="flex items-start justify-between mb-3">
+      <Card v-for="agent in agentStore.agents" :key="agent.id" class="hover:shadow-md transition-shadow">
+        <CardContent class="p-5">
+          <div class="flex items-start justify-between mb-3 cursor-pointer" @click="goToChat(agent.id)">
             <div class="flex items-center gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary text-lg font-bold">
-                {{ agent.icon || agent.name.charAt(0).toUpperCase() }}
+              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden">
+                <AgentIcon v-if="agent.icon" :icon="agent.icon" class="h-6 w-6" />
+                <span v-else class="text-lg font-bold">{{ agent.name.charAt(0).toUpperCase() }}</span>
               </div>
               <div>
                 <h3 class="font-semibold">{{ agent.name }}</h3>
@@ -122,14 +152,35 @@ function goToChat(agentId: number) {
               {{ agent.status === 'active' ? $t('userStatus.active') : $t('userStatus.disabled') }}
             </Badge>
           </div>
-          <div v-if="agent.tags?.length" class="flex flex-wrap gap-1">
+          <div v-if="agent.tags?.length" class="flex flex-wrap gap-1 mb-3">
             <Badge v-for="tag in agent.tags.slice(0, 3)" :key="tag" variant="outline" class="text-xs">
               {{ tag }}
             </Badge>
             <span v-if="agent.tags.length > 3" class="text-xs text-muted-foreground">+{{ agent.tags.length - 3 }}</span>
           </div>
+          <div class="flex gap-2 pt-2 border-t border-border">
+            <Button variant="outline" size="sm" class="flex-1" @click="goToEdit(agent.id)">
+              <Pencil class="mr-1 h-3 w-3" /> {{ $t('common.edit') }}
+            </Button>
+            <Button variant="outline" size="sm" class="flex-1" @click="goToChat(agent.id)">
+              <MessageSquare class="mr-1 h-3 w-3" /> {{ $t('chat.directChat') }}
+            </Button>
+            <Button variant="outline" size="sm" class="text-destructive hover:text-destructive" :disabled="deletingId === agent.id" @click="confirmDelete(agent.id)">
+              <Trash2 class="h-3 w-3" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
+
+    <ConfirmDialog
+      :open="showDeleteDialog"
+      @update:open="showDeleteDialog = $event"
+      :title="t('dialog.deleteConfirm.title')"
+      :description="t('dialog.deleteConfirm.desc', { entity: 'Agent' })"
+      :confirm-text="t('common.delete')"
+      :loading="deletingId !== null"
+      @confirm="handleDelete"
+    />
   </div>
 </template>

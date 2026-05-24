@@ -141,7 +141,6 @@ class SystemLogServiceTest {
     void getStats_shouldReturnAllMetrics() {
         when(systemLogRepository.count()).thenReturn(100L);
         when(systemLogRepository.countErrorsSince(any())).thenReturn(5L);
-        when(systemLogRepository.countByCreatedAtAfter(any())).thenReturn(30L);
         when(systemLogRepository.countByLevel("DEBUG")).thenReturn(20L);
         when(systemLogRepository.countByLevel("INFO")).thenReturn(50L);
         when(systemLogRepository.countByLevel("WARN")).thenReturn(25L);
@@ -169,7 +168,6 @@ class SystemLogServiceTest {
     void getStats_shouldHandleZeroTotal() {
         when(systemLogRepository.count()).thenReturn(0L);
         when(systemLogRepository.countErrorsSince(any())).thenReturn(0L);
-        when(systemLogRepository.countByCreatedAtAfter(any())).thenReturn(0L);
         when(systemLogRepository.countByLevel(anyString())).thenReturn(0L);
         when(systemLogRepository.countByCategory(anyString())).thenReturn(0L);
         when(systemLogRepository.countErrorsByHourNative(any())).thenReturn(List.of());

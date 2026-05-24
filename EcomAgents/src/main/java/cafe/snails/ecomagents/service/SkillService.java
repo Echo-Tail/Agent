@@ -415,7 +415,6 @@ public class SkillService {
 
         // Force delete: clean all agent bindings
         if (!bindings.isEmpty()) {
-            Path globalSkillsDir = getSkillsDir();
             for (AgentSkill as : bindings) {
                 Path agentSkillDir = getAgentSkillsDir(as.getAgentId()).resolve(name);
                 deleteRecursively(agentSkillDir);

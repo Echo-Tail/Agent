@@ -2,7 +2,6 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Agent;
-import cafe.snails.ecomagents.model.AgentSkill;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AgentSkillRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;

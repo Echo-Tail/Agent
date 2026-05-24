@@ -255,7 +255,7 @@
     "username": "用户名",
     "password": "密码",
     "email": "邮箱（选填）",
-    "msgInput": "输入消息... (Enter 发送, Shift+Enter 换行)",
+    "msgInput": "今天想聊点什么",
     "usernameHint": "2-20个字符",
     "passwordHint": "至少6位",
     "inviteCodeHint": "请输入邀请码"
@@ -326,7 +326,9 @@
     "unpublish": "下架",
     "unpublishConfirm": "确定要下架此 Agent 吗？",
     "useAgent": "使用 Agent",
-    "startChat": "开始对话"
+    "startChat": "开始对话",
+    "ragMode": "AGENTIC 模式",
+    "ragModeDesc": "开启后 Agent 通过工具自主判断何时检索知识库，不开启系统自动检索相关知识注入到每次对话前"
   },
   "session": {
     "title": "历史会话",
@@ -353,11 +355,14 @@
     "startChat": "开始对话",
     "selectAgent": "选择一个 Agent 开始对话：",
     "newChat": "新对话",
-    "inputPlaceholder": "输入消息... (Enter 发送, Shift+Enter 换行)",
+    "inputPlaceholder": "今天想聊点什么",
     "send": "发送",
     "stop": "停止",
     "errorRetry": "重试",
-    "errorPartial": "部分内容"
+    "errorPartial": "部分内容",
+    "attachFile": "上传附件",
+    "uploading": "上传中...",
+    "fileTooLarge": "文件大小不能超过 {size}"
   },
   "log": {
     "level": {
