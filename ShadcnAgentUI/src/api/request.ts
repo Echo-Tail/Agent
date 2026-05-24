@@ -35,8 +35,7 @@ http.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResponse
     if (body.code === 200) {
-      response.data = body.data
-      return response
+      return body.data
     }
     const msg = body.message || i18n.global.t('error.operationFailed')
     toast.error(msg)

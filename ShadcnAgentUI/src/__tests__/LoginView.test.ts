@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import LoginView from '@/views/login/LoginView.vue'
 import i18n from '@/locales'
+import { loginApi } from '@/api/auth'
 
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
@@ -106,5 +107,37 @@ describe('LoginView', () => {
     // Click to hide again
     await toggleBtn.trigger('click')
     expect(passwordInput.attributes('type')).toBe('password')
+  })
+
+  it('navigates to Dashboard on successful login', async () => {
+    const mockUser = {
+      id: 1,
+      username: 'testuser',
+      email: '',
+      role: 'user',
+      status: 'active',
+      createdAt: '2026-01-01',
+    }
+    vi.mocked(loginApi).mockResolvedValue({
+      token: 'test-token',
+      user: mockUser,
+    })
+
+    const wrapper = createWrapper()
+    const inputs = wrapper.findAll('input')
+    const buttons = wrapper.findAll('button')
+    const loginBtn = buttons.find(b => b.text().includes('登录'))
+
+    // Fill in credentials
+    await inputs[0].setValue('testuser')
+    await inputs[1].setValue('password123')
+
+    // Click login
+    await loginBtn!.trigger('click')
+    // Wait for async handleLogin to resolve
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(mockPush).toHaveBeenCalledWith({ name: 'Dashboard' })
   })
 })
