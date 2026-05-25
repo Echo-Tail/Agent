@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.KnowledgeAuditLog;
 import cafe.snails.ecomagents.model.KnowledgeBase;
@@ -22,7 +23,12 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * 知识库业务逻辑，包括知识库 CRUD、文档管理、全文搜索、RAG 上下文构建和审计日志。
@@ -39,6 +45,7 @@ public class KnowledgeBaseService {
     private final AgentRepository agentRepository;
     private final WorkspaceInitService workspaceInitService;
     private final VectorEmbeddingService vectorEmbeddingService;
+    private final LlmConfig llmConfig;
 
     // ========== Knowledge Base CRUD ==========
 
@@ -76,6 +83,12 @@ public class KnowledgeBaseService {
         }
         List<Agent> agents = agentRepository.findByKnowledgeBaseId(id);
         for (Agent agent : agents) {
+            List<Long> remainingKbIds = agent.getKnowledgeBaseIds() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(agent.getKnowledgeBaseIds());
+            remainingKbIds.removeIf(kbId -> id.equals(kbId));
+            agent.setKnowledgeBaseIds(remainingKbIds);
+            agentRepository.save(agent);
             workspaceInitService.updateKnowledgeMd(agent.getId(), null);
         }
 
@@ -183,20 +196,99 @@ public class KnowledgeBaseService {
     public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
-        List<KnowledgeDocument> docs = docRepository.searchByKeywordAndKbIds(userQuery, kbIds);
+        List<String> chunks = vectorEmbeddingService.searchSimilar(
+                kbIds,
+                userQuery,
+                llmConfig.getRagSearchLimit(),
+                llmConfig.getRagSimilarityThreshold()
+        );
+        if (chunks != null && !chunks.isEmpty()) {
+            StringBuilder context = new StringBuilder("\n\n以下是与用户问题相关的知识库内容:\n\n");
+            for (int i = 0; i < chunks.size(); i++) {
+                context.append("--- chunk ").append(i + 1).append(" ---\n")
+                        .append(truncate(chunks.get(i), 1200))
+                        .append("\n\n");
+            }
+            return context.toString();
+        }
+
+        List<KnowledgeDocument> docs = findRelevantDocuments(kbIds, userQuery);
         if (docs.isEmpty()) return "";
 
         StringBuilder context = new StringBuilder("\n\n以下是与用户问题相关的知识库内容:\n\n");
-        for (int i = 0; i < Math.min(docs.size(), 5); i++) {
+        for (int i = 0; i < Math.min(docs.size(), llmConfig.getRagSearchLimit()); i++) {
             KnowledgeDocument doc = docs.get(i);
-            String snippet = doc.getContent();
-            if (snippet.length() > 1000) {
-                snippet = snippet.substring(0, 1000) + "...";
-            }
             context.append("--- ").append(doc.getFileName()).append(" ---\n")
-                    .append(snippet).append("\n\n");
+                    .append(truncate(doc.getContent(), 1200)).append("\n\n");
         }
         return context.toString();
+    }
+
+    private List<KnowledgeDocument> findRelevantDocuments(List<Long> kbIds, String userQuery) {
+        String keyword = userQuery == null ? "" : userQuery.trim();
+        if (!keyword.isBlank()) {
+            List<KnowledgeDocument> exactMatches = docRepository.searchByKeywordAndKbIds(keyword, kbIds);
+            if (!exactMatches.isEmpty()) {
+                return exactMatches;
+            }
+        }
+
+        List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdIn(kbIds);
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+        Set<String> terms = extractSearchTerms(keyword);
+        if (terms.isEmpty()) {
+            return docs.stream()
+                    .filter(doc -> doc.getContent() != null && !doc.getContent().isBlank())
+                    .limit(5)
+                    .toList();
+        }
+
+        return docs.stream()
+                .filter(doc -> scoreDocument(doc, terms) > 0)
+                .sorted(Comparator.comparingInt((KnowledgeDocument doc) -> scoreDocument(doc, terms)).reversed())
+                .limit(5)
+                .toList();
+    }
+
+    private Set<String> extractSearchTerms(String query) {
+        Set<String> terms = new LinkedHashSet<>();
+        if (query == null || query.isBlank()) {
+            return terms;
+        }
+        String normalized = query.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+        for (String term : normalized.split("\\s+")) {
+            if (term.length() >= 2) {
+                terms.add(term);
+            }
+        }
+        String compact = normalized.replace(" ", "");
+        if (compact.length() >= 2 && compact.length() <= 40) {
+            terms.add(compact);
+        }
+        return terms;
+    }
+
+    private int scoreDocument(KnowledgeDocument doc, Set<String> terms) {
+        if (doc.getContent() == null || doc.getContent().isBlank()) {
+            return 0;
+        }
+        String text = doc.getContent().toLowerCase(Locale.ROOT);
+        int score = 0;
+        for (String term : terms) {
+            if (text.contains(term)) {
+                score += term.length();
+            }
+        }
+        return score;
+    }
+
+    private String truncate(String text, int maxLength) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() > maxLength ? text.substring(0, maxLength) + "..." : text;
     }
 
     // ========== Audit Log ==========

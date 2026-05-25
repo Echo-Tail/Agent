@@ -2,9 +2,13 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.Agent;
+import cafe.snails.ecomagents.model.KnowledgeBase;
+import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AgentSkillRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
+import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
+import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +42,10 @@ class AgentServiceTest {
     private SkillService skillService;
     @Mock
     private AgentSkillRepository agentSkillRepository;
+    @Mock
+    private ToolConfigRepository toolConfigRepository;
+    @Mock
+    private KnowledgeBaseRepository knowledgeBaseRepository;
 
     private AgentService service;
 
@@ -44,7 +53,8 @@ class AgentServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AgentService(repository, aiModelRepository, workspaceInitService, skillService, agentSkillRepository);
+        service = new AgentService(repository, aiModelRepository, workspaceInitService, skillService,
+                agentSkillRepository, toolConfigRepository, knowledgeBaseRepository);
         sampleAgent = Agent.builder()
                 .id(1L).name("客服助手").icon("bi-headset")
                 .description("客服Agent")
@@ -94,6 +104,41 @@ class AgentServiceTest {
     }
 
     @Test
+    void createAgent_shouldFilterDisabledToolsAndMissingKnowledgeBases() {
+        Agent input = Agent.builder()
+                .name("New Agent")
+                .modelId(1L)
+                .tools(List.of("web_search", "image_generation"))
+                .knowledgeBaseIds(List.of(10L, 99L))
+                .build();
+        ToolConfig enabledTool = ToolConfig.builder().id("web_search").enabled(true).build();
+        ToolConfig disabledTool = ToolConfig.builder().id("image_generation").enabled(false).build();
+        KnowledgeBase existingKb = KnowledgeBase.builder()
+                .id(10L)
+                .name("KB")
+                .createdAt(LocalDate.now())
+                .createdBy(1L)
+                .build();
+
+        when(toolConfigRepository.findAllById(List.of("web_search", "image_generation")))
+                .thenReturn(List.of(enabledTool, disabledTool));
+        when(knowledgeBaseRepository.findAllById(List.of(10L, 99L)))
+                .thenReturn(List.of(existingKb));
+        when(repository.save(any())).thenAnswer(i -> {
+            Agent a = i.getArgument(0);
+            a.setId(2L);
+            return a;
+        });
+
+        ApiResponse<Agent> result = service.createAgent(input, 1L);
+
+        assertEquals(List.of("web_search"), result.getData().getTools());
+        assertEquals(List.of(10L), result.getData().getKnowledgeBaseIds());
+        assertDoesNotThrow(() -> result.getData().getTools().clear());
+        assertDoesNotThrow(() -> result.getData().getKnowledgeBaseIds().clear());
+    }
+
+    @Test
     void updateAgent_shouldUpdateFields() {
         when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -104,6 +149,56 @@ class AgentServiceTest {
         assertEquals("bi-robot", result.getData().getIcon());
         // No prompt/knowledge change → workspace not updated
         verify(workspaceInitService, never()).updateAgentsMd(any(), any());
+    }
+
+    @Test
+    void updateAgent_shouldFilterDisabledToolsAndMissingKnowledgeBases() {
+        when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        ToolConfig enabledTool = ToolConfig.builder().id("web_search").enabled(true).build();
+        ToolConfig disabledTool = ToolConfig.builder().id("image_generation").enabled(false).build();
+        KnowledgeBase existingKb = KnowledgeBase.builder()
+                .id(10L)
+                .name("KB")
+                .createdAt(LocalDate.now())
+                .createdBy(1L)
+                .build();
+        when(toolConfigRepository.findAllById(List.of("web_search", "image_generation")))
+                .thenReturn(List.of(enabledTool, disabledTool));
+        when(knowledgeBaseRepository.findAllById(List.of(10L, 99L)))
+                .thenReturn(List.of(existingKb));
+
+        Agent updates = Agent.builder()
+                .tools(List.of("web_search", "image_generation"))
+                .knowledgeBaseIds(List.of(10L, 99L))
+                .build();
+        ApiResponse<Agent> result = service.updateAgent(1L, updates, 1L);
+
+        assertEquals(List.of("web_search"), result.getData().getTools());
+        assertEquals(List.of(10L), result.getData().getKnowledgeBaseIds());
+        assertDoesNotThrow(() -> result.getData().getTools().clear());
+        assertDoesNotThrow(() -> result.getData().getKnowledgeBaseIds().clear());
+        verify(workspaceInitService).updateKnowledgeMd(1L, null);
+    }
+
+    @Test
+    void updateAgent_withEmptyBindings_shouldKeepMutableCollectionsForHibernateMerge() {
+        when(repository.findById(1L)).thenReturn(Optional.of(sampleAgent));
+        when(repository.save(any())).thenAnswer(i -> {
+            Agent saved = i.getArgument(0);
+            saved.getTools().clear();
+            saved.getKnowledgeBaseIds().clear();
+            return saved;
+        });
+
+        Agent updates = Agent.builder()
+                .tools(new ArrayList<>())
+                .knowledgeBaseIds(new ArrayList<>())
+                .build();
+
+        ApiResponse<Agent> result = service.updateAgent(1L, updates, 1L);
+
+        assertEquals(200, result.getCode());
     }
 
     @Test

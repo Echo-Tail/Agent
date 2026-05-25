@@ -1,6 +1,8 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
 import cafe.snails.ecomagents.repository.AgentRepository;
@@ -40,13 +42,17 @@ class KnowledgeBaseServiceTest {
     private WorkspaceInitService workspaceInitService;
     @Mock
     private VectorEmbeddingService vectorEmbeddingService;
+    @Mock
+    private LlmConfig llmConfig;
 
     private KnowledgeBaseService service;
     private KnowledgeBase sampleKb;
 
     @BeforeEach
     void setUp() {
-        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, vectorEmbeddingService);
+        lenient().when(llmConfig.getRagSearchLimit()).thenReturn(5);
+        lenient().when(llmConfig.getRagSimilarityThreshold()).thenReturn(0.15);
+        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, vectorEmbeddingService, llmConfig);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();
@@ -110,6 +116,28 @@ class KnowledgeBaseServiceTest {
     }
 
     @Test
+    void deleteKnowledgeBase_shouldUnbindAgentsBeforeDelete() {
+        Agent agent = Agent.builder()
+                .id(2L)
+                .name("Agent")
+                .knowledgeBaseIds(List.of(1L, 3L))
+                .build();
+        when(kbRepository.existsById(1L)).thenReturn(true);
+        when(agentRepository.findByKnowledgeBaseId(1L)).thenReturn(List.of(agent));
+        when(agentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(1L)).thenReturn(List.of());
+
+        ApiResponse<Void> result = service.deleteKnowledgeBase(1L);
+
+        assertEquals(200, result.getCode());
+        assertEquals(List.of(3L), agent.getKnowledgeBaseIds());
+        assertDoesNotThrow(() -> agent.getKnowledgeBaseIds().clear());
+        verify(agentRepository).save(agent);
+        verify(workspaceInitService).updateKnowledgeMd(2L, null);
+        verify(kbRepository).deleteById(1L);
+    }
+
+    @Test
     void search_withKeyword_shouldReturnResults() {
         KnowledgeDocument doc = KnowledgeDocument.builder()
                 .id(1L).knowledgeBaseId(1L).fileName("test.md")
@@ -144,10 +172,22 @@ class KnowledgeBaseServiceTest {
                 .id(1L).knowledgeBaseId(1L).fileName("policy.md")
                 .content("退换货政策内容").charCount(100)
                 .uploadedAt(LocalDateTime.now()).uploadedBy(1L).build();
+        when(vectorEmbeddingService.searchSimilar(List.of(1L), "退换货", 5, 0.15)).thenReturn(List.of());
         when(docRepository.searchByKeywordAndKbIds("退换货", List.of(1L))).thenReturn(List.of(doc));
         String context = service.buildKnowledgeContext(List.of(1L), "退换货");
         assertTrue(context.contains("policy.md"));
         assertTrue(context.contains("退换货政策内容"));
+    }
+
+    @Test
+    void buildKnowledgeContext_withVectorChunks_shouldPreferVectorSearch() {
+        when(vectorEmbeddingService.searchSimilar(List.of(1L), "shipping", 5, 0.15))
+                .thenReturn(List.of("shipping policy chunk"));
+
+        String context = service.buildKnowledgeContext(List.of(1L), "shipping");
+
+        assertTrue(context.contains("shipping policy chunk"));
+        verify(docRepository, never()).searchByKeywordAndKbIds(any(), any());
     }
 
     @Test
@@ -158,7 +198,9 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_noResults_shouldReturnEmpty() {
+        when(vectorEmbeddingService.searchSimilar(List.of(1L), "nonexistent", 5, 0.15)).thenReturn(List.of());
         when(docRepository.searchByKeywordAndKbIds("nonexistent", List.of(1L))).thenReturn(List.of());
+        when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of());
         assertEquals("", service.buildKnowledgeContext(List.of(1L), "nonexistent"));
     }
 }

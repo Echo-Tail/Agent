@@ -35,7 +35,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const isAuthenticated = computed(() => !!(token.value && currentUser.value))
-  const isAdmin = computed(() => currentUser.value?.role === 'admin')
+  const isAdmin = computed(() => currentUser.value?.role?.toLowerCase() === 'admin')
 
   async function login(req: LoginRequest) {
     try {

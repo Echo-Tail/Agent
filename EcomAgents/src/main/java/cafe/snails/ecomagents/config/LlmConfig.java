@@ -27,6 +27,11 @@ public class LlmConfig {
     private long connectionTimeout = 30;
     /** 模型 API 读取超时时间（秒） */
     private long readTimeout = 55;
+    private String embeddingApiUrl;
+    private String embeddingApiKey;
+    private String embeddingModel = "text-embedding-3-small";
+    private int ragSearchLimit = 5;
+    private double ragSimilarityThreshold = 0.15;
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
@@ -44,4 +49,14 @@ public class LlmConfig {
     public void setConnectionTimeout(long connectionTimeout) { this.connectionTimeout = connectionTimeout; }
     public long getReadTimeout() { return readTimeout; }
     public void setReadTimeout(long readTimeout) { this.readTimeout = readTimeout; }
+    public String getEmbeddingApiUrl() { return embeddingApiUrl; }
+    public void setEmbeddingApiUrl(String embeddingApiUrl) { this.embeddingApiUrl = embeddingApiUrl; }
+    public String getEmbeddingApiKey() { return embeddingApiKey; }
+    public void setEmbeddingApiKey(String embeddingApiKey) { this.embeddingApiKey = embeddingApiKey; }
+    public String getEmbeddingModel() { return embeddingModel; }
+    public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
+    public int getRagSearchLimit() { return ragSearchLimit; }
+    public void setRagSearchLimit(int ragSearchLimit) { this.ragSearchLimit = ragSearchLimit; }
+    public double getRagSimilarityThreshold() { return ragSimilarityThreshold; }
+    public void setRagSimilarityThreshold(double ragSimilarityThreshold) { this.ragSimilarityThreshold = ragSimilarityThreshold; }
 }

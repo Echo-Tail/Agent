@@ -5,6 +5,8 @@ import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AgentSkillRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
+import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
+import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +36,8 @@ public class AgentService {
     private final WorkspaceInitService workspaceInitService;
     private final SkillService skillService;
     private final AgentSkillRepository agentSkillRepository;
+    private final ToolConfigRepository toolConfigRepository;
+    private final KnowledgeBaseRepository knowledgeBaseRepository;
 
     /**
      * 获取 Agent 列表（支持按用户范围过滤）。
@@ -108,6 +115,8 @@ public class AgentService {
         agent.setCreatedBy(userId);
         if (agent.getStatus() == null) agent.setStatus("active");
         if (agent.getRagMode() == null) agent.setRagMode("AGENTIC");
+        agent.setTools(filterEnabledToolIds(agent.getTools(), null));
+        agent.setKnowledgeBaseIds(filterExistingKnowledgeBaseIds(agent.getKnowledgeBaseIds(), null));
         Agent saved = agentRepository.save(agent);
 
         workspaceInitService.initWorkspace(saved);
@@ -143,14 +152,14 @@ public class AgentService {
                     if (update.getGreeting() != null) existing.setGreeting(update.getGreeting());
                     if (update.getTags() != null) existing.setTags(update.getTags());
                     if (update.getTools() != null) {
-                        existing.setTools(update.getTools());
+                        existing.setTools(filterEnabledToolIds(update.getTools(), id));
                     }
                     if (update.getSkills() != null) {
                         existing.setSkills(update.getSkills());
                         skillsChanged = true;
                     }
                     if (update.getKnowledgeBaseIds() != null) {
-                        existing.setKnowledgeBaseIds(update.getKnowledgeBaseIds());
+                        existing.setKnowledgeBaseIds(filterExistingKnowledgeBaseIds(update.getKnowledgeBaseIds(), id));
                         knowledgeChanged = true;
                     }
                     if (update.getModelId() != null) existing.setModelId(update.getModelId());
@@ -198,5 +207,48 @@ public class AgentService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    private List<String> filterEnabledToolIds(List<String> toolIds, Long agentId) {
+        if (toolIds == null) return null;
+        if (toolIds.isEmpty()) return new ArrayList<>();
+
+        Set<String> enabledToolIds = toolConfigRepository.findAllById(toolIds).stream()
+                .filter(tool -> Boolean.TRUE.equals(tool.getEnabled()))
+                .map(tool -> tool.getId())
+                .collect(Collectors.toSet());
+
+        List<String> filtered = new ArrayList<>(toolIds.stream()
+                .filter(id -> id != null && enabledToolIds.contains(id))
+                .distinct()
+                .toList());
+
+        Set<String> skipped = new HashSet<>(toolIds);
+        skipped.removeAll(filtered);
+        skipped.forEach(id -> log.warn(
+                "Agent {} skipped disabled or unknown tool binding during save: toolId={}",
+                agentId != null ? agentId : "(new)", id));
+        return filtered;
+    }
+
+    private List<Long> filterExistingKnowledgeBaseIds(List<Long> knowledgeBaseIds, Long agentId) {
+        if (knowledgeBaseIds == null) return null;
+        if (knowledgeBaseIds.isEmpty()) return new ArrayList<>();
+
+        Set<Long> existingIds = knowledgeBaseRepository.findAllById(knowledgeBaseIds).stream()
+                .map(kb -> kb.getId())
+                .collect(Collectors.toSet());
+
+        List<Long> filtered = new ArrayList<>(knowledgeBaseIds.stream()
+                .filter(id -> id != null && existingIds.contains(id))
+                .distinct()
+                .toList());
+
+        Set<Long> skipped = new HashSet<>(knowledgeBaseIds);
+        skipped.removeAll(filtered);
+        skipped.forEach(id -> log.warn(
+                "Agent {} removed missing knowledge base binding during save: knowledgeBaseId={}",
+                agentId != null ? agentId : "(new)", id));
+        return filtered;
     }
 }

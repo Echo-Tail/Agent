@@ -67,9 +67,11 @@ onMounted(async () => {
       listKnowledgeBasesApi(),
     ])
     models.value = modelsData ?? []
-    tools.value = (toolsData ?? []).filter(t => t.enabled)
+    tools.value = toolsData ?? []
     skills.value = skillsData ?? []
     kbs.value = kbsData ?? []
+    const enabledToolIds = new Set(tools.value.filter(t => t.enabled).map(t => t.id))
+    const existingKbIds = new Set(kbs.value.map(kb => kb.id))
 
     if (isEdit) {
       const id = Number(route.params.id)
@@ -83,9 +85,9 @@ onMounted(async () => {
           greeting: a.greeting || '',
           modelId: a.modelId,
           tags: a.tags || [],
-          tools: a.tools || [],
+          tools: (a.tools || []).filter(id => enabledToolIds.has(id)),
           skills: a.skills || [],
-          knowledgeBaseIds: a.knowledgeBaseIds || [],
+          knowledgeBaseIds: (a.knowledgeBaseIds || []).filter(id => existingKbIds.has(id)),
           ragMode: a.ragMode || 'AGENTIC',
         }
       }
@@ -109,7 +111,15 @@ function removeTag(tag: string) {
   form.value.tags = form.value.tags.filter(t => t !== tag)
 }
 
+function isToolDisabled(toolId: string) {
+  return !tools.value.find(t => t.id === toolId)?.enabled
+}
+
 function toggleTool(toolId: string) {
+  if (isToolDisabled(toolId)) {
+    toast.warning(t('agent.toolDisabledContactAdmin'))
+    return
+  }
   const idx = form.value.tools.indexOf(toolId)
   if (idx >= 0) form.value.tools.splice(idx, 1)
   else form.value.tools.push(toolId)
@@ -139,6 +149,10 @@ async function handleSave() {
 
   saving.value = true
   try {
+    const enabledToolIds = new Set(tools.value.filter(t => t.enabled).map(t => t.id))
+    const existingKbIds = new Set(kbs.value.map(kb => kb.id))
+    const enabledTools = form.value.tools.filter(id => enabledToolIds.has(id))
+    const existingKnowledgeBaseIds = form.value.knowledgeBaseIds.filter(id => existingKbIds.has(id))
     const payload = {
       name: form.value.name.trim(),
       icon: form.value.icon || undefined,
@@ -147,9 +161,9 @@ async function handleSave() {
       greeting: form.value.greeting.trim() || undefined,
       modelId: form.value.modelId,
       tags: form.value.tags.length ? form.value.tags : undefined,
-      tools: form.value.tools.length ? form.value.tools : undefined,
+      tools: isEdit ? enabledTools : (enabledTools.length ? enabledTools : undefined),
       skills: form.value.skills.length ? form.value.skills : undefined,
-      knowledgeBaseIds: form.value.knowledgeBaseIds.length ? form.value.knowledgeBaseIds : undefined,
+      knowledgeBaseIds: isEdit ? existingKnowledgeBaseIds : (existingKnowledgeBaseIds.length ? existingKnowledgeBaseIds : undefined),
       ragMode: form.value.ragMode,
     }
 
@@ -282,10 +296,12 @@ async function handleSave() {
               v-for="tool in tools"
               :key="tool.id"
               :variant="form.tools.includes(tool.id) ? 'default' : 'outline'"
-              class="cursor-pointer"
+              :class="tool.enabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+              :title="tool.enabled ? tool.description : $t('agent.toolDisabledContactAdmin')"
               @click="toggleTool(tool.id)"
             >
               {{ tool.name }}
+              <span v-if="!tool.enabled" class="ml-1 text-[10px]">{{ $t('agent.disabled') }}</span>
             </Badge>
           </div>
         </CardContent>

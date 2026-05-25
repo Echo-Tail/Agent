@@ -7,9 +7,7 @@ const STORAGE_KEY = 'locale'
 function getDefaultLocale(): string {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) return stored
-  const navLang = navigator.language
-  if (navLang.startsWith('zh')) return 'zh-CN'
-  return 'en'
+  return 'zh-CN'
 }
 
 const i18n = createI18n({

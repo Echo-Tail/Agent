@@ -24,4 +24,6 @@ public interface KnowledgeDocumentRepository extends JpaRepository<KnowledgeDocu
     /** 在指定知识库范围内按关键字搜索文档内容 */
     @Query(value = "SELECT d FROM KnowledgeDocument d WHERE d.knowledgeBaseId IN :kbIds AND LOWER(d.content) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<KnowledgeDocument> searchByKeywordAndKbIds(@Param("keyword") String keyword, @Param("kbIds") List<Long> kbIds);
+
+    List<KnowledgeDocument> findByKnowledgeBaseIdIn(List<Long> kbIds);
 }
