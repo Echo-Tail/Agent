@@ -230,7 +230,7 @@ async function handleSave() {
           <div class="space-y-2">
             <Label for="agent-model">{{ $t('agent.model') }} <span class="text-destructive">*</span></Label>
             <Select v-model="form.modelId" :disabled="models.length === 0">
-              <SelectTrigger id="agent-model" name="agent-model">
+              <SelectTrigger id="agent-model" name="agent-model" class="w-[300px]">
                 <SelectValue :placeholder="models.length === 0 ? $t('agent.noToolsConfig') : $t('agent.selectModel')" />
               </SelectTrigger>
               <SelectContent>
