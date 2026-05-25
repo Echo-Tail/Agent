@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Button } from '@/components/ui/button'
@@ -56,13 +56,20 @@ const deleteTarget = ref<number | null>(null)
 
 const fetchingModels = ref(false)
 const availableModelIds = ref<{ label: string; value: string }[]>([])
+const canFetchModels = computed(() => Boolean(editingModel.value.apiUrl && editingModel.value.apiKey && !fetchingModels.value))
 
-const providerOptions = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'DeepSeek', value: 'deepseek' },
-  { label: '通义千问', value: 'qwen' },
-  { label: '其他', value: 'other' },
-]
+const providerDefaults: Record<string, { label: string; apiUrl: string; apiType: string }> = {
+  anthropic: { label: 'Anthropic', apiUrl: 'https://api.anthropic.com', apiType: 'anthropic' },
+  openai: { label: 'OpenAI', apiUrl: 'https://api.openai.com', apiType: 'openai' },
+  qwen: { label: '阿里百炼', apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiType: 'openai' },
+  deepseek: { label: 'DeepSeek', apiUrl: 'https://api.deepseek.com', apiType: 'openai' },
+  other: { label: '其它', apiUrl: '', apiType: 'openai' },
+}
+
+const providerOptions = Object.entries(providerDefaults).map(([value, config]) => ({
+  label: config.label,
+  value,
+}))
 
 const apiTypeOptions = [
   { label: 'OpenAI 格式', value: 'openai' },
@@ -77,21 +84,20 @@ const tokenOptions = [
 
 const providerLabels: Record<string, string> = {
   openai: 'OpenAI',
+  anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
-  qwen: '通义千问',
+  qwen: '阿里百炼',
+  other: '其它',
 }
 
 onMounted(fetchModels)
 
 watch(() => editingModel.value.provider, (provider) => {
   if (!provider || isEditMode.value) return
-  const versionMap: Record<string, string> = {
-    openai: '/v1',
-    deepseek: '',
-    qwen: '/v1',
-    other: '/v1',
-  }
-  editingModel.value.apiVersion = versionMap[provider] || '/v1'
+  const defaults = providerDefaults[provider]
+  editingModel.value.apiUrl = defaults?.apiUrl || ''
+  editingModel.value.apiType = defaults?.apiType || 'openai'
+  availableModelIds.value = []
 })
 
 async function fetchModels() {
@@ -104,13 +110,13 @@ async function fetchModels() {
 }
 
 function openCreate() {
+  isEditMode.value = false
   editingModel.value = {
     name: '',
     provider: 'openai',
     modelName: '',
-    apiUrl: '',
+    apiUrl: providerDefaults.openai.apiUrl,
     apiType: 'openai',
-    apiVersion: '/v1',
     apiKey: '',
     maxTokens: 131072,
     temperature: 0.7,
@@ -119,7 +125,6 @@ function openCreate() {
     enabled: true,
   }
   availableModelIds.value = []
-  isEditMode.value = false
   showModal.value = true
 }
 
@@ -131,7 +136,7 @@ function openEdit(model: AiModel) {
 }
 
 async function handleFetchModels() {
-  const { apiUrl, apiType, apiVersion, apiKey } = editingModel.value
+  const { apiUrl, apiType, apiKey, provider } = editingModel.value
   if (!apiUrl) {
     toast.warning(t('modelManage.formInvalid'))
     return
@@ -141,8 +146,8 @@ async function handleFetchModels() {
   try {
     const data = await validateModelApi({
       baseUrl: apiUrl,
+      provider: provider || 'openai',
       apiType: apiType || 'openai',
-      apiVersion: apiVersion || '/v1',
       apiKey: apiKey || '',
     })
     if (data && data.length > 0) {
@@ -158,18 +163,6 @@ async function handleFetchModels() {
 }
 
 async function handleSave() {
-  const { apiUrl, apiKey } = editingModel.value
-  if (apiUrl && apiKey) {
-    try {
-      await validateModelApi({
-        baseUrl: apiUrl,
-        apiType: editingModel.value.apiType || 'openai',
-        apiVersion: editingModel.value.apiVersion || '/v1',
-        apiKey: apiKey || '',
-      })
-    } catch { /* interceptor handles toast */ return }
-  }
-
   saving.value = true
   try {
     if (isEditMode.value && editingModel.value.id) {
@@ -223,12 +216,12 @@ async function handleDelete() {
         <thead>
           <tr class="bg-muted/50 border-b border-border">
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('userManage.columns.id') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground">{{ $t('modelManage.columns.name') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('modelManage.columns.modelType') }}</th>
+            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-[200px]">{{ $t('modelManage.columns.name') }}</th>
+            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-20 whitespace-nowrap">{{ $t('modelManage.columns.modelType') }}</th>
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-20">{{ $t('modelManage.columns.provider') }}</th>
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground">{{ $t('modelManage.columns.modelId') }}</th>
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground">{{ $t('modelManage.form.apiUrl') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">-</th>
+            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('modelManage.columns.default') }}</th>
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('modelManage.columns.status') }}</th>
             <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-28">{{ $t('common.action') }}</th>
           </tr>
@@ -236,14 +229,14 @@ async function handleDelete() {
         <tbody class="divide-y divide-border">
           <tr v-for="m in models" :key="m.id" class="hover:bg-muted/30 transition-colors">
             <td class="px-3 py-2.5 text-muted-foreground">{{ m.id }}</td>
-            <td class="px-3 py-2.5 font-medium">{{ m.name }}</td>
-            <td class="px-3 py-2.5">
-              <Badge v-if="m.modelType === 'IMAGE'" variant="secondary" class="text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
-              <span v-else class="text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
+            <td class="px-3 py-2.5 font-medium max-w-[200px] truncate" :title="m.name">{{ m.name }}</td>
+            <td class="px-3 py-2.5 whitespace-nowrap">
+              <Badge v-if="m.modelType === 'IMAGE'" variant="secondary" class="text-xs whitespace-nowrap">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
+              <span v-else class="text-xs text-muted-foreground whitespace-nowrap">{{ $t(modelTypeKeys.TEXT) }}</span>
             </td>
             <td class="px-3 py-2.5 text-muted-foreground">{{ providerLabels[m.provider] || m.provider }}</td>
-            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[160px] truncate" :title="m.modelName">{{ m.modelName }}</td>
-            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[240px] truncate" :title="m.apiUrl">{{ m.apiUrl }}</td>
+            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[130px] truncate" :title="m.modelName">{{ m.modelName }}</td>
+            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[210px] truncate" :title="m.apiUrl">{{ m.apiUrl }}</td>
             <td class="px-3 py-2.5">
               <Badge v-if="m.isDefault" class="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-200">{{ $t('common.yes') }}</Badge>
               <span v-else class="text-xs text-muted-foreground">-</span>
@@ -320,7 +313,14 @@ async function handleDelete() {
                 </SelectContent>
               </Select>
               <Input v-else id="model-id" name="model-id" v-model="editingModel.modelName" placeholder="gpt-4o、deepseek-chat" class="flex-1" />
-              <Button variant="secondary" size="sm" :loading="fetchingModels" :disabled="!editingModel.apiUrl" @click="handleFetchModels">
+              <Button
+                variant="secondary"
+                size="sm"
+                :loading="fetchingModels"
+                :disabled="!canFetchModels"
+                :title="!editingModel.apiKey ? $t('modelManage.form.apiKeyRequiredForFetch') : undefined"
+                @click="handleFetchModels"
+              >
                 <RefreshCw class="mr-1 h-3.5 w-3.5" />{{ $t('modelManage.fetchModels') }}
               </Button>
             </div>
@@ -357,10 +357,6 @@ async function handleDelete() {
                   <SelectItem v-for="opt in tokenOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div class="space-y-2">
-              <label for="model-api-version" class="text-sm font-medium">{{ $t('modelManage.form.apiVersion') }}</label>
-              <Input id="model-api-version" name="model-api-version" v-model="editingModel.apiVersion" placeholder="/v1" />
             </div>
           </div>
           <div class="flex items-center gap-4 pt-2">

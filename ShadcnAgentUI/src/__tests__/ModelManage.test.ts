@@ -65,7 +65,6 @@ describe('ModelManage', () => {
       'model-temperature',
       'model-api-key',
       'model-max-tokens',
-      'model-api-version',
       'model-is-default',
       'model-enabled',
     ]

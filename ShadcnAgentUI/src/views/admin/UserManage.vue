@@ -39,6 +39,8 @@ import {
   Mail,
   Plus,
   Trash2,
+  Copy,
+  Check,
 } from 'lucide-vue-next'
 import { toast } from 'sonner'
 
@@ -57,6 +59,8 @@ const inviteTab = ref('unused')
 const batchCount = ref(5)
 const batchLoading = ref(false)
 const deletingCode = ref<Set<string>>(new Set())
+const copiedCode = ref<string | null>(null)
+const copiedBulk = ref(false)
 
 const stats = computed(() => {
   const total = users.value.length
@@ -128,6 +132,35 @@ async function handleDeleteCode(code: string) {
     const next = new Set(deletingCode.value)
     next.delete(code)
     deletingCode.value = next
+  }
+}
+
+async function copyText(text: string) {
+  await navigator.clipboard.writeText(text)
+}
+
+async function handleCopyCode(code: string) {
+  try {
+    await copyText(code)
+    copiedCode.value = code
+    toast.success(t('userManage.copySuccess'))
+    setTimeout(() => {
+      if (copiedCode.value === code) copiedCode.value = null
+    }, 1500)
+  } catch {
+    toast.error(t('userManage.copyFailed'))
+  }
+}
+
+async function handleCopyUnusedCodes() {
+  if (unusedCodes.value.length === 0) return
+  try {
+    await copyText(unusedCodes.value.map((c) => c.code).join('\n'))
+    copiedBulk.value = true
+    toast.success(t('userManage.batchCopySuccess', { count: unusedCodes.value.length }))
+    setTimeout(() => { copiedBulk.value = false }, 1500)
+  } catch {
+    toast.error(t('userManage.copyFailed'))
   }
 }
 
@@ -289,6 +322,13 @@ function formatDate(dateStr: string) {
               <TabsTrigger value="used">{{ $t('userManage.inviteCodeUsed') }} ({{ usedCodes.length }})</TabsTrigger>
             </TabsList>
             <TabsContent value="unused" class="max-h-72 overflow-y-auto space-y-1">
+              <div v-if="!inviteLoading && unusedCodes.length > 0" class="sticky top-0 z-10 flex justify-end bg-background pb-2">
+                <Button variant="outline" size="sm" class="h-8 text-xs" @click="handleCopyUnusedCodes">
+                  <Check v-if="copiedBulk" class="mr-1 h-3.5 w-3.5" />
+                  <Copy v-else class="mr-1 h-3.5 w-3.5" />
+                  {{ $t('userManage.copyAllUnused') }}
+                </Button>
+              </div>
               <div v-if="inviteLoading" class="flex justify-center py-4">
                 <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
@@ -304,16 +344,28 @@ function formatDate(dateStr: string) {
                   <span class="font-mono font-medium">{{ code.code }}</span>
                   <span class="text-xs text-muted-foreground ml-2">{{ $t('common.create') }} {{ formatDate(code.createdAt) }}</span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-destructive hover:text-destructive"
-                  :disabled="deletingCode.has(code.code)"
-                  @click="handleDeleteCode(code.code)"
-                >
-                  <Loader2 v-if="deletingCode.has(code.code)" class="h-3.5 w-3.5 animate-spin" />
-                  <Trash2 v-else class="h-3.5 w-3.5" />
-                </Button>
+                <div class="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7"
+                    :title="$t('userManage.copyInviteCode')"
+                    @click="handleCopyCode(code.code)"
+                  >
+                    <Check v-if="copiedCode === code.code" class="h-3.5 w-3.5 text-green-600" />
+                    <Copy v-else class="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7 text-destructive hover:text-destructive"
+                    :disabled="deletingCode.has(code.code)"
+                    @click="handleDeleteCode(code.code)"
+                  >
+                    <Loader2 v-if="deletingCode.has(code.code)" class="h-3.5 w-3.5 animate-spin" />
+                    <Trash2 v-else class="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </TabsContent>
             <TabsContent value="used" class="max-h-72 overflow-y-auto space-y-1">
@@ -334,16 +386,28 @@ function formatDate(dateStr: string) {
                     {{ $t('userManage.inviteCodeColumns.usedBy') }}：{{ code.usedBy || '-' }} · {{ formatDate(code.createdAt) }}
                   </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-destructive hover:text-destructive"
-                  :disabled="deletingCode.has(code.code)"
-                  @click="handleDeleteCode(code.code)"
-                >
-                  <Loader2 v-if="deletingCode.has(code.code)" class="h-3.5 w-3.5 animate-spin" />
-                  <Trash2 v-else class="h-3.5 w-3.5" />
-                </Button>
+                <div class="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7"
+                    :title="$t('userManage.copyInviteCode')"
+                    @click="handleCopyCode(code.code)"
+                  >
+                    <Check v-if="copiedCode === code.code" class="h-3.5 w-3.5 text-green-600" />
+                    <Copy v-else class="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7 text-destructive hover:text-destructive"
+                    :disabled="deletingCode.has(code.code)"
+                    @click="handleDeleteCode(code.code)"
+                  >
+                    <Loader2 v-if="deletingCode.has(code.code)" class="h-3.5 w-3.5 animate-spin" />
+                    <Trash2 v-else class="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </TabsContent>
           </Tabs>

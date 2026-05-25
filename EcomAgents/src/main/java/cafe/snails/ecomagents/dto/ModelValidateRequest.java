@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ModelValidateRequest {
     private String baseUrl;
+    private String provider;
     private String apiType;
     private String apiVersion;
     private String apiKey;

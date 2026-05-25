@@ -48,6 +48,7 @@ public class AiModelService {
 
     /** 创建新模型，自动处理默认模型逻辑（首个模型自动设为默认） */
     public ApiResponse<AiModel> createModel(AiModel model) {
+        normalizeModelConfig(model);
         ApiResponse<AiModel> validation = validateModel(model);
         if (validation != null) return validation;
         model.setId(null);
@@ -65,6 +66,9 @@ public class AiModelService {
 
     /** 更新模型配置，设为默认时自动清除其他模型的默认标记 */
     public ApiResponse<AiModel> updateModel(Long id, AiModel updates) {
+        boolean shouldUpdateApiType = updates.getApiType() != null || updates.getProvider() != null;
+        boolean shouldUpdateApiVersion = updates.getApiVersion() != null || updates.getApiUrl() != null || updates.getProvider() != null;
+        normalizeModelConfig(updates);
         ApiResponse<AiModel> validation = validateModel(updates);
         if (validation != null) return validation;
         return repository.findById(id)
@@ -74,6 +78,8 @@ public class AiModelService {
                     if (updates.getModelName() != null) model.setModelName(updates.getModelName());
                     if (updates.getApiUrl() != null) model.setApiUrl(updates.getApiUrl());
                     if (updates.getApiKey() != null) model.setApiKey(updates.getApiKey());
+                    if (shouldUpdateApiType) model.setApiType(updates.getApiType());
+                    if (shouldUpdateApiVersion) model.setApiVersion(updates.getApiVersion());
                     if (updates.getMaxTokens() != null) model.setMaxTokens(updates.getMaxTokens());
                     if (updates.getTemperature() != null) model.setTemperature(updates.getTemperature());
                     if (updates.getModelType() != null) model.setModelType(updates.getModelType());
@@ -137,15 +143,32 @@ public class AiModelService {
                 .orElse(null);
     }
 
-    /** 根据 apiType 和 apiVersion 构建请求路径 */
+    /** 根据 apiType 和 API 地址构建请求路径 */
     static String buildEndpointPath(AiModel model) {
-        String type = model.getApiType();
-        String version = model.getApiVersion();
-        if (version == null) version = "";
-        if ("anthropic".equalsIgnoreCase(type)) {
-            return version + "/messages";
+        String type = normalizeApiType(model.getApiType(), model.getProvider());
+        String version = normalizePath(model.getApiVersion());
+        if (!version.isBlank()) {
+            return "anthropic".equalsIgnoreCase(type)
+                    ? version + "/messages"
+                    : version + "/chat/completions";
         }
-        return version + "/chat/completions";
+
+        String basePath = extractPathWithoutQuery(model.getApiUrl());
+        if (basePath == null) {
+            return "anthropic".equalsIgnoreCase(type) ? "/messages" : "/chat/completions";
+        }
+        boolean urlAlreadyHasVersion = basePath != null && (
+                basePath.endsWith("/v1")
+                        || basePath.endsWith("/compatible-mode/v1")
+                        || basePath.matches(".*/v\\d+(?:beta)?$"));
+
+        if ("anthropic".equalsIgnoreCase(type)) {
+            return urlAlreadyHasVersion ? "/messages" : "/v1/messages";
+        }
+        if ("deepseek".equalsIgnoreCase(model.getProvider())) {
+            return "/chat/completions";
+        }
+        return urlAlreadyHasVersion ? "/chat/completions" : "/v1/chat/completions";
     }
 
     /**
@@ -153,17 +176,22 @@ public class AiModelService {
      * 返回成功时 data 为模型 ID 列表，返回失败时 message 包含错误描述。
      */
     public ApiResponse<List<String>> validateModel(ModelValidateRequest req) {
-        String baseUrl = req.getBaseUrl();
-        String apiType = req.getApiType() != null ? req.getApiType() : "openai";
-        String apiVersion = req.getApiVersion() != null ? req.getApiVersion() : "/v1";
+        String baseUrl = trimTrailingSlash(req.getBaseUrl());
+        String provider = req.getProvider() != null ? req.getProvider().trim().toLowerCase() : null;
+        String apiType = normalizeApiType(req.getApiType(), provider);
+        String apiVersion = normalizePath(req.getApiVersion());
         String apiKey = req.getApiKey();
 
         if (baseUrl == null || baseUrl.isBlank()) {
             return ApiResponse.error(400, "请求地址不能为空");
         }
 
-        // 构建 /models 请求 URL
-        String modelsUrl = baseUrl.replaceAll("/+$", "") + apiVersion + "/models";
+        String modelsUrl;
+        try {
+            modelsUrl = buildModelsUrl(baseUrl, provider, apiType, apiVersion);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(400, e.getMessage());
+        }
 
         try {
             HttpClient client = HttpClient.newHttpClient();
@@ -184,7 +212,7 @@ public class AiModelService {
                     HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return ApiResponse.error(502, "API 返回错误状态: HTTP " + response.statusCode());
+                return ApiResponse.error(502, describeValidationHttpError(response.statusCode(), baseUrl, modelsUrl));
             }
 
             // 解析模型列表
@@ -208,6 +236,8 @@ public class AiModelService {
             }
 
             return ApiResponse.success("验证成功，共 " + modelIds.size() + " 个模型", modelIds);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(400, "请求地址格式不正确，请填写供应商根地址，例如 https://api.openai.com");
         } catch (java.net.ConnectException e) {
             return ApiResponse.error(502, "无法连接到 " + baseUrl + "，请检查请求地址");
         } catch (java.net.http.HttpTimeoutException e) {
@@ -251,6 +281,12 @@ public class AiModelService {
 
     /** 校验模型配置参数合法性，返回 null 表示校验通过 */
     private ApiResponse<AiModel> validateModel(AiModel model) {
+        String apiUrl = trimTrailingSlash(model.getApiUrl());
+        if (apiUrl != null && !apiUrl.isBlank()) {
+            ApiResponse<AiModel> urlError = validateApiUrl(model.getProvider(), apiUrl);
+            if (urlError != null) return urlError;
+            model.setApiUrl(apiUrl);
+        }
         if (model.getMaxTokens() != null && model.getMaxTokens() < 1) {
             return ApiResponse.error(400, "maxTokens 必须大于等于 1");
         }
@@ -258,5 +294,110 @@ public class AiModelService {
             return ApiResponse.error(400, "temperature 必须在 0 到 2 之间");
         }
         return null;
+    }
+
+    private static void normalizeModelConfig(AiModel model) {
+        if (model == null) return;
+        if (model.getProvider() != null) {
+            model.setProvider(model.getProvider().trim().toLowerCase());
+        }
+        model.setApiUrl(trimTrailingSlash(model.getApiUrl()));
+        model.setApiType(normalizeApiType(model.getApiType(), model.getProvider()));
+        model.setApiVersion("");
+    }
+
+    private static String normalizeApiType(String apiType, String provider) {
+        if ("anthropic".equalsIgnoreCase(provider)) return "anthropic";
+        if (apiType == null || apiType.isBlank()) return "openai";
+        return apiType.trim().toLowerCase();
+    }
+
+    private static String trimTrailingSlash(String value) {
+        if (value == null) return null;
+        return value.trim().replaceAll("/+$", "");
+    }
+
+    private static String normalizePath(String path) {
+        if (path == null || path.isBlank()) return "";
+        String normalized = path.trim();
+        if (!normalized.startsWith("/")) normalized = "/" + normalized;
+        return normalized.replaceAll("/+$", "");
+    }
+
+    private static String buildModelsUrl(String baseUrl, String provider, String apiType, String apiVersion) {
+        URI uri = URI.create(baseUrl);
+        if (uri.getScheme() == null || uri.getHost() == null) {
+            throw new IllegalArgumentException("请求地址格式不正确，请填写完整地址，例如 https://api.openai.com");
+        }
+        String basePath = normalizePath(uri.getPath());
+        if (basePath.endsWith("/models")) {
+            throw new IllegalArgumentException("请求地址请填写供应商根地址，不要包含 /models");
+        }
+        if (basePath.endsWith("/chat/completions") || basePath.endsWith("/messages")) {
+            throw new IllegalArgumentException("请求地址请填写供应商根地址，不要包含具体接口路径");
+        }
+
+        if (!apiVersion.isBlank()) {
+            return baseUrl + apiVersion + "/models";
+        }
+        boolean urlAlreadyHasVersion = basePath.endsWith("/v1")
+                || basePath.endsWith("/compatible-mode/v1")
+                || basePath.matches(".*/v\\d+(?:beta)?$");
+        if (urlAlreadyHasVersion) {
+            return baseUrl + "/models";
+        }
+        if ("deepseek".equalsIgnoreCase(provider)) {
+            return baseUrl + "/models";
+        }
+        return "anthropic".equalsIgnoreCase(apiType)
+                ? baseUrl + "/v1/models"
+                : baseUrl + "/v1/models";
+    }
+
+    private static String describeValidationHttpError(int statusCode, String baseUrl, String modelsUrl) {
+        if (statusCode == 401 || statusCode == 403) {
+            return "API 认证失败，请检查 API Key、供应商和请求地址是否匹配";
+        }
+        if (statusCode == 404) {
+            return "模型列表接口不存在，请检查请求地址是否应包含或去掉 /v1。当前检测地址：" + modelsUrl;
+        }
+        return "API 返回错误状态: HTTP " + statusCode + "，请检查请求地址、供应商和 API Key";
+    }
+
+    private static ApiResponse<AiModel> validateApiUrl(String provider, String apiUrl) {
+        URI uri;
+        try {
+            uri = URI.create(apiUrl);
+        } catch (Exception e) {
+            return ApiResponse.error(400, "请求地址格式不正确，请填写完整地址，例如 https://api.openai.com");
+        }
+        if (uri.getScheme() == null || uri.getHost() == null) {
+            return ApiResponse.error(400, "请求地址格式不正确，请填写完整地址，例如 https://api.openai.com");
+        }
+        String path = normalizePath(uri.getPath());
+        if (path.endsWith("/models") || path.endsWith("/chat/completions") || path.endsWith("/messages")) {
+            return ApiResponse.error(400, "请求地址请填写供应商根地址，不要包含 /models、/chat/completions 或 /messages");
+        }
+        String host = uri.getHost().toLowerCase();
+        if ("openai".equalsIgnoreCase(provider) && !host.equals("api.openai.com")) {
+            return ApiResponse.error(400, "OpenAI 供应商默认地址为 https://api.openai.com；如果使用兼容接口，请选择“其它”或对应供应商");
+        }
+        if ("anthropic".equalsIgnoreCase(provider) && !host.equals("api.anthropic.com")) {
+            return ApiResponse.error(400, "Anthropic 供应商默认地址为 https://api.anthropic.com；请检查供应商或请求地址");
+        }
+        if ("deepseek".equalsIgnoreCase(provider) && !host.equals("api.deepseek.com")) {
+            return ApiResponse.error(400, "DeepSeek 供应商默认地址为 https://api.deepseek.com；请检查供应商或请求地址");
+        }
+        if ("qwen".equalsIgnoreCase(provider) && !host.equals("dashscope.aliyuncs.com")) {
+            return ApiResponse.error(400, "阿里百炼供应商默认地址为 https://dashscope.aliyuncs.com/compatible-mode/v1；请检查供应商或请求地址");
+        }
+        return null;
+    }
+
+    private static String extractPathWithoutQuery(String apiUrl) {
+        String path = extractPath(apiUrl);
+        if (path == null) return null;
+        int queryIndex = path.indexOf('?');
+        return queryIndex >= 0 ? path.substring(0, queryIndex) : path;
     }
 }

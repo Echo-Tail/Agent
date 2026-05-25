@@ -537,6 +537,11 @@
     },
     "inviteCodeUsed": "已使用",
     "inviteCodeUnused": "未使用",
+    "copyInviteCode": "复制邀请码",
+    "copyAllUnused": "批量复制未使用邀请码",
+    "copySuccess": "已复制",
+    "copyFailed": "复制失败，请检查浏览器权限",
+    "batchCopySuccess": "已复制 {count} 个邀请码",
     "batchGenerate": "批量生成",
     "batchGenerateCount": "生成数量",
     "batchGenerateConfirm": "确定要生成 {count} 个邀请码吗？",
@@ -552,6 +557,7 @@
       "provider": "提供商",
       "modelType": "模型类型",
       "modelId": "模型 ID",
+      "default": "默认",
       "status": "状态",
       "sortOrder": "排序",
       "action": "操作"
@@ -570,7 +576,7 @@
       "apiType": "API 格式",
       "temperature": "温度",
       "maxTokens": "最大 Token",
-      "apiVersion": "API 版本路径",
+      "apiKeyRequiredForFetch": "填写 API Key 后才可以拉取模型",
       "default": "设为默认模型",
       "sortOrder": "排序",
       "enabled": "启用"

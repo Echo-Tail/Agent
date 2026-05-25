@@ -72,7 +72,6 @@ export interface AiModel {
   apiUrl: string
   apiKey?: string
   apiType: string
-  apiVersion: string
   maxTokens: number
   temperature: number
   isDefault: boolean

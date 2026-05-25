@@ -537,6 +537,11 @@
     },
     "inviteCodeUsed": "Used",
     "inviteCodeUnused": "Unused",
+    "copyInviteCode": "Copy invite code",
+    "copyAllUnused": "Copy all unused codes",
+    "copySuccess": "Copied",
+    "copyFailed": "Copy failed. Please check browser permissions.",
+    "batchCopySuccess": "Copied {count} invite codes",
     "batchGenerate": "Batch Generate",
     "batchGenerateCount": "Generate Count",
     "batchGenerateConfirm": "Are you sure you want to generate {count} invite codes?",
@@ -552,6 +557,7 @@
       "provider": "Provider",
       "modelType": "Model Type",
       "modelId": "Model ID",
+      "default": "Default",
       "status": "Status",
       "sortOrder": "Sort Order",
       "action": "Action"
@@ -570,7 +576,7 @@
       "apiType": "API Format",
       "temperature": "Temperature",
       "maxTokens": "Max Tokens",
-      "apiVersion": "API Version Path",
+      "apiKeyRequiredForFetch": "Enter an API Key before fetching models",
       "default": "Set as Default",
       "sortOrder": "Sort Order",
       "enabled": "Enabled"
