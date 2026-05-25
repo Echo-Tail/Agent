@@ -323,7 +323,7 @@ function formatTime(timestamp: string) {
 
       <!-- Search -->
       <div class="px-4 py-2 border-b border-border">
-        <SearchInput v-model="searchQuery" :placeholder="$t('session.searchPlaceholder')" input-class="pl-8 text-sm" />
+        <SearchInput id="session-search" name="session-search" v-model="searchQuery" :placeholder="$t('session.searchPlaceholder')" input-class="pl-8 text-sm" />
       </div>
 
       <!-- Batch actions -->
@@ -423,6 +423,8 @@ function formatTime(timestamp: string) {
           <DialogTitle>{{ $t('session.newFolder') }}</DialogTitle>
         </DialogHeader>
         <Input
+          id="folder-name"
+          name="folder-name"
           v-model="newFolderName"
           :placeholder="$t('placeholder.folderName')"
           @keydown.enter="handleCreateFolder"
@@ -444,6 +446,8 @@ function formatTime(timestamp: string) {
           <DialogTitle>{{ $t('session.renameFolder') }}</DialogTitle>
         </DialogHeader>
         <Input
+          id="folder-rename"
+          name="folder-rename"
           v-model="renameName"
           :placeholder="$t('placeholder.folderName')"
           @keydown.enter="handleRenameFolder"

@@ -64,13 +64,14 @@ async function handleRegister() {
       </div>
       <div class="space-y-2">
         <Label for="username">{{ $t('settings.username') }} <span class="text-destructive">*</span></Label>
-        <Input id="username" v-model="username" :placeholder="$t('placeholder.usernameHint')" :disabled="loading" />
+        <Input id="username" name="username" v-model="username" :placeholder="$t('placeholder.usernameHint')" :disabled="loading" />
       </div>
       <div class="space-y-2">
         <Label for="password">{{ $t('placeholder.password') }} <span class="text-destructive">*</span></Label>
         <div class="relative">
           <Input
             id="password"
+            name="password"
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             :placeholder="$t('placeholder.passwordHint')"
@@ -88,11 +89,11 @@ async function handleRegister() {
       </div>
       <div class="space-y-2">
         <Label for="email">{{ $t('settings.email') }}</Label>
-        <Input id="email" v-model="email" type="email" :placeholder="$t('placeholder.email')" :disabled="loading" />
+        <Input id="email" name="email" v-model="email" type="email" :placeholder="$t('placeholder.email')" :disabled="loading" />
       </div>
       <div class="space-y-2">
         <Label for="inviteCode">{{ $t('placeholder.inviteCode') }} <span class="text-destructive">*</span></Label>
-        <Input id="inviteCode" v-model="inviteCode" :placeholder="$t('placeholder.inviteCodeHint')" :disabled="loading" />
+        <Input id="inviteCode" name="invite-code" v-model="inviteCode" :placeholder="$t('placeholder.inviteCodeHint')" :disabled="loading" />
       </div>
       <Button class="w-full" :disabled="loading" @click="handleRegister">
         <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />

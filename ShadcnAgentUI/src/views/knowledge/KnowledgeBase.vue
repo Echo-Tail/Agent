@@ -294,12 +294,14 @@ function formatDate(dateStr: string) {
         </DialogHeader>
         <div class="space-y-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('knowledge.kbName') }} <span class="text-destructive">*</span></label>
-            <Input v-model="editingKb.name" :placeholder="$t('placeholder.kbName')" maxlength="100" />
+            <label for="knowledge-base-name" class="text-sm font-medium">{{ $t('knowledge.kbName') }} <span class="text-destructive">*</span></label>
+            <Input id="knowledge-base-name" name="knowledge-base-name" v-model="editingKb.name" :placeholder="$t('placeholder.kbName')" maxlength="100" />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('knowledge.kbDescription') }}</label>
+            <label for="knowledge-base-description" class="text-sm font-medium">{{ $t('knowledge.kbDescription') }}</label>
             <textarea
+              id="knowledge-base-description"
+              name="knowledge-base-description"
               v-model="editingKb.description"
               :placeholder="$t('placeholder.kbDescription')"
               class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -361,8 +363,10 @@ function formatDate(dateStr: string) {
         class="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
         @click="selectFiles"
       >
-        <input
-          ref="fileInputRef"
+          <input
+            id="knowledge-document-upload"
+            name="knowledge-document-upload"
+            ref="fileInputRef"
           type="file"
           accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.json,.xml,.yaml,.yml,.properties,.log"
           class="hidden"

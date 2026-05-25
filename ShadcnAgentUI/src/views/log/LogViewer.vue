@@ -264,10 +264,10 @@ onMounted(() => { load() })
           <SelectItem v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</SelectItem>
         </SelectContent>
       </Select>
-      <Input v-model="filterStartDate" type="date" class="w-36 h-8" @change="onFilterChange" />
+      <Input id="log-start-date" name="log-start-date" v-model="filterStartDate" type="date" class="w-36 h-8" @change="onFilterChange" />
       <span class="text-xs text-muted-foreground">{{ $t('common.to') }}</span>
-      <Input v-model="filterEndDate" type="date" class="w-36 h-8" @change="onFilterChange" />
-      <SearchInput v-model="filterSearch" :placeholder="$t('log.filters.search')" input-class="w-44" @search="onFilterChange" />
+      <Input id="log-end-date" name="log-end-date" v-model="filterEndDate" type="date" class="w-36 h-8" @change="onFilterChange" />
+      <SearchInput id="log-search" name="log-search" v-model="filterSearch" :placeholder="$t('log.filters.search')" input-class="w-44" @search="onFilterChange" />
       <Button variant="secondary" size="sm" class="h-8" :disabled="loading" @click="onFilterChange">
         <Loader2 v-if="loading" class="mr-1 h-3.5 w-3.5 animate-spin" />
         {{ $t('log.filters.query') }}

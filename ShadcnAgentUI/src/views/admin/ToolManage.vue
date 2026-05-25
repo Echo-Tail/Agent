@@ -233,12 +233,14 @@ async function handleSaveConfig() {
         </DialogHeader>
         <div v-if="editingTool" class="space-y-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('toolManage.columns.name') }}</label>
-            <Input v-model="editName" />
+            <label for="tool-name" class="text-sm font-medium">{{ $t('toolManage.columns.name') }}</label>
+            <Input id="tool-name" name="tool-name" v-model="editName" />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('toolManage.columns.description') }}</label>
+            <label for="tool-description" class="text-sm font-medium">{{ $t('toolManage.columns.description') }}</label>
             <textarea
+              id="tool-description"
+              name="tool-description"
               v-model="editDescription"
               class="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
@@ -248,7 +250,7 @@ async function handleSaveConfig() {
             <!-- web_search -->
             <template v-if="editingTool.id === 'web_search'">
               <div class="space-y-2">
-                <label class="text-sm font-medium">API Provider</label>
+                <p class="text-sm font-medium">API Provider</p>
                 <div class="flex gap-2">
                   <Button
                     variant="outline"
@@ -265,8 +267,8 @@ async function handleSaveConfig() {
                 </div>
               </div>
               <div class="space-y-2 mt-3">
-                <label class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
-                <Input v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
+                <label for="tool-api-key" class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
+                <Input id="tool-api-key" name="tool-api-key" v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
               </div>
             </template>
 
@@ -276,9 +278,9 @@ async function handleSaveConfig() {
                 {{ $t('toolManage.imageGenHint') }}
               </div>
               <div class="space-y-2">
-                <label class="text-sm font-medium">{{ $t('agent.model') }}</label>
+                <label for="tool-model" class="text-sm font-medium">{{ $t('agent.model') }}</label>
                 <Select v-model="configModelId">
-                  <SelectTrigger>
+                  <SelectTrigger id="tool-model" name="tool-model">
                     <SelectValue :placeholder="$t('common.select')" />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,8 +299,8 @@ async function handleSaveConfig() {
                 {{ $t('toolManage.noExtraConfig') }}
               </div>
               <div v-else class="space-y-2">
-                <label class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
-                <Input v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
+                <label for="tool-api-key-fallback" class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
+                <Input id="tool-api-key-fallback" name="tool-api-key-fallback" v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
               </div>
             </template>
           </div>

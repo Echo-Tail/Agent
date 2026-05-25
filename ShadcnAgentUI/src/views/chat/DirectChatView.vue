@@ -332,8 +332,10 @@ function newSession() {
         >
           <Paperclip class="h-4 w-4" />
         </Button>
-        <input
-          ref="fileInput"
+          <input
+            id="chat-file-upload"
+            name="chat-file-upload"
+            ref="fileInput"
           type="file"
           multiple
           accept=".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.xml,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.zip"

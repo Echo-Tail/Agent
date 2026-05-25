@@ -169,8 +169,8 @@ onMounted(fetchTickets)
           <SelectItem v-for="opt in ticketPriorityOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</SelectItem>
         </SelectContent>
       </Select>
-      <Input :model-value="filters.submitterId?.toString() ?? ''" type="number" :placeholder="$t('common.submitter')" class="w-[120px] h-9" @update:model-value="(v: string | number) => { const n = Number(v); filters.submitterId = isNaN(n) ? null : n }" />
-      <SearchInput :model-value="filters.title ?? ''" @update:model-value="v => filters.title = v" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
+      <Input id="admin-ticket-submitter-filter" name="admin-ticket-submitter-filter" :model-value="filters.submitterId?.toString() ?? ''" type="number" :placeholder="$t('common.submitter')" class="w-[120px] h-9" @update:model-value="(v: string | number) => { const n = Number(v); filters.submitterId = isNaN(n) ? null : n }" />
+      <SearchInput id="admin-ticket-title-filter" name="admin-ticket-title-filter" :model-value="filters.title ?? ''" @update:model-value="v => filters.title = v" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
       <Button variant="secondary" size="sm" :disabled="loading" @click="fetchTickets">
         <Loader2 v-if="loading" class="mr-1 h-3 w-3 animate-spin" />
         {{ $t('common.search') }}
@@ -335,6 +335,8 @@ onMounted(fetchTickets)
           <DialogTitle>{{ $t('ticketManage.detail.complete') }}</DialogTitle>
         </DialogHeader>
         <textarea
+          id="ticket-handling-note"
+          name="ticket-handling-note"
           v-model="handlingNote"
           :placeholder="$t('ticketManage.detail.handlingNotePlaceholder')"
           class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

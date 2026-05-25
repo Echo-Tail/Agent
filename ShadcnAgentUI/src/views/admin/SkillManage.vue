@@ -291,8 +291,8 @@ async function handleDelete() {
             <p class="pl-3"><b>{{ $t('skillManage.urlImport.subtree') }}</b> — https://github.com/{owner}/{repo}/tree/main/skills/{name}</p>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">GitHub URL <span class="text-destructive">*</span></label>
-            <Input v-model="importUrl" placeholder="https://github.com/{owner}/{repo}" />
+            <label for="skill-import-url" class="text-sm font-medium">GitHub URL <span class="text-destructive">*</span></label>
+            <Input id="skill-import-url" name="skill-import-url" v-model="importUrl" placeholder="https://github.com/{owner}/{repo}" />
           </div>
           <DialogFooter>
             <Button variant="outline" @click="showUrlModal = false">{{ $t('common.cancel') }}</Button>
@@ -333,8 +333,8 @@ async function handleDelete() {
         </DialogHeader>
         <div class="space-y-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></label>
-            <input ref="fileInputRef" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
+            <label for="skill-zip-file" class="text-sm font-medium">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></label>
+            <input id="skill-zip-file" name="skill-zip-file" ref="fileInputRef" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
             <div class="flex items-center gap-2">
               <Button variant="outline" size="sm" @click="fileInputRef?.click()">
                 <FileArchive class="mr-1 h-4 w-4" />{{ uploadFile ? uploadFile.name : $t('skillManage.selectFile') }}

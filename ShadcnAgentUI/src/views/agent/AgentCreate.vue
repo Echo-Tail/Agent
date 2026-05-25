@@ -204,21 +204,21 @@ async function handleSave() {
         <CardContent class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <Label>{{ $t('agent.name') }} <span class="text-destructive">*</span></Label>
-              <Input v-model="form.name" :placeholder="$t('agent.formNamePlaceholder')" maxlength="30" />
+              <Label for="agent-name">{{ $t('agent.name') }} <span class="text-destructive">*</span></Label>
+              <Input id="agent-name" name="agent-name" v-model="form.name" :placeholder="$t('agent.formNamePlaceholder')" maxlength="30" />
             </div>
             <div class="space-y-2">
-              <Label>{{ $t('agent.icon') }}</Label>
+              <p class="text-sm font-medium">{{ $t('agent.icon') }}</p>
               <AvatarPicker v-model="form.icon" />
             </div>
           </div>
           <div class="space-y-2">
-            <Label>{{ $t('agent.description') }}</Label>
-            <Textarea v-model="form.description" placeholder="Briefly describe this Agent" maxlength="500" />
+            <Label for="agent-description">{{ $t('agent.description') }}</Label>
+            <Textarea id="agent-description" name="agent-description" v-model="form.description" placeholder="Briefly describe this Agent" maxlength="500" />
           </div>
           <div class="space-y-2">
-            <Label>{{ $t('agent.greeting') }}</Label>
-            <Input v-model="form.greeting" :placeholder="$t('agent.formGreetingPlaceholder')" maxlength="200" />
+            <Label for="agent-greeting">{{ $t('agent.greeting') }}</Label>
+            <Input id="agent-greeting" name="agent-greeting" v-model="form.greeting" :placeholder="$t('agent.formGreetingPlaceholder')" maxlength="200" />
           </div>
         </CardContent>
       </Card>
@@ -228,9 +228,9 @@ async function handleSave() {
         <CardHeader><CardTitle class="text-lg">{{ $t('agent.model') }} &amp; {{ $t('agent.knowledgeBase') }}</CardTitle></CardHeader>
         <CardContent class="space-y-4">
           <div class="space-y-2">
-            <Label>{{ $t('agent.model') }} <span class="text-destructive">*</span></Label>
+            <Label for="agent-model">{{ $t('agent.model') }} <span class="text-destructive">*</span></Label>
             <Select v-model="form.modelId" :disabled="models.length === 0">
-              <SelectTrigger>
+              <SelectTrigger id="agent-model" name="agent-model">
                 <SelectValue :placeholder="models.length === 0 ? $t('agent.noToolsConfig') : $t('agent.selectModel')" />
               </SelectTrigger>
               <SelectContent>
@@ -242,10 +242,12 @@ async function handleSave() {
           </div>
           <div class="flex items-center justify-between">
             <div>
-              <Label>{{ $t('agent.ragMode') }}</Label>
+              <Label for="agent-rag-mode">{{ $t('agent.ragMode') }}</Label>
               <p class="text-xs text-muted-foreground">{{ $t('agent.ragModeDesc') }}</p>
             </div>
             <Switch
+              id="agent-rag-mode"
+              name="agent-rag-mode"
               :checked="form.ragMode === 'AGENTIC'"
               @update:checked="(v: boolean) => form.ragMode = v ? 'AGENTIC' : 'GENERIC'"
             />
@@ -276,7 +278,7 @@ async function handleSave() {
         <CardHeader><CardTitle class="text-lg">{{ $t('agent.tags') }}</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <div class="flex gap-2">
-            <Input v-model="tagInput" placeholder="Enter tag and press Enter" @keyup.enter.prevent="addTag" />
+            <Input id="agent-tag" name="agent-tag" v-model="tagInput" placeholder="Enter tag and press Enter" @keyup.enter.prevent="addTag" />
             <Button variant="outline" @click="addTag" type="button">Add</Button>
           </div>
           <div v-if="form.tags.length" class="flex flex-wrap gap-1">
@@ -329,7 +331,7 @@ async function handleSave() {
       <Card>
         <CardHeader><CardTitle class="text-lg">{{ $t('agent.systemPrompt') }}</CardTitle></CardHeader>
         <CardContent>
-          <Textarea v-model="form.systemPrompt" :placeholder="$t('agent.formPromptPlaceholder')" class="min-h-[200px]" />
+          <Textarea id="agent-system-prompt" name="agent-system-prompt" v-model="form.systemPrompt" :placeholder="$t('agent.formPromptPlaceholder')" class="min-h-[200px]" />
         </CardContent>
       </Card>
 

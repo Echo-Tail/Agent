@@ -174,6 +174,8 @@ function clearUpload() {
         </div>
         <div class="space-y-1.5">
           <input
+            id="avatar-upload"
+            name="avatar-upload"
             ref="fileInput"
             type="file"
             accept="image/png,image/jpeg,image/gif,image/webp"
