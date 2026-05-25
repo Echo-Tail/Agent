@@ -38,7 +38,7 @@ public class Session {
     /** 所属文件夹 ID，为 null 表示未归档 */
     private Long folderId;
 
-    /** HarnessAgent 使用的会话 ID（UUID 格式：sess-{agentId}-{uuid}） */
+    /** HarnessAgent 使用的会话 ID（格式：sess-{agentId}-{userId}-{uuid}） */
     @Column(name = "harness_session_id", length = 100)
     private String harnessSessionId;
 

@@ -37,7 +37,7 @@ public class SessionMapper {
      * @param dbSessionId 可选，已有 DB 会话 ID
      * @param agentId     Agent ID
      * @param userId      用户 ID
-     * @return harnessSessionId (格式: "sess-{agentId}-{uuid}")
+     * @return harnessSessionId (格式: "sess-{agentId}-{userId}-{uuid}")
      */
     @Transactional
     public String resolveHarnessSessionId(Long dbSessionId, Long agentId, Long userId) {
@@ -48,7 +48,7 @@ public class SessionMapper {
             }
             if (existing != null) {
                 // DB 记录存在但还没有 harnessSessionId（旧数据迁移）
-                String harnessId = generateHarnessSessionId(agentId);
+                String harnessId = generateHarnessSessionId(agentId, userId);
                 existing.setHarnessSessionId(harnessId);
                 sessionRepository.save(existing);
                 return harnessId;
@@ -56,7 +56,7 @@ public class SessionMapper {
         }
 
         // 创建新会话
-        String harnessId = generateHarnessSessionId(agentId);
+        String harnessId = generateHarnessSessionId(agentId, userId);
         Session session = Session.builder()
                 .agentId(agentId)
                 .userId(userId)
@@ -121,7 +121,7 @@ public class SessionMapper {
         });
     }
 
-    private static String generateHarnessSessionId(Long agentId) {
-        return "sess-" + agentId + "-" + UUID.randomUUID().toString().replace("-", "");
+    private static String generateHarnessSessionId(Long agentId, Long userId) {
+        return "sess-" + agentId + "-" + userId + "-" + UUID.randomUUID().toString().replace("-", "");
     }
 }

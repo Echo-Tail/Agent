@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
@@ -138,6 +138,9 @@ onMounted(async () => {
     if (agentStore.myAgents.length === 0) {
       await agentStore.fetchMyAgents()
     }
+    if (agentStore.plazaAgents.length === 0) {
+      await agentStore.fetchPlazaAgents()
+    }
 
     if (sessionId) {
       try {
@@ -166,7 +169,19 @@ onMounted(async () => {
         }
       }
     } else {
-      chatStore.switchToDirect()
+      // Default to system agent when no agentId specified
+      try {
+        const sysAgent = await agentStore.fetchSystemAgent()
+        if (sysAgent) {
+          selectedAgent.value = sysAgent
+          chatStore.switchToAgent(sysAgent.id)
+          await chatStore.createSession(sysAgent.id)
+        } else {
+          chatStore.switchToDirect()
+        }
+      } catch {
+        chatStore.switchToDirect()
+      }
     }
   } finally {
     initializing.value = false
@@ -219,8 +234,10 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function selectAgent(agentId: number) {
+async function selectAgent(agentId: number) {
   const agent = agentStore.myAgents.find(a => a.id === agentId)
+    ?? agentStore.plazaAgents.find(a => a.id === agentId)
+    ?? await resolveAgent(agentId)
   if (agent) {
     selectedAgent.value = agent
     chatStore.switchToAgent(agentId)
@@ -233,6 +250,17 @@ function newSession() {
     chatStore.createSession(selectedAgent.value.id).catch(() => toast.error(t('error.createSessionFailed')))
   }
 }
+
+const availableAgents = computed(() => {
+  const currentId = selectedAgent.value?.id
+  const all = [...agentStore.myAgents, ...agentStore.plazaAgents]
+  const seen = new Set<number>()
+  return all.filter(a => {
+    if (a.id === currentId || seen.has(a.id)) return false
+    seen.add(a.id)
+    return true
+  })
+})
 </script>
 
 <template>
@@ -402,19 +430,18 @@ function newSession() {
     </div>
     </div>
 
-    <!-- Agent selector when no agent selected -->
-    <div v-if="!selectedAgent && !initializing" class="mt-2">
-      <p class="text-sm text-muted-foreground mb-2">{{ $t('chat.selectAgent') }}</p>
-      <div class="flex flex-wrap gap-2">
-        <Button
-          v-for="agent in agentStore.myAgents"
+    <!-- Agent switching bar -->
+    <div v-if="!initializing && availableAgents.length > 0" class="mt-3 pt-3 border-t">
+      <div class="flex flex-wrap gap-1.5">
+        <Badge
+          v-for="agent in availableAgents"
           :key="agent.id"
           variant="outline"
-          size="sm"
+          class="cursor-pointer hover:bg-accent text-xs py-1 px-2.5 select-none"
           @click="selectAgent(agent.id)"
         >
-          <Bot class="mr-1 h-3 w-3" /> {{ agent.name }}
-        </Button>
+          {{ agent.name }}
+        </Badge>
       </div>
     </div>
   </div>

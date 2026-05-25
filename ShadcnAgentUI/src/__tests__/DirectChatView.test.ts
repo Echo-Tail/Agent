@@ -29,6 +29,7 @@ vi.mock('@/api/agent', () => ({
   listAgentsApi: vi.fn(),
   listAgentsByScopeApi: vi.fn(),
   getAgentApi: vi.fn(),
+  getSystemAgentApi: vi.fn(),
 }))
 
 vi.mock('@/api/session', () => ({

@@ -199,6 +199,21 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 | POST | `/v1/tickets` | 创建工单 |
 | GET | `/v1/token-usage` | Token 用量统计 |
 
+## 多租户架构
+
+平台支持多用户使用同一 Agent，数据隔离策略如下：
+
+| 数据层 | 隔离策略 | 实现方式 |
+|--------|---------|---------|
+| Agent 人格（AGENTS.md） | Per-agent 独立 | 每个 Agent 有独立 workspace：`EcomAgents/workspace/agent-{id}/` |
+| 会话元数据 | Per-user 隔离 | DB `sessions` 表记录 userId |
+| 会话消息 | Per-user 隔离 | DB `session_messages` 表通过 FK 关联 session |
+| 会话文件（JSONL） | Per-user 可追溯 | sessionId 格式：`sess-{agentId}-{userId}-{uuid}` |
+| 长期记忆（MEMORY.md） | **Per-agent 共享** | AgentScope SDK 限制，所有用户共享同一份 MEMORY.md |
+
+> 长期记忆共享是已知的框架限制（`MemoryFlushHook` 写死路径到 workspace 根目录），
+> 会话级别数据不受影响。详见 [CONTEXT.md](./CONTEXT.md) 中的多租户设计章节。
+
 ## 项目约定
 
 - **后端**: RESTful 控制器 `/v1/*`，JPA 实体 + Lombok，Service 层业务逻辑

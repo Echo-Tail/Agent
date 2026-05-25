@@ -198,6 +198,22 @@ The frontend dev server proxies `/v1/*` requests to `http://localhost:8888`. All
 | POST | `/v1/tickets` | Create ticket |
 | GET | `/v1/token-usage` | Token usage statistics |
 
+## Multi-Tenant Architecture
+
+The platform supports multiple users interacting with the same agent. Data isolation strategy:
+
+| Layer | Isolation | Implementation |
+|-------|-----------|---------------|
+| Agent personality (AGENTS.md) | Per-agent | Each agent has independent workspace: `EcomAgents/workspace/agent-{id}/` |
+| Session metadata | Per-user | DB `sessions` table records userId |
+| Session messages | Per-user | DB `session_messages` table linked via session FK |
+| Session files (JSONL) | Per-user traceable | Session ID format: `sess-{agentId}-{userId}-{uuid}` |
+| Long-term memory (MEMORY.md) | **Shared per-agent** | AgentScope SDK limitation — all users share the same MEMORY.md |
+
+> Long-term memory sharing is a known framework limitation (`MemoryFlushHook` hardcodes
+> the path to workspace root). Session-level data is strictly user-isolated.
+> See [CONTEXT.md](./CONTEXT.md) for details.
+
 ## Project Conventions
 
 - **Backend**: RESTful controllers at `/v1/*`, JPA entities with Lombok, service-layer business logic

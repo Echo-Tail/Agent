@@ -102,12 +102,17 @@ All frontend API calls use Axios instance from `src/api/request.ts`, base URL `/
 
 ### Domain Model
 
-- **Agent** — AI assistant instance with name, system prompt, tools, model, knowledge base
+- **Agent** — AI assistant instance with name, system prompt, tools, model, knowledge base. Each agent has an independent workspace at `EcomAgents/workspace/agent-{id}/`
 - **Model** — LLM backend config (admin-managed list, selected per-agent; stored in `ai_models` table)
 - **Tool** — Capability registered via AgentScope `@Tool` annotation (admin-managed enable/disable/config in `tool_configs` table). Tools have categories (web/media/browser/terminal_files/memory) and per-tool JSON config (API keys).
-- **Session** — Chat history with messages, folder organization, SSE streaming
+- **Session** — Chat history with messages, folder organization, SSE streaming. Session ID format: `sess-{agentId}-{userId}-{uuid}`
 - **Knowledge Base** — Document collection for RAG (TXT, MD, JSON uploads)
 - **Invite Code** — Registration codes with usage tracking
+
+### Multi-Tenant Design
+- **Agent personality (AGENTS.md)**: per-agent workspace isolation (`workspace/agent-{id}/`)
+- **Session data**: per-user isolation via DB userId field + userId embedded in sessionId
+- **Long-term memory (MEMORY.md)**: shared across all users of the same agent (AgentScope SDK limitation, accepted)
 
 ### Tool Management System
 

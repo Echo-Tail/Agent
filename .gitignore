@@ -58,6 +58,7 @@ back
 io
 .codegraph
 */uploads
+*.vscode
 
 # Local env files
 .env
