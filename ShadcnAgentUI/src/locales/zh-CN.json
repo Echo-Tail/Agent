@@ -434,6 +434,7 @@
     "kbDescription": "描述",
     "noKb": "还没有知识库",
     "noKbDesc": "点击上方按钮创建第一个知识库",
+    "noKbUser": "空空如也",
     "noDocs": "暂无文档，请上传",
     "noSearchResults": "没有匹配的文档",
     "uploadArea": "点击或拖拽文件到此处上传",

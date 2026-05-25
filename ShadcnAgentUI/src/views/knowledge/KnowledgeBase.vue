@@ -255,31 +255,38 @@ function formatDate(dateStr: string) {
           <Card><CardContent class="p-5"><Skeleton class="h-16 w-full" /></CardContent></Card>
         </div>
       </div>
-      <EmptyState v-else-if="store.kbs.length === 0" :icon="Library" :title="$t('knowledge.noKb')" :description="$t('knowledge.noKbDesc')" />
-      <div v-else class="grid gap-4 md:grid-cols-2">
+      <EmptyState
+        v-else-if="store.kbs.length === 0"
+        :icon="Library"
+        :title="authStore.isAdmin ? $t('knowledge.noKb') : $t('knowledge.noKbUser')"
+        :description="authStore.isAdmin ? $t('knowledge.noKbDesc') : undefined"
+      />
+      <div v-else class="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         <Card
           v-for="kb in store.kbs"
           :key="kb.id"
-          class="cursor-pointer hover:shadow-md transition-shadow"
+          class="group relative cursor-pointer hover:shadow-md transition-shadow"
           @click="router.push({ name: 'KnowledgeDetail', params: { id: kb.id } })"
         >
-          <CardContent class="p-5">
-            <div class="flex items-center gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <BookMarked class="h-6 w-6" />
+          <div
+            v-if="authStore.isAdmin"
+            class="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            @click.stop
+          >
+            <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEdit(kb)">
+              <Pencil class="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive hover:text-destructive" @click="confirmDeleteKb(kb)">
+              <Trash2 class="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <CardContent class="p-4">
+            <div class="flex flex-col items-center text-center gap-2">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <BookMarked class="h-5 w-5" />
               </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="font-semibold">{{ kb.name }}</h3>
-                <p v-if="kb.description" class="text-xs text-muted-foreground line-clamp-1 mt-0.5">{{ kb.description }}</p>
-              </div>
-              <div v-if="authStore.isAdmin" class="flex items-center gap-1 shrink-0" @click.stop>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEdit(kb)">
-                  <Pencil class="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive hover:text-destructive" @click="confirmDeleteKb(kb)">
-                  <Trash2 class="h-4 w-4" />
-                </Button>
-              </div>
+              <h3 class="font-semibold text-sm line-clamp-1 w-full">{{ kb.name }}</h3>
+              <p v-if="kb.description" class="text-xs text-muted-foreground line-clamp-2 w-full min-h-[2rem]">{{ kb.description }}</p>
             </div>
           </CardContent>
         </Card>

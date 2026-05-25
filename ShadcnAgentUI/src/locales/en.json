@@ -434,6 +434,7 @@
     "kbDescription": "Description",
     "noKb": "No knowledge bases yet",
     "noKbDesc": "Click the button above to create your first knowledge base",
+    "noKbUser": "Nothing here yet",
     "noDocs": "No documents yet. Please upload.",
     "noSearchResults": "No matching documents",
     "uploadArea": "Click or drag files here to upload",
