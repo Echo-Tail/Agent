@@ -51,9 +51,9 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="space-y-6 max-w-2xl">
-    <!-- Profile -->
-    <Card>
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+    <!-- Profile (left 3/5) -->
+    <Card class="lg:col-span-3">
       <CardHeader>
         <CardTitle class="text-lg">{{ $t('settings.profile') }}</CardTitle>
       </CardHeader>
@@ -108,64 +108,67 @@ function handleLogout() {
       </CardContent>
     </Card>
 
-    <!-- Appearance -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-lg">{{ $t('settings.appearance') }}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <Sun v-if="!themeStore.isDark" class="h-5 w-5 text-muted-foreground" />
-            <Moon v-else class="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p class="text-sm font-medium">{{ $t('settings.darkMode') }}</p>
-              <p class="text-xs text-muted-foreground">{{ $t('settings.darkModeDesc') }}</p>
+    <!-- Right column (2/5): Appearance + Language + Logout -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Appearance -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-lg">{{ $t('settings.appearance') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <Sun v-if="!themeStore.isDark" class="h-5 w-5 text-muted-foreground" />
+              <Moon v-else class="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p class="text-sm font-medium">{{ $t('settings.darkMode') }}</p>
+                <p class="text-xs text-muted-foreground">{{ $t('settings.darkModeDesc') }}</p>
+              </div>
             </div>
+            <Switch :checked="themeStore.isDark" @update:checked="themeStore.setDark" />
           </div>
-          <Switch :checked="themeStore.isDark" @update:checked="themeStore.setDark" />
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
 
-    <!-- Language -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-lg">{{ $t('settings.language') }}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <Languages class="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p class="text-sm font-medium">{{ $t('settings.language') }}</p>
-              <p class="text-xs text-muted-foreground">{{ $t('settings.languageDesc') }}</p>
+      <!-- Language -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-lg">{{ $t('settings.language') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <Languages class="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p class="text-sm font-medium">{{ $t('settings.language') }}</p>
+                <p class="text-xs text-muted-foreground">{{ $t('settings.languageDesc') }}</p>
+              </div>
             </div>
+            <Button variant="outline" size="sm" class="h-8" @click="toggleLocale">
+              {{ currentLocale === 'zh-CN' ? 'English' : '中文' }}
+            </Button>
           </div>
-          <Button variant="outline" size="sm" class="h-8" @click="toggleLocale">
-            {{ currentLocale === 'zh-CN' ? 'English' : '中文' }}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
 
-    <!-- Logout -->
-    <Card>
-      <CardContent class="p-0">
-        <div class="flex items-center justify-between px-6 py-4">
-          <div class="flex items-center gap-3">
-            <LogOut class="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p class="text-sm font-medium">{{ $t('settings.logout') }}</p>
-              <p class="text-xs text-muted-foreground">{{ $t('settings.logoutDesc') }}</p>
+      <!-- Logout -->
+      <Card>
+        <CardContent class="p-0">
+          <div class="flex items-center justify-between px-6 py-4">
+            <div class="flex items-center gap-3">
+              <LogOut class="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p class="text-sm font-medium">{{ $t('settings.logout') }}</p>
+                <p class="text-xs text-muted-foreground">{{ $t('settings.logoutDesc') }}</p>
+              </div>
             </div>
+            <Button variant="destructive" @click="showLogoutDialog = true">
+              <LogOut class="mr-2 h-4 w-4" />{{ $t('settings.logout') }}
+            </Button>
           </div>
-          <Button variant="destructive" @click="showLogoutDialog = true">
-            <LogOut class="mr-2 h-4 w-4" />{{ $t('settings.logout') }}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
 
     <!-- Logout Dialog -->
     <Dialog :open="showLogoutDialog" @update:open="showLogoutDialog = $event">
