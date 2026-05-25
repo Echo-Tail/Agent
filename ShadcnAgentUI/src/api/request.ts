@@ -23,16 +23,47 @@ axiosRetry(http, {
   },
 })
 
+/** 记录请求耗时，自动跳过 system-logs 自身避免循环 */
+function logApiCall(method: string | undefined, url: string | undefined, status: number, duration: number, errMsg?: string) {
+  if (!url || url.includes('/system-logs')) return
+  try {
+    const userStr = localStorage.getItem(STORAGE_KEY_USER)
+    const userId = userStr ? (JSON.parse(userStr) as Record<string, unknown>)?.id as number | undefined : undefined
+    const body: Record<string, unknown> = {
+      level: status >= 400 ? 'ERROR' : 'INFO',
+      category: 'API',
+      message: `${method?.toUpperCase()} ${url} → ${status}${errMsg ? `: ${errMsg}` : ''}`,
+      duration,
+      route: url,
+      userId,
+    }
+    if (errMsg) body.data = JSON.stringify({ error: errMsg })
+    // 静默提交，失败不处理
+    fetch(`/v1/system-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => {})
+  } catch { /* ignore */ }
+}
+
+const startTimes = new WeakMap<InternalAxiosRequestConfig, number>()
+
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  startTimes.set(config, performance.now())
   return config
 })
 
 http.interceptors.response.use(
   (response) => {
+    const start = startTimes.get(response.config)
+    startTimes.delete(response.config)
+    const duration = start ? Math.round(performance.now() - start) : 0
+    logApiCall(response.config.method, response.config.url, response.status, duration)
     const body = response.data as ApiResponse
     if (body.code === 200) {
       return body.data
@@ -42,6 +73,10 @@ http.interceptors.response.use(
     return Promise.reject(new Error(msg))
   },
   (error: AxiosError<{ message?: string }>) => {
+    const start = error.config ? startTimes.get(error.config) : undefined
+    if (error.config) startTimes.delete(error.config)
+    const duration = start ? Math.round(performance.now() - start) : 0
+    logApiCall(error.config?.method, error.config?.url, error.response?.status ?? 0, duration, error.message)
     if (error.response?.status === 401) {
       localStorage.removeItem(STORAGE_KEY_TOKEN)
       localStorage.removeItem(STORAGE_KEY_USER)
