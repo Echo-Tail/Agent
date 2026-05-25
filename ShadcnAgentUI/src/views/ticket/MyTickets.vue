@@ -238,7 +238,7 @@ onMounted(fetchTickets)
         </SelectContent>
       </Select>
       <SearchInput id="my-tickets-title-filter" name="my-tickets-title-filter" v-model="filters.title" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
-      <Button variant="secondary" size="sm" @click="fetchTickets" :disabled="loading">
+      <Button variant="secondary" size="default" class="w-[86px]" @click="fetchTickets" :disabled="loading">
         <Loader2 v-if="loading" class="mr-1 h-3 w-3 animate-spin" />
         {{ $t('common.search') }}
       </Button>

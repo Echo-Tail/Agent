@@ -171,7 +171,7 @@ onMounted(fetchTickets)
       </Select>
       <Input id="admin-ticket-submitter-filter" name="admin-ticket-submitter-filter" :model-value="filters.submitterId?.toString() ?? ''" type="number" :placeholder="$t('common.submitter')" class="w-[120px] h-9" @update:model-value="(v: string | number) => { const n = Number(v); filters.submitterId = isNaN(n) ? null : n }" />
       <SearchInput id="admin-ticket-title-filter" name="admin-ticket-title-filter" :model-value="filters.title ?? ''" @update:model-value="v => filters.title = v" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
-      <Button variant="secondary" size="sm" :disabled="loading" @click="fetchTickets">
+      <Button variant="secondary" size="default" class="w-[86px]" :disabled="loading" @click="fetchTickets">
         <Loader2 v-if="loading" class="mr-1 h-3 w-3 animate-spin" />
         {{ $t('common.search') }}
       </Button>
