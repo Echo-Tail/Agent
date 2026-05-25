@@ -27,6 +27,7 @@ import {
 } from '@/api/tool'
 import { listModelsApi } from '@/api/model'
 import { ToolCategoryKeys } from '@/types/enums'
+import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import type { ToolDefinition } from '@/api/tool'
 import type { AiModel } from '@/types/api'
@@ -36,6 +37,7 @@ import {
 import { toast } from 'sonner'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
 
 const tools = ref<ToolDefinition[]>([])
 const loading = ref(false)
@@ -76,6 +78,11 @@ onMounted(fetchTools)
 
 async function handleToggle(tool: ToolDefinition) {
   if (toggling.value.has(tool.id)) return
+  const valid = await authStore.verifyAuth()
+  if (!valid || !authStore.isAdmin) {
+    toast.error(t('error.forbidden'))
+    return
+  }
   toggling.value = new Set(toggling.value).add(tool.id)
   try {
     const data = await toggleToolApi(tool.id)

@@ -74,6 +74,8 @@ router.beforeEach(async (to, _from) => {
   const adminRoutes = ['UserManage', 'ModelManage', 'ToolManage', 'SkillManage', 'TokenUsage', 'TicketManage']
   if (adminRoutes.includes(to.name as string)) {
     const auth = useAuthStore()
+    const valid = await auth.verifyAuth()
+    if (!valid) return { name: 'Login' }
     if (!auth.isAdmin) return { name: 'Dashboard' }
   }
 })

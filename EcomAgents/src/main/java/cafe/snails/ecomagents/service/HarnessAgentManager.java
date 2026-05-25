@@ -104,11 +104,24 @@ public class HarnessAgentManager {
                 : Set.of();
         if (agentToolIds.isEmpty()) return;
 
-        List<ToolConfig> enabledTools = toolConfigRepository.findByEnabledTrue();
-        if (enabledTools == null || enabledTools.isEmpty()) return;
+        List<ToolConfig> agentToolConfigs = toolConfigRepository.findAllById(agentToolIds);
+        if (agentToolConfigs == null || agentToolConfigs.isEmpty()) return;
 
-        for (ToolConfig tool : enabledTools) {
-            if (!agentToolIds.contains(tool.getId())) continue;
+        Set<String> configuredToolIds = new HashSet<>();
+        for (ToolConfig tool : agentToolConfigs) {
+            configuredToolIds.add(tool.getId());
+            if (!Boolean.TRUE.equals(tool.getEnabled())) {
+                log.warn("Agent {} skipped disabled tool at runtime: toolId={}", agent.getId(), tool.getId());
+            }
+        }
+        for (String toolId : agentToolIds) {
+            if (!configuredToolIds.contains(toolId)) {
+                log.warn("Agent {} skipped unknown tool at runtime: toolId={}", agent.getId(), toolId);
+            }
+        }
+
+        for (ToolConfig tool : agentToolConfigs) {
+            if (!Boolean.TRUE.equals(tool.getEnabled())) continue;
 
             switch (tool.getId()) {
                 case "web_search" -> registerWebSearch(toolkit, tool);

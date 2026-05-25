@@ -42,7 +42,7 @@ http.interceptors.response.use(
     return Promise.reject(new Error(msg))
   },
   (error: AxiosError<{ message?: string }>) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    if (error.response?.status === 401) {
       localStorage.removeItem(STORAGE_KEY_TOKEN)
       localStorage.removeItem(STORAGE_KEY_USER)
       if (!window.location.pathname.startsWith('/login')) {
@@ -50,7 +50,8 @@ http.interceptors.response.use(
       }
       return Promise.reject(error)
     }
-    const msg = error.response?.data?.message || i18n.global.t('error.networkError')
+    const msg = error.response?.data?.message
+      || (error.response?.status === 403 ? i18n.global.t('error.forbidden') : i18n.global.t('error.networkError'))
     toast.error(msg)
     return Promise.reject(new Error(msg))
   },
