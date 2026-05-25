@@ -58,6 +58,7 @@ async function handleLogin() {
         <Label for="username">{{ $t('placeholder.username') }}</Label>
         <Input
           id="username"
+          name="username"
           v-model="username"
           :placeholder="$t('placeholder.username')"
           :disabled="loading"
@@ -69,6 +70,7 @@ async function handleLogin() {
         <div class="relative">
           <Input
             id="password"
+            name="password"
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
             :placeholder="$t('placeholder.password')"

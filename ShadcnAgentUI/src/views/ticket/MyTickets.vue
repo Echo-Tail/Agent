@@ -237,7 +237,7 @@ onMounted(fetchTickets)
           </SelectItem>
         </SelectContent>
       </Select>
-      <SearchInput v-model="filters.title" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
+      <SearchInput id="my-tickets-title-filter" name="my-tickets-title-filter" v-model="filters.title" :placeholder="$t('ticketManage.filters.titleSearch')" input-class="w-[200px] h-9 pl-8" />
       <Button variant="secondary" size="sm" @click="fetchTickets" :disabled="loading">
         <Loader2 v-if="loading" class="mr-1 h-3 w-3 animate-spin" />
         {{ $t('common.search') }}
@@ -288,14 +288,14 @@ onMounted(fetchTickets)
         </DialogHeader>
         <div class="space-y-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('myTickets.form.title') }} <span class="text-destructive">*</span></label>
-            <Input v-model="form.title" maxlength="120" :placeholder="$t('myTickets.form.titlePlaceholder')" />
+            <label for="ticket-title" class="text-sm font-medium">{{ $t('myTickets.form.title') }} <span class="text-destructive">*</span></label>
+            <Input id="ticket-title" name="ticket-title" v-model="form.title" maxlength="120" :placeholder="$t('myTickets.form.titlePlaceholder')" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('myTickets.form.affectedMenu') }} <span class="text-destructive">*</span></label>
+              <label for="ticket-affected-menu" class="text-sm font-medium">{{ $t('myTickets.form.affectedMenu') }} <span class="text-destructive">*</span></label>
               <Select v-model="form.affectedMenu">
-                <SelectTrigger>
+                <SelectTrigger id="ticket-affected-menu" name="ticket-affected-menu">
                   <SelectValue :placeholder="$t('myTickets.form.affectedMenuPlaceholder')" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,9 +306,9 @@ onMounted(fetchTickets)
               </Select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('myTickets.form.priority') }} <span class="text-destructive">*</span></label>
+              <label for="ticket-priority" class="text-sm font-medium">{{ $t('myTickets.form.priority') }} <span class="text-destructive">*</span></label>
               <Select v-model="form.priority">
-                <SelectTrigger>
+                <SelectTrigger id="ticket-priority" name="ticket-priority">
                   <SelectValue :placeholder="$t('myTickets.form.priorityPlaceholder')" />
                 </SelectTrigger>
                 <SelectContent>
@@ -320,17 +320,19 @@ onMounted(fetchTickets)
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('myTickets.form.content') }} <span class="text-destructive">*</span></label>
+            <label for="ticket-content" class="text-sm font-medium">{{ $t('myTickets.form.content') }} <span class="text-destructive">*</span></label>
             <textarea
+              id="ticket-content"
+              name="ticket-content"
               v-model="form.content"
               :placeholder="$t('myTickets.form.contentPlaceholder')"
               class="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('myTickets.form.attachments') }}</label>
+            <label for="ticket-attachments" class="text-sm font-medium">{{ $t('myTickets.form.attachments') }}</label>
             <div class="flex flex-col gap-2">
-              <input ref="uploadInput" type="file" multiple class="hidden" @change="handleFiles" />
+              <input id="ticket-attachments" name="ticket-attachments" ref="uploadInput" type="file" multiple class="hidden" @change="handleFiles" />
               <Button variant="outline" size="sm" class="w-fit" @click="uploadInput?.click()" :disabled="submitting">
                 <Upload class="mr-1 h-3.5 w-3.5" />{{ $t('myTickets.form.selectFiles') }}
               </Button>

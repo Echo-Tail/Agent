@@ -68,9 +68,9 @@ onMounted(fetchData)
 
     <!-- Date Range + Actions -->
     <div class="flex items-center gap-2 flex-wrap">
-      <Input v-model="startDate" type="date" class="w-36" />
+      <Input id="token-usage-start-date" name="token-usage-start-date" v-model="startDate" type="date" class="w-36" />
       <span class="text-muted-foreground">{{ $t('common.to') }}</span>
-      <Input v-model="endDate" type="date" class="w-36" />
+      <Input id="token-usage-end-date" name="token-usage-end-date" v-model="endDate" type="date" class="w-36" />
       <Button size="sm" :loading="loading" @click="fetchData">
         <Loader2 v-if="loading" class="mr-1 h-4 w-4 animate-spin" />
         {{ $t('common.search') }}

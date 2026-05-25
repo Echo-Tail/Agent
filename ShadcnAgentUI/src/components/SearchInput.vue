@@ -6,6 +6,8 @@ import { Search } from 'lucide-vue-next'
 const { t } = useI18n()
 
 const props = defineProps<{
+  id?: string
+  name?: string
   modelValue: string
   placeholder?: string
   inputClass?: string
@@ -31,6 +33,8 @@ function onKeydown(e: KeyboardEvent) {
   <div class="relative">
     <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
     <Input
+      :id="props.id"
+      :name="props.name"
       :value="props.modelValue"
       :placeholder="placeholder || t('common.searchDot')"
       :class="['pl-7 h-8 text-xs', props.inputClass]"

@@ -282,23 +282,23 @@ async function handleDelete() {
         </DialogHeader>
         <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('modelManage.form.name') }} <span class="text-destructive">*</span></label>
-            <Input v-model="editingModel.name" placeholder="GPT-4o、DeepSeek-V3" />
+            <label for="model-name" class="text-sm font-medium">{{ $t('modelManage.form.name') }} <span class="text-destructive">*</span></label>
+            <Input id="model-name" name="model-name" v-model="editingModel.name" placeholder="GPT-4o、DeepSeek-V3" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.provider') }} <span class="text-destructive">*</span></label>
+              <label for="model-provider" class="text-sm font-medium">{{ $t('modelManage.form.provider') }} <span class="text-destructive">*</span></label>
               <Select v-model="editingModel.provider">
-                <SelectTrigger><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
+                <SelectTrigger id="model-provider" name="model-provider"><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in providerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.modelType') }}</label>
+              <label for="model-type" class="text-sm font-medium">{{ $t('modelManage.form.modelType') }}</label>
               <Select v-model="editingModel.modelType">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="model-type" name="model-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TEXT">{{ $t(modelTypeKeys.TEXT) }}</SelectItem>
                   <SelectItem value="IMAGE">{{ $t(modelTypeKeys.IMAGE) }}</SelectItem>
@@ -307,69 +307,69 @@ async function handleDelete() {
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('modelManage.form.modelId') }} <span class="text-destructive">*</span></label>
+            <label for="model-id" class="text-sm font-medium">{{ $t('modelManage.form.modelId') }} <span class="text-destructive">*</span></label>
             <div class="flex gap-2">
               <Select
                 v-if="availableModelIds.length > 0"
                 v-model="editingModel.modelName"
                 class="flex-1"
               >
-                <SelectTrigger><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
+                <SelectTrigger id="model-id" name="model-id"><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in availableModelIds" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
-              <Input v-else v-model="editingModel.modelName" placeholder="gpt-4o、deepseek-chat" class="flex-1" />
+              <Input v-else id="model-id" name="model-id" v-model="editingModel.modelName" placeholder="gpt-4o、deepseek-chat" class="flex-1" />
               <Button variant="secondary" size="sm" :loading="fetchingModels" :disabled="!editingModel.apiUrl" @click="handleFetchModels">
                 <RefreshCw class="mr-1 h-3.5 w-3.5" />{{ $t('modelManage.fetchModels') }}
               </Button>
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('modelManage.form.apiUrl') }}</label>
-            <Input v-model="editingModel.apiUrl" placeholder="https://api.openai.com" />
+            <label for="model-api-url" class="text-sm font-medium">{{ $t('modelManage.form.apiUrl') }}</label>
+            <Input id="model-api-url" name="model-api-url" v-model="editingModel.apiUrl" placeholder="https://api.openai.com" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.apiType') }}</label>
+              <label for="model-api-type" class="text-sm font-medium">{{ $t('modelManage.form.apiType') }}</label>
               <Select v-model="editingModel.apiType">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="model-api-type" name="model-api-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in apiTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.temperature') }}</label>
-              <Input v-model="editingModel.temperature" type="number" min="0" max="2" step="0.1" />
+              <label for="model-temperature" class="text-sm font-medium">{{ $t('modelManage.form.temperature') }}</label>
+              <Input id="model-temperature" name="model-temperature" v-model="editingModel.temperature" type="number" min="0" max="2" step="0.1" />
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}</label>
-            <Input v-model="editingModel.apiKey" type="password" placeholder="sk-..." />
+            <label for="model-api-key" class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}</label>
+            <Input id="model-api-key" name="model-api-key" v-model="editingModel.apiKey" type="password" placeholder="sk-..." />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.maxTokens') }}</label>
+              <label for="model-max-tokens" class="text-sm font-medium">{{ $t('modelManage.form.maxTokens') }}</label>
               <Select v-model="editingModel.maxTokens">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="model-max-tokens" name="model-max-tokens"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in tokenOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('modelManage.form.apiVersion') }}</label>
-              <Input v-model="editingModel.apiVersion" placeholder="/v1" />
+              <label for="model-api-version" class="text-sm font-medium">{{ $t('modelManage.form.apiVersion') }}</label>
+              <Input id="model-api-version" name="model-api-version" v-model="editingModel.apiVersion" placeholder="/v1" />
             </div>
           </div>
           <div class="flex items-center gap-4 pt-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="editingModel.isDefault" class="rounded border-gray-300" />
+            <label for="model-is-default" class="flex items-center gap-2 cursor-pointer">
+              <input id="model-is-default" name="model-is-default" type="checkbox" v-model="editingModel.isDefault" class="rounded border-gray-300" />
               <span class="text-sm">{{ $t('modelManage.form.default') }}</span>
             </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" v-model="editingModel.enabled" class="rounded border-gray-300" />
+            <label for="model-enabled" class="flex items-center gap-2 cursor-pointer">
+              <input id="model-enabled" name="model-enabled" type="checkbox" v-model="editingModel.enabled" class="rounded border-gray-300" />
               <span class="text-sm">{{ $t('modelManage.form.enabled') }}</span>
             </label>
           </div>
