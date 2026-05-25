@@ -1,9 +1,7 @@
 package cafe.snails.ecomagents.config;
 
-import cafe.snails.ecomagents.model.InviteCode;
 import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.model.User;
-import cafe.snails.ecomagents.repository.InviteCodeRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
 import cafe.snails.ecomagents.service.SessionService;
@@ -27,7 +25,6 @@ import java.util.List;
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
-    private final InviteCodeRepository inviteCodeRepository;
     private final ToolConfigRepository toolConfigRepository;
     private final PasswordEncoder passwordEncoder;
     private final SessionService sessionService;
@@ -48,19 +45,6 @@ public class DataInitializer implements CommandLineRunner {
             admin.setPassword(passwordEncoder.encode("123456"));
         }
         userRepository.save(admin);
-
-        // 初始化邀请码（仅当不存在时）
-        if (inviteCodeRepository.count() == 0) {
-            log.info("初始化邀请码...");
-            inviteCodeRepository.save(InviteCode.builder().code("FREE001")
-                    .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
-            inviteCodeRepository.save(InviteCode.builder().code("FREE002")
-                    .used(false).createdAt(LocalDate.of(2024, 3, 1)).build());
-            inviteCodeRepository.save(InviteCode.builder().code("EC2026")
-                    .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
-            inviteCodeRepository.save(InviteCode.builder().code("AGENT01")
-                    .used(false).createdAt(LocalDate.of(2026, 5, 1)).build());
-        }
 
         log.info("数据初始化完成");
         initTools();
