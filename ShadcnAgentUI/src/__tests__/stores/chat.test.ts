@@ -129,6 +129,23 @@ describe('useChatStore', () => {
       expect(store.messages).toHaveLength(1)
     })
 
+    it('switchToAgent can preserve the active history session', async () => {
+      const store = useChatStore()
+      const mockSession = {
+        id: 1, agentId: 1, title: 'Chat',
+        messages: [{ role: 'user', content: 'hi', timestamp: '2024-01-01' }],
+        createdAt: '', updatedAt: '',
+      }
+      store.activeSession = mockSession as any
+      store.messages = mockSession.messages as any
+
+      store.switchToAgent(1, { preserveSession: true })
+
+      expect(store.activeAgentId).toBe(1)
+      expect(store.activeSession).toEqual(mockSession)
+      expect(store.messages).toHaveLength(1)
+    })
+
     it('removeSession clears active session when deleted', async () => {
       const { deleteSessionApi, listSessionsApi } = await import('@/api/session')
 

@@ -206,6 +206,7 @@
     "loginFailed": "Login failed",
     "registerFailed": "Registration failed",
     "createSessionFailed": "Failed to create session",
+    "loadSessionFailed": "Failed to load history session",
     "sendMessageFailed": "An unknown error occurred while sending the message",
     "noActiveSession": "No active session, please select an Agent",
     "loadTicketsFailed": "Failed to load tickets",

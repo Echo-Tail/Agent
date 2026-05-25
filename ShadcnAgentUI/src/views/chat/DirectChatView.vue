@@ -21,7 +21,7 @@ import {
   Wrench,
   Paperclip,
   X,
-  File,
+  File as FileIcon,
   Copy,
   Check,
 } from 'lucide-vue-next'
@@ -113,35 +113,64 @@ function removeFile(index: number) {
 
 const selectedAgent = ref<Agent | null>(null)
 
+function parseQueryNumber(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+async function resolveAgent(agentId: number): Promise<Agent | null> {
+  const localAgent = agentStore.myAgents.find(a => a.id === agentId)
+  if (localAgent) return localAgent
+  try {
+    return await getAgentApi(agentId)
+  } catch {
+    return null
+  }
+}
+
 onMounted(async () => {
-  const agentId = Number(route.query.agentId)
+  const routeAgentId = parseQueryNumber(route.query.agentId)
+  const sessionId = parseQueryNumber(route.query.sessionId)
 
-  // Load agents if not loaded
-  if (agentStore.myAgents.length === 0) {
-    await agentStore.fetchMyAgents()
-  }
-
-  if (agentId) {
-    // Look in myAgents first, then try fetching individually (plaza agents)
-    selectedAgent.value = agentStore.myAgents.find(a => a.id === agentId) || null
-    if (!selectedAgent.value) {
-      try {
-        selectedAgent.value = await getAgentApi(agentId)
-      } catch { /* agent not found */ }
+  try {
+    // Load agents if not loaded
+    if (agentStore.myAgents.length === 0) {
+      await agentStore.fetchMyAgents()
     }
-    if (selectedAgent.value) {
-      chatStore.switchToAgent(agentId)
-      // Create a session if none exists
+
+    if (sessionId) {
       try {
-        await chatStore.createSession(agentId)
+        await chatStore.loadSession(sessionId)
+        const agentId = chatStore.activeSession?.agentId ?? routeAgentId
+        if (agentId) {
+          selectedAgent.value = await resolveAgent(agentId)
+          chatStore.switchToAgent(agentId, { preserveSession: true })
+        }
       } catch {
-        toast.error(t('error.createSessionFailed'))
+        toast.error(t('error.loadSessionFailed'))
+        chatStore.clearActiveSession()
       }
+      return
     }
-  } else {
-    chatStore.switchToDirect()
+
+    if (routeAgentId) {
+      selectedAgent.value = await resolveAgent(routeAgentId)
+      if (selectedAgent.value) {
+        chatStore.switchToAgent(routeAgentId)
+        // Create a session if none exists
+        try {
+          await chatStore.createSession(routeAgentId)
+        } catch {
+          toast.error(t('error.createSessionFailed'))
+        }
+      }
+    } else {
+      chatStore.switchToDirect()
+    }
+  } finally {
+    initializing.value = false
   }
-  initializing.value = false
 })
 
 watch(() => chatStore.messages.length, () => {
@@ -306,7 +335,7 @@ function newSession() {
           :key="att.file.name + idx"
           class="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted rounded-md text-xs whitespace-nowrap shrink-0"
         >
-          <File class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <FileIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span class="max-w-[120px] truncate">{{ att.file.name }}</span>
           <span class="text-muted-foreground shrink-0">{{ formatFileSize(att.file.size) }}</span>
           <span v-if="!att.record && !att.error" class="text-muted-foreground shrink-0">{{ $t('chat.uploading') }}</span>
