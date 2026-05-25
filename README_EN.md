@@ -48,19 +48,20 @@ A full-stack platform for managing, configuring, and interacting with AI agents 
 | Build | Gradle |
 | Testing | JUnit 5, Mockito (120 tests, 14 test classes) |
 
-### Frontend (EcomAgentsFront/)
+### Frontend (ShadcnAgentUI/)
 
 | Component | Technology |
 |-----------|-----------|
 | Framework | Vue 3 (Composition API) |
-| UI Library | Naive UI |
+| UI Library | shadcn-vue (based on Reka UI) |
 | Language | TypeScript |
-| Build | Vite 6 |
+| Build | Vite 8 |
 | State Management | Pinia |
 | Router | Vue Router 4 |
 | HTTP Client | Axios |
-| Testing | Vitest + happy-dom (167 tests, 17 files) |
+| Testing | Vitest + happy-dom (102 tests, 11 files) |
 | Streaming | SSE via ReadableStream API |
+| Package Manager | pnpm (recommended) / npm |
 
 ## Project Structure
 
@@ -77,10 +78,11 @@ Agent/
 │       ├── security/               # JWT auth filter + Spring Security config
 │       ├── service/                # Business logic (19 services: HarnessAgentManager, VectorEmbeddingService, etc.)
 │       └── tool/                   # AgentScope @Tool annotated tools
-├── EcomAgentsFront/                # Vue 3 SPA (TypeScript, Vite, Naive UI, port 5173)
+├── ShadcnAgentUI/                  # Vue 3 SPA (TypeScript, Vite, shadcn-vue, port 5174)
 │   └── src/
 │       ├── api/                    # Axios HTTP client layer (14 modules)
-│       ├── components/             # Reusable UI components
+│       ├── components/ui/          # shadcn-vue UI components (Button, Card, Dialog, Table, Badge, etc.)
+│       ├── composables/            # Vue composable functions
 │       ├── constants/              # Shared constants (API base, storage keys, validation limits)
 │       ├── layouts/                # Layout components (DefaultLayout sidebar, BlankLayout fullscreen)
 │       ├── router/                 # Vue Router with auth guard
@@ -127,19 +129,23 @@ cd EcomAgents
 ### Frontend Setup
 
 ```bash
-cd EcomAgentsFront
+cd ShadcnAgentUI
 
-# Install dependencies
-npm install
+# Install dependencies (pnpm recommended, npm also works)
+pnpm install
+# npm install
 
 # Run tests
-npm test
+pnpm test
+# npm test
 
-# Start development server (port 5173, proxies /v1 to :8888)
-npm run dev
+# Start development server (port 5174, proxies /v1 and /chat to backend :8888)
+pnpm dev
+# npm run dev
 
 # Production build
-npm run build
+pnpm build
+# npm run build
 ```
 
 ### Default Admin Account
@@ -217,7 +223,7 @@ The platform supports multiple users interacting with the same agent. Data isola
 ## Project Conventions
 
 - **Backend**: RESTful controllers at `/v1/*`, JPA entities with Lombok, service-layer business logic
-- **Frontend**: Composition API `<script setup>` style, Naive UI components, Pinia composition stores
+- **Frontend**: Composition API `<script setup>` style, shadcn-vue components, Pinia composition stores
 - **Access Control**: Dual guard via Vue Router `beforeEach` + backend security filter; admin/user role separation
 - **Agent Ownership**: Users can only modify agents they created; "Agent Plaza" allows using others' agents for conversation
 - **Skills**: Global skill pool stored in `workspace/skills/{name}/SKILL.md` with YAML frontmatter (`name`, `description`, `category`); copied per-agent on binding

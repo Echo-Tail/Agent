@@ -49,19 +49,20 @@
 | 构建 | Gradle |
 | 测试 | JUnit 5, Mockito（120 测试用例，14 测试类） |
 
-### 前端 (EcomAgentsFront/)
+### 前端 (ShadcnAgentUI/)
 
 | 组件 | 技术 |
 |------|------|
 | 框架 | Vue 3 (Composition API) |
-| UI 库 | Naive UI |
+| UI 库 | shadcn-vue（基于 Reka UI） |
 | 语言 | TypeScript |
-| 构建 | Vite 6 |
+| 构建 | Vite 8 |
 | 状态管理 | Pinia |
 | 路由 | Vue Router 4 |
 | HTTP 客户端 | Axios |
-| 测试 | Vitest + happy-dom（167 测试用例，17 文件） |
+| 测试 | Vitest + happy-dom（102 测试用例，11 文件） |
 | 流式通信 | SSE via ReadableStream API |
+| 包管理 | pnpm（推荐）/ npm |
 
 ## 项目结构
 
@@ -78,10 +79,11 @@ Agent/
 │       ├── security/               # JWT 认证过滤器 + Spring Security 配置
 │       ├── service/                # 业务逻辑层 (19 个 Service: 含 HarnessAgentManager、VectorEmbeddingService 等)
 │       └── tool/                   # AgentScope @Tool 注解工具
-├── EcomAgentsFront/                # Vue 3 前端 SPA (TypeScript, Vite, Naive UI, port 5173)
+├── ShadcnAgentUI/                  # Vue 3 SPA 前端 (TypeScript, Vite, shadcn-vue, port 5174)
 │   └── src/
 │       ├── api/                    # Axios HTTP 客户端层 (14 个模块)
-│       ├── components/             # 可复用 UI 组件
+│       ├── components/ui/          # shadcn-vue UI 组件 (Button, Card, Dialog, Table, Badge 等)
+│       ├── composables/            # Vue 组合式函数
 │       ├── constants/              # 共享常量 (API 地址、存储键、验证限制)
 │       ├── layouts/                # 布局组件 (DefaultLayout 侧边栏, BlankLayout 全屏)
 │       ├── router/                 # Vue Router + 导航守卫
@@ -91,7 +93,7 @@ Agent/
 │       └── views/                  # 路由页面组件 (19 个视图)
 │           ├── admin/              # 用户/模型/工具/技能/工单/Token 用量管理
 │           ├── agent/              # 我的 Agent / Agent 广场 / 创建编辑
-│           ├── chat/               # 实时对话
+│           ├── chat/               # 实时流式对话
 │           ├── ticket/             # 我的工单
 │           ├── log/                # 系统日志
 │           └── ...                 # Dashboard, Login, Register, Settings 等
@@ -128,19 +130,23 @@ cd EcomAgents
 ### 前端启动
 
 ```bash
-cd EcomAgentsFront
+cd ShadcnAgentUI
 
-# 安装依赖
-npm install
+# 安装依赖（推荐 pnpm，也可用 npm）
+pnpm install
+# npm install
 
 # 运行测试
-npm test
+pnpm test
+# npm test
 
-# 启动开发服务器 (端口 5173, /v1 代理到 :8888)
-npm run dev
+# 启动开发服务器（端口 5174，/v1 和 /chat 代理到后端 8888）
+pnpm dev
+# npm run dev
 
 # 生产构建
-npm run build
+pnpm build
+# npm run build
 ```
 
 ### 默认管理员账号
@@ -217,7 +223,7 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 ## 项目约定
 
 - **后端**: RESTful 控制器 `/v1/*`，JPA 实体 + Lombok，Service 层业务逻辑
-- **前端**: Composition API `<script setup>` 风格，Naive UI 组件，Pinia composition store
+- **前端**: Composition API `<script setup>` 风格，shadcn-vue 组件，Pinia composition store
 - **权限控制**: Vue Router `beforeEach` + 后端安全过滤器双重控制，管理员/普通用户角色分离
 - **Agent 所有权**: 用户只能修改自己创建的 Agent，可通过 "Agent 广场" 使用他人的 Agent
 - **技能系统**: 全局技能池（文件系统 `workspace/skills/{name}/SKILL.md`，YAML frontmatter），创建 Agent 时复制绑定到工作空间
