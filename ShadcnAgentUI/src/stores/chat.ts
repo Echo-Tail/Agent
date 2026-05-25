@@ -115,10 +115,12 @@ export const useChatStore = defineStore('chat', () => {
     clearActiveSession()
   }
 
-  function switchToAgent(_agentId: number) {
+  function switchToAgent(_agentId: number, options?: { preserveSession?: boolean }) {
     chatMode.value = 'agent'
     activeAgentId.value = _agentId
-    clearActiveSession()
+    if (!options?.preserveSession) {
+      clearActiveSession()
+    }
   }
 
   async function sendMessage(agentId: number, content: string, skipUserPush = false) {
