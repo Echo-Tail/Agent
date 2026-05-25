@@ -23,8 +23,8 @@ export function deleteModelApi(id: number) {
 
 export interface ModelValidateRequest {
   baseUrl: string
+  provider?: string
   apiType: string
-  apiVersion: string
   apiKey: string
 }
 

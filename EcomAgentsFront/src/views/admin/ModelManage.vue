@@ -19,6 +19,19 @@ const isEditMode = ref(false)
 const fetchingModels = ref(false)
 const availableModelIds = ref<SelectOption[]>([])
 
+const providerDefaults: Record<string, { label: string; apiUrl: string; apiType: string }> = {
+  anthropic: { label: 'Anthropic', apiUrl: 'https://api.anthropic.com', apiType: 'anthropic' },
+  openai: { label: 'OpenAI', apiUrl: 'https://api.openai.com', apiType: 'openai' },
+  qwen: { label: '阿里百炼', apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiType: 'openai' },
+  deepseek: { label: 'DeepSeek', apiUrl: 'https://api.deepseek.com', apiType: 'openai' },
+  other: { label: '其它', apiUrl: '', apiType: 'openai' },
+}
+
+const providerOptions = Object.entries(providerDefaults).map(([value, config]) => ({
+  label: config.label,
+  value,
+}))
+
 const tokenOptions: SelectOption[] = [
   { label: '128K', value: 131072 },
   { label: '256K', value: 262144 },
@@ -27,16 +40,13 @@ const tokenOptions: SelectOption[] = [
 
 onMounted(fetchModels)
 
-// 供应商切换时自动设定 API 版本路径
+// 供应商切换时自动带出默认 API 地址和格式。
 watch(() => editingModel.value.provider, (provider) => {
   if (!provider || isEditMode.value) return
-  const versionMap: Record<string, string> = {
-    openai: '/v1',
-    deepseek: '',
-    qwen: '/v1',
-    other: '/v1',
-  }
-  editingModel.value.apiVersion = versionMap[provider] || '/v1'
+  const defaults = providerDefaults[provider]
+  editingModel.value.apiUrl = defaults?.apiUrl || ''
+  editingModel.value.apiType = defaults?.apiType || 'openai'
+  availableModelIds.value = []
 })
 
 async function fetchModels() {
@@ -52,13 +62,13 @@ async function fetchModels() {
 }
 
 function openCreate() {
+  isEditMode.value = false
   editingModel.value = {
     name: '',
     provider: 'openai',
     modelName: '',
-    apiUrl: '',
+    apiUrl: providerDefaults.openai.apiUrl,
     apiType: 'openai',
-    apiVersion: '/v1',
     apiKey: '',
     maxTokens: 131072,
     temperature: 0.7,
@@ -67,7 +77,6 @@ function openCreate() {
     enabled: true,
   }
   availableModelIds.value = []
-  isEditMode.value = false
   showModal.value = true
 }
 
@@ -79,7 +88,7 @@ function openEdit(model: AiModel) {
 }
 
 async function handleFetchModels() {
-  const { apiUrl, apiType, apiVersion, apiKey } = editingModel.value
+  const { apiUrl, apiType, apiKey, provider } = editingModel.value
   if (!apiUrl) {
     message.warning('请先填写请求地址')
     return
@@ -89,8 +98,8 @@ async function handleFetchModels() {
   try {
     const res = await validateModelApi({
       baseUrl: apiUrl,
+      provider: provider || 'openai',
       apiType: apiType || 'openai',
-      apiVersion: apiVersion || '/v1',
       apiKey: apiKey || '',
     })
     if (res.data.code === 200 && res.data.data) {
@@ -110,21 +119,6 @@ async function handleFetchModels() {
 }
 
 async function handleSave() {
-  // Validate before save
-  const { apiUrl, apiType, apiVersion, apiKey } = editingModel.value
-  if (apiUrl && apiKey) {
-    const valRes = await validateModelApi({
-      baseUrl: apiUrl,
-      apiType: apiType || 'openai',
-      apiVersion: apiVersion || '/v1',
-      apiKey: apiKey || '',
-    })
-    if (valRes.data.code !== 200) {
-      message.error(valRes.data.message || '配置验证失败，请检查请求地址和密钥')
-      return
-    }
-  }
-
   saving.value = true
   try {
     if (isEditMode.value && editingModel.value.id) {
@@ -178,8 +172,10 @@ function handleDelete(model: AiModel) {
 
 const providerLabels: Record<string, string> = {
   openai: 'OpenAI',
+  anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
-  qwen: '通义千问',
+  qwen: '阿里百炼',
+  other: '其它',
 }
 
 const columns: DataTableColumn<AiModel>[] = [
@@ -273,12 +269,7 @@ const columns: DataTableColumn<AiModel>[] = [
         <n-form-item label="供应商" required>
           <n-select
             v-model:value="editingModel.provider"
-            :options="[
-              { label: 'OpenAI', value: 'openai' },
-              { label: 'DeepSeek', value: 'deepseek' },
-              { label: '通义千问', value: 'qwen' },
-              { label: '其他', value: 'other' },
-            ]"
+            :options="providerOptions"
           />
         </n-form-item>
         <n-form-item label="模型 ID" required>

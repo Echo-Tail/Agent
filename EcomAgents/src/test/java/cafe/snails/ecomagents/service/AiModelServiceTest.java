@@ -205,6 +205,63 @@ class AiModelServiceTest {
         assertEquals("/chat/completions", AiModelService.buildEndpointPath(m));
     }
 
+    @Test
+    void buildEndpointPath_openaiDefaultBase_shouldInferV1ChatCompletions() {
+        AiModel m = AiModel.builder()
+                .provider("openai")
+                .apiType("openai")
+                .apiVersion("")
+                .apiUrl("https://api.openai.com")
+                .build();
+        assertEquals("/v1/chat/completions", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void buildEndpointPath_anthropicDefaultBase_shouldInferV1Messages() {
+        AiModel m = AiModel.builder()
+                .provider("anthropic")
+                .apiType("anthropic")
+                .apiVersion("")
+                .apiUrl("https://api.anthropic.com")
+                .build();
+        assertEquals("/v1/messages", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void buildEndpointPath_qwenCompatibleBase_shouldNotAddV1Again() {
+        AiModel m = AiModel.builder()
+                .provider("qwen")
+                .apiType("openai")
+                .apiVersion("")
+                .apiUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .build();
+        assertEquals("/chat/completions", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void buildEndpointPath_deepseekDefaultBase_shouldNotAddV1() {
+        AiModel m = AiModel.builder()
+                .provider("deepseek")
+                .apiType("openai")
+                .apiVersion("")
+                .apiUrl("https://api.deepseek.com")
+                .build();
+        assertEquals("/chat/completions", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void createModel_fullEndpointUrl_shouldReturnHelpfulError() {
+        AiModel input = AiModel.builder()
+                .name("Bad URL")
+                .modelName("gpt-4o")
+                .provider("openai")
+                .apiUrl("https://api.openai.com/v1/chat/completions")
+                .build();
+        ApiResponse<AiModel> result = service.createModel(input);
+        assertEquals(400, result.getCode());
+        assertTrue(result.getMessage().contains("不要包含"));
+    }
+
     @ParameterizedTest
     @CsvSource({
         "https://api.openai.com/v1/chat/completions, https://api.openai.com, /v1/chat/completions",
