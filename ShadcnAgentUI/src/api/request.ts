@@ -39,9 +39,10 @@ function logApiCall(method: string | undefined, url: string | undefined, status:
     }
     if (errMsg) body.data = JSON.stringify({ error: errMsg })
     // 静默提交，失败不处理
+    const token = localStorage.getItem(STORAGE_KEY_TOKEN)
     fetch(`/v1/system-logs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(body),
     }).catch(() => {})
   } catch { /* ignore */ }
