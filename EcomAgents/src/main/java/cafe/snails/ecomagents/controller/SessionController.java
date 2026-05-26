@@ -33,8 +33,10 @@ public class SessionController {
 
     /** 获取单个会话详情（含完整消息列表） */
     @GetMapping("/sessions/{id}")
-    public ApiResponse<Session> getSession(@PathVariable("id") Long id) {
-        return sessionService.getSessionWithMessages(id);
+    public ApiResponse<Session> getSession(
+            @PathVariable("id") Long id,
+            @CurrentUserId Long userId) {
+        return sessionService.getSessionWithMessages(id, userId);
     }
 
     /** 创建新会话 */
@@ -50,23 +52,29 @@ public class SessionController {
 
     /** 更新会话标题和/或文件夹 */
     @PutMapping("/sessions/{id}")
-    public ApiResponse<Session> updateSession(@PathVariable("id") Long id, @RequestBody Map<String, Object> body) {
+    public ApiResponse<Session> updateSession(
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, Object> body,
+            @CurrentUserId Long userId) {
         String title = (String) body.get("title");
         Long folderId = body.get("folderId") != null ? Long.valueOf(body.get("folderId").toString()) : null;
-        return sessionService.updateSession(id, title, folderId);
+        return sessionService.updateSession(id, title, folderId, userId);
     }
 
     /** 删除会话 */
     @DeleteMapping("/sessions/{id}")
-    public ApiResponse<Void> deleteSession(@PathVariable("id") Long id) {
-        return sessionService.deleteSession(id);
+    public ApiResponse<Void> deleteSession(
+            @PathVariable("id") Long id,
+            @CurrentUserId Long userId) {
+        return sessionService.deleteSession(id, userId);
     }
 
     /** 向会话追加一条消息 */
     @PostMapping("/sessions/{id}/messages")
     public ApiResponse<SessionMessage> addMessage(
             @PathVariable("id") Long id,
-            @RequestBody Map<String, String> body) {
-        return sessionService.addMessage(id, body.get("role"), body.get("content"));
+            @RequestBody Map<String, String> body,
+            @CurrentUserId Long userId) {
+        return sessionService.addMessage(id, body.get("role"), body.get("content"), userId);
     }
 }

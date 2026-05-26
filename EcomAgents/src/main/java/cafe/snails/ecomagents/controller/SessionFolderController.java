@@ -42,8 +42,11 @@ public class SessionFolderController {
 
     /** 更新文件夹名称 */
     @PutMapping("/session-folders/{id}")
-    public ApiResponse<SessionFolder> updateFolder(@PathVariable("id") Long id, @RequestBody Map<String, Object> body) {
-        return folderRepository.findById(id)
+    public ApiResponse<SessionFolder> updateFolder(
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, Object> body,
+            @CurrentUserId Long userId) {
+        return folderRepository.findByIdAndUserId(id, userId)
                 .map(folder -> {
                     if (body.get("name") != null) folder.setName((String) body.get("name"));
                     SessionFolder saved = folderRepository.save(folder);
@@ -55,8 +58,10 @@ public class SessionFolderController {
     /** 删除文件夹 */
     @Transactional
     @DeleteMapping("/session-folders/{id}")
-    public ApiResponse<Void> deleteFolder(@PathVariable("id") Long id) {
-        return folderRepository.findById(id)
+    public ApiResponse<Void> deleteFolder(
+            @PathVariable("id") Long id,
+            @CurrentUserId Long userId) {
+        return folderRepository.findByIdAndUserId(id, userId)
                 .map(folder -> {
                     folderRepository.delete(folder);
                     return ApiResponse.<Void>success("文件夹已删除", null);

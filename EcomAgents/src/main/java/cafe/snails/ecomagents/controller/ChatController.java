@@ -53,7 +53,14 @@ public class ChatController {
                 agentId, dbSessionId, content.length(), userId);
 
         // 通过 SessionMapper 获取或创建 HarnessAgent sessionId（UUID 格式）
-        String harnessSessionId = sessionMapper.resolveHarnessSessionId(dbSessionId, agentId, userId);
+        String harnessSessionId;
+        try {
+            harnessSessionId = sessionMapper.resolveHarnessSessionId(dbSessionId, agentId, userId);
+        } catch (IllegalArgumentException e) {
+            log.warn("streamChat rejected: inaccessible session (agentId={}, dbSessionId={}, userId={})",
+                    agentId, dbSessionId, userId);
+            return errorEmitter("会话不存在或无权访问");
+        }
 
         // 启动 HarnessAgent 流式对话，SseEmitter 由内部创建并立即返回
         return harnessChatService.streamChat(agentId, harnessSessionId, content, userId);
