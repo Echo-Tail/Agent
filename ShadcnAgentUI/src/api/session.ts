@@ -1,5 +1,5 @@
 import http from './request'
-import { STORAGE_KEY_TOKEN, STREAM_TIMEOUT } from '@/constants'
+import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER, STREAM_TIMEOUT } from '@/constants'
 import type { Session, SessionSummary, SessionFolder, SseEvent } from '@/types/session'
 import i18n from '@/locales'
 
@@ -88,6 +88,14 @@ export async function streamChat(
 
     if (!response.ok) {
       clearTimeout(timeoutId)
+      if (response.status === 401) {
+        localStorage.removeItem(STORAGE_KEY_TOKEN)
+        localStorage.removeItem(STORAGE_KEY_USER)
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login'
+        }
+        return
+      }
       onError('HTTP ' + response.status)
       return
     }

@@ -8,7 +8,7 @@ import { getAgentApi, getWebSearchAvailabilityApi } from '@/api/agent'
 import type { Agent, ToolAvailability } from '@/types/agent'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
+
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -288,7 +288,7 @@ const availableAgents = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-[calc(100vh-8rem)] max-w-4xl mx-auto">
+  <div class="flex flex-col h-[calc(100vh-8rem)] max-w-6xl mx-auto">
     <!-- Toolbar -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center gap-2">
@@ -320,8 +320,7 @@ const availableAgents = computed(() => {
     </div>
 
     <!-- Messages -->
-    <Card class="flex-1 overflow-hidden flex flex-col">
-      <CardContent class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div class="flex-1 overflow-y-auto rounded-lg bg-muted/30 p-4 space-y-4">
         <!-- Loading state -->
         <div v-if="initializing" class="space-y-4">
           <div class="flex gap-3"><Skeleton class="h-8 w-8 rounded-full" /><Skeleton class="h-16 flex-1 rounded-lg" /></div>
@@ -344,7 +343,7 @@ const availableAgents = computed(() => {
                 {{ selectedAgent?.name?.charAt(0) || 'A' }}
               </AvatarFallback>
             </Avatar>
-            <div :class="['group relative max-w-[80%] rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
+            <div :class="['group relative rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
               <MarkdownRenderer v-if="msg.role === 'assistant' && !msg.isError" :content="msg.content" />
               <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
               <button
@@ -378,7 +377,7 @@ const availableAgents = computed(() => {
                 {{ selectedAgent?.name?.charAt(0) || 'A' }}
               </AvatarFallback>
             </Avatar>
-            <div class="bg-muted rounded-lg p-3 text-sm max-w-[80%]">
+            <div class="bg-muted rounded-lg p-3 text-sm">
               <!-- Tool calls -->
               <div v-if="chatStore.currentToolStatuses.length" class="flex flex-wrap gap-2 mb-2">
                 <Badge
@@ -398,8 +397,7 @@ const availableAgents = computed(() => {
 
           <div ref="messagesEnd" />
         </template>
-      </CardContent>
-    </Card>
+    </div>
 
     <!-- Input -->
     <div class="mt-4">
