@@ -3,6 +3,8 @@ package cafe.snails.ecomagents.service;
 import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
+import cafe.snails.ecomagents.service.rag.KnowledgeUnit;
+import cafe.snails.ecomagents.service.rag.KnowledgeUnitParserService;
 import io.agentscope.core.embedding.ollama.OllamaTextEmbedding;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.model.ExecutionConfig;
@@ -31,6 +33,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
@@ -38,12 +41,11 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LocalKnowledgeIndexService {
 
     private static final Logger log = LoggerFactory.getLogger(LocalKnowledgeIndexService.class);
-    private static final int CHUNK_SIZE = 1200;
-    private static final int CHUNK_OVERLAP = 200;
-    private static final long WAIT_FOR_REBUILD_MILLIS = 5000;
+    private static final long WAIT_FOR_REBUILD_MILLIS = 750;
 
     private final KnowledgeDocumentRepository docRepository;
     private final LlmConfig llmConfig;
+    private final KnowledgeUnitParserService knowledgeUnitParserService;
 
     private final Map<Long, KnowledgeIndex> indexes = new ConcurrentHashMap<>();
     private final Map<Long, CompletableFuture<Void>> rebuildTasks = new ConcurrentHashMap<>();
@@ -66,17 +68,27 @@ public class LocalKnowledgeIndexService {
     }
 
     public List<String> searchSimilar(List<Long> kbIds, String queryText, int limit, double threshold) {
+        return searchSimilarDetailed(kbIds, queryText, limit, threshold).chunks();
+    }
+
+    public KnowledgeSearchResult searchSimilarDetailed(List<Long> kbIds, String queryText, int limit, double threshold) {
+        long startedAt = System.nanoTime();
         if (kbIds == null || kbIds.isEmpty() || queryText == null || queryText.isBlank()) {
-            return List.of();
+            return new KnowledgeSearchResult(List.of(), false, false, 0, 0, 0);
         }
 
         List<ScoredChunk> chunks = new ArrayList<>();
+        boolean degraded = false;
+        boolean timedOut = false;
+        int searchedKbCount = 0;
         for (Long kbId : kbIds) {
             if (kbId == null) {
                 continue;
             }
+            searchedKbCount++;
             KnowledgeIndex index = getOrBuildIndex(kbId);
             if (index == null || !index.available()) {
+                degraded = true;
                 continue;
             }
             try {
@@ -84,7 +96,9 @@ public class LocalKnowledgeIndexService {
                         .limit(Math.max(1, limit))
                         .scoreThreshold(threshold)
                         .build();
-                List<Document> results = index.knowledge().retrieve(queryText, config).block();
+                List<Document> results = index.knowledge()
+                        .retrieve(queryText, config)
+                        .block(Duration.ofSeconds(Math.max(1, llmConfig.getRagRetrievalTimeout())));
                 if (results == null) {
                     continue;
                 }
@@ -96,15 +110,22 @@ public class LocalKnowledgeIndexService {
                     chunks.add(new ScoredChunk(content, result.getScore() == null ? 0.0 : result.getScore()));
                 }
             } catch (RuntimeException e) {
+                degraded = true;
+                timedOut = timedOut || isTimeout(e);
                 log.warn("Local knowledge retrieval failed for KB {}: {}", kbId, e.getMessage());
             }
         }
 
-        return chunks.stream()
+        List<String> sortedChunks = chunks.stream()
                 .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(Math.max(1, limit))
                 .map(ScoredChunk::content)
                 .toList();
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+        int returnedChars = sortedChunks.stream().mapToInt(String::length).sum();
+        log.info("Knowledge vector retrieval completed: kbCount={}, chunks={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
+                searchedKbCount, sortedChunks.size(), degraded, timedOut, elapsedMillis, returnedChars);
+        return new KnowledgeSearchResult(sortedChunks, degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
     }
 
     public void rebuildAsync(Long kbId) {
@@ -183,37 +204,38 @@ public class LocalKnowledgeIndexService {
     private KnowledgeIndex rebuildIndex(Long kbId, long version) {
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId);
         SimpleKnowledge knowledge = createKnowledge();
-        int indexedChunks = 0;
-        int totalChunks = 0;
+        int indexedUnits = 0;
+        int totalUnits = 0;
 
         for (KnowledgeDocument doc : docs) {
             if (doc.getContent() == null || doc.getContent().isBlank()) {
                 continue;
             }
-            List<String> chunks = chunkText(doc.getContent());
-            totalChunks += chunks.size();
-            for (int i = 0; i < chunks.size(); i++) {
-                Document document = toDocument(kbId, doc, i, chunks.get(i));
+            List<KnowledgeUnit> units = knowledgeUnitParserService.parse(doc);
+            totalUnits += units.size();
+            for (int i = 0; i < units.size(); i++) {
+                KnowledgeUnit unit = units.get(i);
+                Document document = toDocument(unit, i);
                 try {
                     knowledge.addDocuments(List.of(document)).block();
-                    indexedChunks++;
+                    indexedUnits++;
                 } catch (RuntimeException e) {
-                    log.warn("Skipped embedding chunk {} of document {} in KB {}: {}", i, doc.getId(), kbId, e.getMessage());
+                    log.warn("Skipped embedding unit {} of document {} in KB {}: {}", i, doc.getId(), kbId, e.getMessage());
                 }
             }
         }
 
-        KnowledgeIndex index = new KnowledgeIndex(knowledge, indexedChunks);
+        KnowledgeIndex index = new KnowledgeIndex(knowledge, indexedUnits);
         if (versionOf(kbId) != version) {
             log.info("Discarded stale knowledge index for KB {}", kbId);
             return index;
         }
         if (index.available()) {
             indexes.put(kbId, index);
-            log.info("Rebuilt knowledge index for KB {} with {}/{} chunk(s)", kbId, indexedChunks, totalChunks);
+            log.info("Rebuilt knowledge index for KB {} with {}/{} unit(s)", kbId, indexedUnits, totalUnits);
         } else {
             indexes.remove(kbId);
-            log.warn("Knowledge index for KB {} has no usable chunks; text search fallback will be used", kbId);
+            log.warn("Knowledge index for KB {} has no usable units; text search fallback will be used", kbId);
         }
         return index;
     }
@@ -245,33 +267,35 @@ public class LocalKnowledgeIndexService {
                 .build();
     }
 
-    private Document toDocument(Long kbId, KnowledgeDocument doc, int chunkIndex, String chunk) {
+    private Document toDocument(KnowledgeUnit unit, int unitIndex) {
         DocumentMetadata metadata = DocumentMetadata.builder()
-                .content(TextBlock.builder().text(chunk).build())
-                .docId(String.valueOf(doc.getId()))
-                .chunkId(String.valueOf(chunkIndex))
-                .addPayload("kbId", kbId)
-                .addPayload("documentId", doc.getId())
-                .addPayload("fileName", doc.getFileName())
+                .content(TextBlock.builder().text(formatUnitForRetrieval(unit)).build())
+                .docId(String.valueOf(unit.documentId()))
+                .chunkId(String.valueOf(unitIndex))
+                .addPayload("kbId", unit.knowledgeBaseId())
+                .addPayload("documentId", unit.documentId())
+                .addPayload("fileName", unit.fileName())
+                .addPayload("fileType", unit.fileType())
+                .addPayload("unitType", unit.unitType())
+                .addPayload("sourceLocation", unit.sourceLocation())
                 .build();
         Document document = new Document(metadata);
-        document.setVectorName("kb-" + kbId);
+        document.setVectorName("kb-" + unit.knowledgeBaseId());
         return document;
     }
 
-    private List<String> chunkText(String content) {
-        String normalized = content.replace("\r\n", "\n").trim();
-        List<String> chunks = new ArrayList<>();
-        int start = 0;
-        while (start < normalized.length()) {
-            int end = Math.min(normalized.length(), start + CHUNK_SIZE);
-            chunks.add(normalized.substring(start, end));
-            if (end == normalized.length()) {
-                break;
-            }
-            start = Math.max(end - CHUNK_OVERLAP, start + 1);
+    private String formatUnitForRetrieval(KnowledgeUnit unit) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[source: ").append(unit.fileName());
+        if (unit.sourceLocation() != null && !unit.sourceLocation().isBlank()) {
+            sb.append(" @ ").append(unit.sourceLocation());
         }
-        return chunks;
+        sb.append("]\n");
+        if (unit.title() != null && !unit.title().isBlank()) {
+            sb.append(unit.title()).append("\n");
+        }
+        sb.append(unit.content());
+        return sb.toString();
     }
 
     private String resolveEmbeddingBaseUrl() {
@@ -286,6 +310,30 @@ public class LocalKnowledgeIndexService {
 
     private int resolveEmbeddingDimension() {
         return Math.max(1, llmConfig.getEmbeddingDimension());
+    }
+
+    private boolean isTimeout(Throwable e) {
+        Throwable current = e;
+        while (current != null) {
+            if (current instanceof TimeoutException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase().contains("timeout")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    public record KnowledgeSearchResult(
+            List<String> chunks,
+            boolean degraded,
+            boolean timedOut,
+            int searchedKbCount,
+            long elapsedMillis,
+            int returnedChars) {
     }
 
     private record KnowledgeIndex(SimpleKnowledge knowledge, int indexedChunks) {

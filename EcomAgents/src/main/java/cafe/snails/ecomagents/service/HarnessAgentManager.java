@@ -85,7 +85,7 @@ public class HarnessAgentManager {
                 .workspace(workspacePath)
                 .toolkit(toolkit)
                 .hooks(List.of(hooks))
-                .maxIters(20)
+                .maxIters(6)
                 .build();
 
         log.debug("HarnessAgent created for agent {} (user {})", agentId, userId);

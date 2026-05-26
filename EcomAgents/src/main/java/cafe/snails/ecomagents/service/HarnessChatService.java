@@ -260,6 +260,23 @@ public class HarnessChatService {
     private String buildErrorDiagnostic(Exception e, String friendly) {
         String raw = e.getMessage();
         String type = e.getClass().getSimpleName();
-        return "friendly=" + friendly + "; type=" + type + "; raw=" + (raw != null ? raw : "");
+        return "stage=" + classifyTimeoutStage(e) + "; friendly=" + friendly + "; type=" + type + "; raw=" + (raw != null ? raw : "");
+    }
+
+    private String classifyTimeoutStage(Exception e) {
+        String message = e.getMessage();
+        if (message == null) {
+            return "unknown";
+        }
+        if (message.contains("Knowledge retrieval") || message.contains("retrieve_knowledge")) {
+            return "rag_timeout";
+        }
+        if (message.contains("tool") || message.contains("Tool")) {
+            return "tool_timeout";
+        }
+        if (message.contains("timeout") || message.contains("Timeout")) {
+            return "model_timeout";
+        }
+        return "unknown";
     }
 }

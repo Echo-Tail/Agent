@@ -9,6 +9,8 @@ import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.KnowledgeAuditLogRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
+import cafe.snails.ecomagents.service.rag.KnowledgeUnitParserService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,12 +49,15 @@ class KnowledgeBaseServiceTest {
 
     private KnowledgeBaseService service;
     private KnowledgeBase sampleKb;
+    private KnowledgeUnitParserService knowledgeUnitParserService;
 
     @BeforeEach
     void setUp() {
         lenient().when(llmConfig.getRagSearchLimit()).thenReturn(5);
         lenient().when(llmConfig.getRagSimilarityThreshold()).thenReturn(0.15);
-        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, localKnowledgeIndexService, llmConfig);
+        lenient().when(llmConfig.getRagMaxContextChars()).thenReturn(4000);
+        knowledgeUnitParserService = new KnowledgeUnitParserService(new ObjectMapper());
+        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, localKnowledgeIndexService, llmConfig, knowledgeUnitParserService);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();
@@ -195,7 +200,8 @@ class KnowledgeBaseServiceTest {
                 .id(1L).knowledgeBaseId(1L).fileName("policy.md")
                 .content("退换货政策内容").charCount(100)
                 .uploadedAt(LocalDateTime.now()).uploadedBy(1L).build();
-        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "退换货", 5, 0.15)).thenReturn(List.of());
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "退换货", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), false, false, 1, 12, 0));
         when(docRepository.searchByKeywordAndKbIds("退换货", List.of(1L))).thenReturn(List.of(doc));
         String context = service.buildKnowledgeContext(List.of(1L), "退换货");
         assertTrue(context.contains("policy.md"));
@@ -204,13 +210,119 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_withVectorChunks_shouldPreferVectorSearch() {
-        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "shipping", 5, 0.15))
-                .thenReturn(List.of("shipping policy chunk"));
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "shipping", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of("shipping policy chunk"), false, false, 1, 8, 21));
 
         String context = service.buildKnowledgeContext(List.of(1L), "shipping");
 
         assertTrue(context.contains("shipping policy chunk"));
+        assertTrue(context.contains("Knowledge retrieval status: vector_search"));
         verify(docRepository, never()).searchByKeywordAndKbIds(any(), any());
+    }
+
+    @Test
+    void buildKnowledgeContext_vectorTimeout_shouldFallbackToTextSearch() {
+        KnowledgeDocument doc = KnowledgeDocument.builder()
+                .id(1L).knowledgeBaseId(1L).fileName("policy.md")
+                .content("shipping policy fallback").charCount(100)
+                .uploadedAt(LocalDateTime.now()).uploadedBy(1L).build();
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "shipping", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), true, true, 1, 8000, 0));
+        when(docRepository.searchByKeywordAndKbIds("shipping", List.of(1L))).thenReturn(List.of(doc));
+
+        String context = service.buildKnowledgeContext(List.of(1L), "shipping");
+
+        assertTrue(context.contains("Knowledge retrieval status: text_search_fallback_after_vector_timeout"));
+        assertTrue(context.contains("shipping policy fallback"));
+    }
+
+    @Test
+    void buildKnowledgeContext_textFallback_shouldSnippetAroundMatchedChineseTerm() {
+        String prefix = "无关开头".repeat(300);
+        KnowledgeDocument doc = KnowledgeDocument.builder()
+                .id(1L).knowledgeBaseId(1L).fileName("products.json")
+                .content(prefix + "目标产品支持无线充电并包含磁吸支架。" + "无关结尾".repeat(100))
+                .charCount(3000)
+                .uploadedAt(LocalDateTime.now()).uploadedBy(1L).build();
+        String query = "请根据知识库说明目标产品是否支持无线充电和磁吸支架";
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), query, 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), true, false, 1, 750, 0));
+        when(docRepository.searchByKeywordAndKbIds(query, List.of(1L))).thenReturn(List.of());
+        when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of(doc));
+
+        String context = service.buildKnowledgeContext(List.of(1L), query);
+
+        assertTrue(context.contains("products.json"));
+        assertTrue(context.contains("支持无线充电"));
+        assertTrue(context.contains("磁吸支架"));
+        assertFalse(context.contains(prefix));
+    }
+
+    @Test
+    void buildKnowledgeContext_jsonFallback_shouldReturnCompleteMatchedObject() {
+        String json = """
+                [
+                  {
+                    "sku": "A-100",
+                    "name": "普通支架",
+                    "features": ["铝合金"]
+                  },
+                  {
+                    "sku": "B-200",
+                    "name": "磁吸无线充电支架",
+                    "features": ["无线充电", "磁吸支架", "折叠收纳"],
+                    "description": "适合车载和桌面使用"
+                  }
+                ]
+                """;
+        KnowledgeDocument doc = KnowledgeDocument.builder()
+                .id(1L)
+                .knowledgeBaseId(1L)
+                .fileName("products.json")
+                .fileType("json")
+                .content(json)
+                .charCount(json.length())
+                .uploadedAt(LocalDateTime.now())
+                .uploadedBy(1L)
+                .build();
+        String query = "B-200 是否支持无线充电和磁吸支架";
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), query, 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), true, false, 1, 750, 0));
+        when(docRepository.searchByKeywordAndKbIds(query, List.of(1L))).thenReturn(List.of());
+        when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of(doc));
+
+        String context = service.buildKnowledgeContext(List.of(1L), query);
+
+        assertTrue(context.contains("products.json @ $[1]"));
+        assertTrue(context.contains("\"sku\" : \"B-200\""));
+        assertTrue(context.contains("\"无线充电\""));
+        assertTrue(context.contains("\"磁吸支架\""));
+        assertFalse(context.contains("\"sku\" : \"A-100\""));
+    }
+
+    @Test
+    void buildKnowledgeContext_vectorTimeoutWithoutTextMatch_shouldReturnTimeoutStatus() {
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "missing", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), true, true, 1, 8000, 0));
+        when(docRepository.searchByKeywordAndKbIds("missing", List.of(1L))).thenReturn(List.of());
+        when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of());
+
+        String context = service.buildKnowledgeContext(List.of(1L), "missing");
+
+        assertTrue(context.contains("Knowledge retrieval status: vector_timeout_no_fallback"));
+    }
+
+    @Test
+    void buildKnowledgeContext_shouldRespectConfiguredContextBudget() {
+        when(llmConfig.getRagMaxContextChars()).thenReturn(600);
+        String longChunk = "x".repeat(2000);
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "shipping", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(longChunk, longChunk), false, false, 1, 8, 4000));
+
+        String context = service.buildKnowledgeContext(List.of(1L), "shipping");
+
+        assertTrue(context.length() <= 600);
+        assertTrue(context.contains("[knowledge context truncated]"));
     }
 
     @Test
@@ -221,7 +333,8 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_noResults_shouldReturnEmpty() {
-        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "nonexistent", 5, 0.15)).thenReturn(List.of());
+        when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "nonexistent", 5, 0.15))
+                .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(), false, false, 1, 3, 0));
         when(docRepository.searchByKeywordAndKbIds("nonexistent", List.of(1L))).thenReturn(List.of());
         when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of());
         assertEquals("", service.buildKnowledgeContext(List.of(1L), "nonexistent"));

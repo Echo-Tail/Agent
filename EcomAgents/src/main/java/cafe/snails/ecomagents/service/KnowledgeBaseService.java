@@ -10,6 +10,8 @@ import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.KnowledgeAuditLogRepository;
 import cafe.snails.ecomagents.repository.KnowledgeBaseRepository;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
+import cafe.snails.ecomagents.service.rag.KnowledgeUnit;
+import cafe.snails.ecomagents.service.rag.KnowledgeUnitParserService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -29,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 知识库业务逻辑，包括知识库 CRUD、文档管理、全文搜索、RAG 上下文构建和审计日志。
@@ -38,6 +41,7 @@ import java.util.Set;
 public class KnowledgeBaseService {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseService.class);
+    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_-]{3,}");
 
     private final KnowledgeBaseRepository kbRepository;
     private final KnowledgeDocumentRepository docRepository;
@@ -46,6 +50,7 @@ public class KnowledgeBaseService {
     private final WorkspaceInitService workspaceInitService;
     private final LocalKnowledgeIndexService localKnowledgeIndexService;
     private final LlmConfig llmConfig;
+    private final KnowledgeUnitParserService knowledgeUnitParserService;
 
     // ========== Knowledge Base CRUD ==========
 
@@ -195,32 +200,108 @@ public class KnowledgeBaseService {
     public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
-        List<String> chunks = localKnowledgeIndexService.searchSimilar(
+        long startedAt = System.nanoTime();
+        LocalKnowledgeIndexService.KnowledgeSearchResult vectorResult = localKnowledgeIndexService.searchSimilarDetailed(
                 kbIds,
                 userQuery,
                 llmConfig.getRagSearchLimit(),
                 llmConfig.getRagSimilarityThreshold()
         );
+        List<String> chunks = vectorResult == null ? List.of() : vectorResult.chunks();
         if (chunks != null && !chunks.isEmpty()) {
-            StringBuilder context = new StringBuilder("\n\n以下是与用户问题相关的知识库内容:\n\n");
+            StringBuilder context = new StringBuilder("\n\nKnowledge retrieval status: ")
+                    .append(vectorResult.degraded() ? "degraded_vector_search" : "vector_search")
+                    .append(vectorResult.timedOut() ? " (timeout fallback available)" : "")
+                    .append("\n\nUse the knowledge context below to answer. Do not call web_search or local file tools unless the user explicitly asks for realtime, external, or workspace file information.\n\n");
             for (int i = 0; i < chunks.size(); i++) {
                 context.append("--- chunk ").append(i + 1).append(" ---\n")
-                        .append(truncate(chunks.get(i), 1200))
+                        .append(truncate(chunks.get(i), 3000))
                         .append("\n\n");
             }
-            return context.toString();
+            String limited = limitContext(context.toString());
+            log.info("Knowledge context built from vector search: kbCount={}, chunks={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
+                    kbIds.size(), chunks.size(), vectorResult.degraded(), vectorResult.timedOut(),
+                    elapsedMillis(startedAt), limited.length());
+            return limited;
         }
 
-        List<KnowledgeDocument> docs = findRelevantDocuments(kbIds, userQuery);
-        if (docs.isEmpty()) return "";
-
-        StringBuilder context = new StringBuilder("\n\n以下是与用户问题相关的知识库内容:\n\n");
-        for (int i = 0; i < Math.min(docs.size(), llmConfig.getRagSearchLimit()); i++) {
-            KnowledgeDocument doc = docs.get(i);
-            context.append("--- ").append(doc.getFileName()).append(" ---\n")
-                    .append(truncate(doc.getContent(), 1200)).append("\n\n");
+        List<KnowledgeUnit> units = findRelevantUnits(kbIds, userQuery);
+        if (units.isEmpty()) {
+            log.info("Knowledge context empty: kbCount={}, degraded={}, timedOut={}, elapsedMs={}",
+                    kbIds.size(), vectorResult != null && vectorResult.degraded(),
+                    vectorResult != null && vectorResult.timedOut(), elapsedMillis(startedAt));
+            if (vectorResult != null && vectorResult.timedOut()) {
+                return "Knowledge retrieval status: vector_timeout_no_fallback\n\nNo relevant knowledge context is available.";
+            }
+            return "";
         }
-        return context.toString();
+
+        String status = vectorResult != null && vectorResult.timedOut()
+                ? "text_search_fallback_after_vector_timeout"
+                : "text_search_fallback";
+        StringBuilder context = new StringBuilder("\n\nKnowledge retrieval status: ")
+                .append(status)
+                .append("\n\nUse the knowledge context below to answer. Do not call web_search or local file tools unless the user explicitly asks for realtime, external, or workspace file information.\n\n");
+        for (int i = 0; i < Math.min(units.size(), llmConfig.getRagSearchLimit()); i++) {
+            KnowledgeUnit unit = units.get(i);
+            context.append("--- ").append(unit.fileName());
+            if (unit.sourceLocation() != null && !unit.sourceLocation().isBlank()) {
+                context.append(" @ ").append(unit.sourceLocation());
+            }
+            context.append(" ---\n")
+                    .append(buildRelevantSnippet(unit, userQuery, 1800)).append("\n\n");
+        }
+        String limited = limitContext(context.toString());
+        log.info("Knowledge context built from text fallback: kbCount={}, units={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
+                kbIds.size(), units.size(), vectorResult != null && vectorResult.degraded(),
+                vectorResult != null && vectorResult.timedOut(), elapsedMillis(startedAt), limited.length());
+        return limited;
+    }
+
+    private List<KnowledgeUnit> findRelevantUnits(List<Long> kbIds, String userQuery) {
+        String keyword = userQuery == null ? "" : userQuery.trim();
+        List<KnowledgeDocument> docs = List.of();
+        if (!keyword.isBlank()) {
+            docs = docRepository.searchByKeywordAndKbIds(keyword, kbIds);
+        }
+        if (docs == null || docs.isEmpty()) {
+            docs = docRepository.findByKnowledgeBaseIdIn(kbIds);
+        }
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> terms = extractSearchTerms(keyword);
+        Set<String> identifiers = extractIdentifierTerms(keyword);
+        List<KnowledgeUnit> parsedUnits = docs.stream()
+                .flatMap(doc -> knowledgeUnitParserService.parse(doc).stream())
+                .toList();
+        List<ScoredUnit> scoredUnits = parsedUnits.stream()
+                .map(unit -> new ScoredUnit(unit, scoreUnit(unit, terms, identifiers)))
+                .filter(scored -> scored.score() > 0 || terms.isEmpty())
+                .sorted(Comparator.comparingInt(ScoredUnit::score).reversed())
+                .toList();
+        if (scoredUnits.isEmpty()) {
+            return List.of();
+        }
+        int topScore = scoredUnits.get(0).score();
+        int minScore = topScore > 0 ? Math.max(1, (int) Math.ceil(topScore * 0.75)) : 0;
+        List<ScoredUnit> selected = scoredUnits.stream()
+                .filter(scored -> scored.score() >= minScore)
+                .limit(Math.max(1, llmConfig.getRagSearchLimit()))
+                .toList();
+        log.info("Knowledge unit retrieval candidates: docs={}, parsedUnits={}, matchedUnits={}, selectedUnits={}, topScore={}, minScore={}, identifiers={}",
+                docs.size(), parsedUnits.size(), scoredUnits.size(), selected.size(), topScore, minScore, identifiers);
+        for (int i = 0; i < Math.min(selected.size(), 5); i++) {
+            ScoredUnit scored = selected.get(i);
+            KnowledgeUnit unit = scored.unit();
+            log.info("Knowledge unit selected: rank={}, score={}, docId={}, fileName={}, fileType={}, unitType={}, source={}, title={}, chars={}",
+                    i + 1, scored.score(), unit.documentId(), unit.fileName(), unit.fileType(), unit.unitType(),
+                    unit.sourceLocation(), safeLog(unit.title()), unit.content() == null ? 0 : unit.content().length());
+        }
+        return selected.stream()
+                .map(ScoredUnit::unit)
+                .toList();
     }
 
     private List<KnowledgeDocument> findRelevantDocuments(List<Long> kbIds, String userQuery) {
@@ -258,15 +339,60 @@ public class KnowledgeBaseService {
         }
         String normalized = query.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
         for (String term : normalized.split("\\s+")) {
-            if (term.length() >= 2) {
+            if (term.length() >= 2 && term.length() <= 80) {
                 terms.add(term);
             }
+            addCjkNgrams(terms, term);
         }
         String compact = normalized.replace(" ", "");
-        if (compact.length() >= 2 && compact.length() <= 40) {
+        if (compact.length() >= 2 && compact.length() <= 80) {
             terms.add(compact);
         }
+        addCjkNgrams(terms, compact);
         return terms;
+    }
+
+    private Set<String> extractIdentifierTerms(String query) {
+        Set<String> identifiers = new LinkedHashSet<>();
+        if (query == null || query.isBlank()) {
+            return identifiers;
+        }
+        var matcher = IDENTIFIER_PATTERN.matcher(query);
+        while (matcher.find()) {
+            identifiers.add(matcher.group().toLowerCase(Locale.ROOT));
+        }
+        return identifiers;
+    }
+
+    private void addCjkNgrams(Set<String> terms, String text) {
+        if (text == null || text.length() < 2 || !containsCjk(text)) {
+            return;
+        }
+        int maxTerms = 80;
+        for (int n = 4; n >= 2; n--) {
+            if (text.length() < n) {
+                continue;
+            }
+            for (int i = 0; i <= text.length() - n && terms.size() < maxTerms; i++) {
+                String gram = text.substring(i, i + n);
+                if (containsCjk(gram)) {
+                    terms.add(gram);
+                }
+            }
+        }
+    }
+
+    private boolean containsCjk(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            Character.UnicodeScript script = Character.UnicodeScript.of(text.charAt(i));
+            if (script == Character.UnicodeScript.HAN
+                    || script == Character.UnicodeScript.HIRAGANA
+                    || script == Character.UnicodeScript.KATAKANA
+                    || script == Character.UnicodeScript.HANGUL) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private int scoreDocument(KnowledgeDocument doc, Set<String> terms) {
@@ -283,11 +409,110 @@ public class KnowledgeBaseService {
         return score;
     }
 
+    private int scoreUnit(KnowledgeUnit unit, Set<String> terms, Set<String> identifiers) {
+        if (unit == null || unit.content() == null || unit.content().isBlank()) {
+            return 0;
+        }
+        String haystack = String.join("\n",
+                unit.title() == null ? "" : unit.title(),
+                unit.fileName() == null ? "" : unit.fileName(),
+                unit.sourceLocation() == null ? "" : unit.sourceLocation(),
+                unit.content()
+        ).toLowerCase(Locale.ROOT);
+        boolean identifierQuery = identifiers != null && !identifiers.isEmpty();
+        boolean identifierMatched = false;
+        if (identifierQuery) {
+            for (String identifier : identifiers) {
+                if (haystack.contains(identifier)) {
+                    identifierMatched = true;
+                    break;
+                }
+            }
+            if (!identifierMatched) {
+                return 0;
+            }
+        }
+        int score = 0;
+        if (identifierMatched) {
+            score += 1000;
+        }
+        for (String term : terms) {
+            String normalized = term.toLowerCase(Locale.ROOT);
+            if (haystack.contains(normalized)) {
+                score += normalized.length();
+            }
+        }
+        if (unit.unitType() != null && unit.unitType().startsWith("json") && score > 0) {
+            score += 10;
+        }
+        return score;
+    }
+
+    private String safeLog(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() > 80 ? value.substring(0, 80) + "..." : value;
+    }
+
     private String truncate(String text, int maxLength) {
         if (text == null) {
             return "";
         }
         return text.length() > maxLength ? text.substring(0, maxLength) + "..." : text;
+    }
+
+    private String buildRelevantSnippet(KnowledgeDocument doc, String userQuery, int maxLength) {
+        String content = doc.getContent();
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        Set<String> terms = extractSearchTerms(userQuery);
+        String lower = content.toLowerCase(Locale.ROOT);
+        String bestTerm = terms.stream()
+                .filter(term -> lower.contains(term.toLowerCase(Locale.ROOT)))
+                .max(Comparator.comparingInt(String::length))
+                .orElse("");
+        if (bestTerm.isBlank()) {
+            return truncate(content, maxLength);
+        }
+        int hit = lower.indexOf(bestTerm.toLowerCase(Locale.ROOT));
+        int start = Math.max(0, hit - 300);
+        int end = Math.min(content.length(), start + maxLength);
+        if (end - start < maxLength && end == content.length()) {
+            start = Math.max(0, end - maxLength);
+        }
+        String prefix = start > 0 ? "..." : "";
+        String suffix = end < content.length() ? "..." : "";
+        return prefix + content.substring(start, end) + suffix;
+    }
+
+    private String buildRelevantSnippet(KnowledgeUnit unit, String userQuery, int maxLength) {
+        if (unit == null || unit.content() == null || unit.content().isBlank()) {
+            return "";
+        }
+        if (unit.unitType() != null && unit.unitType().startsWith("json") && unit.content().length() <= maxLength * 3) {
+            return unit.content();
+        }
+        KnowledgeDocument synthetic = KnowledgeDocument.builder()
+                .content(unit.content())
+                .build();
+        return buildRelevantSnippet(synthetic, userQuery, maxLength);
+    }
+
+    private record ScoredUnit(KnowledgeUnit unit, int score) {
+    }
+
+    private String limitContext(String context) {
+        int maxChars = Math.max(500, llmConfig.getRagMaxContextChars());
+        if (context == null || context.length() <= maxChars) {
+            return context;
+        }
+        return context.substring(0, Math.max(0, maxChars - 32)) + "\n\n[knowledge context truncated]\n";
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
 
     // ========== Audit Log ==========
