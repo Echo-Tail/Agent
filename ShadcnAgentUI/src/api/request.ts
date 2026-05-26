@@ -65,9 +65,9 @@ http.interceptors.response.use(
     startTimes.delete(response.config)
     const duration = start ? Math.round(performance.now() - start) : 0
     logApiCall(response.config.method, response.config.url, response.status, duration)
-    const body = response.data as ApiResponse
+    const body = response.data as ApiResponse<unknown>
     if (body.code === 200) {
-      return body.data
+      return body.data as any
     }
     const msg = body.message || i18n.global.t('error.operationFailed')
     toast.error(msg)

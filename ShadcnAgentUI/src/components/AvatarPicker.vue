@@ -19,11 +19,9 @@ const previewUrl = ref<string | null>(null)
 const uploading = ref(false)
 const uploadedUrl = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
-const canvasRef = ref<HTMLCanvasElement | null>(null)
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
-const hasValue = computed(() => !!modelValue.value)
 const isIconMode = computed(() => mode.value === 'icon')
 
 function switchMode(m: Mode) {

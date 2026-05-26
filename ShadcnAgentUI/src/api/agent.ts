@@ -1,5 +1,5 @@
 import http from './request'
-import type { Agent, AgentCreateRequest, AgentUpdateRequest } from '@/types/agent'
+import type { Agent, AgentCreateRequest, AgentUpdateRequest, ToolAvailability } from '@/types/agent'
 
 export function listAgentsApi(scope?: string) {
   const params = scope ? { scope } : undefined
@@ -28,4 +28,8 @@ export function deleteAgentApi(id: number) {
 
 export function getSystemAgentApi() {
   return http.get<any, Agent>('/agents/system')
+}
+
+export function getWebSearchAvailabilityApi(id: number) {
+  return http.get<any, ToolAvailability>(`/agents/${id}/web-search-availability`)
 }

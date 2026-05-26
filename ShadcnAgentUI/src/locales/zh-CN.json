@@ -366,7 +366,9 @@
     "errorPartial": "部分内容",
     "attachFile": "上传附件",
     "uploading": "上传中...",
-    "fileTooLarge": "文件大小不能超过 {size}"
+    "fileTooLarge": "文件大小不能超过 {size}",
+    "webSearchReady": "网页搜索可用",
+    "webSearchUnavailable": "网页搜索不可用"
   },
   "log": {
     "level": {

@@ -17,6 +17,16 @@ export interface Agent {
   ragMode: 'GENERIC' | 'AGENTIC'
 }
 
+export interface ToolAvailability {
+  toolId: string
+  agentId: number
+  boundToAgent: boolean
+  globallyEnabled: boolean
+  configured: boolean
+  available: boolean
+  message: string
+}
+
 export interface AgentSummary {
   total: number
   active: number

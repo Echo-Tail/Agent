@@ -102,21 +102,32 @@ public class HarnessAgentManager {
         Set<String> agentToolIds = agent.getTools() != null
                 ? new HashSet<>(agent.getTools())
                 : Set.of();
-        if (agentToolIds.isEmpty()) return;
 
-        List<ToolConfig> agentToolConfigs = toolConfigRepository.findAllById(agentToolIds);
+        List<ToolConfig> agentToolConfigs;
+        if (Boolean.TRUE.equals(agent.getIsSystem())) {
+            agentToolConfigs = toolConfigRepository.findAll().stream()
+                    .filter(tool -> Boolean.TRUE.equals(tool.getEnabled()))
+                    .toList();
+            log.debug("System agent {} will register all enabled tools: {}", agent.getId(),
+                    agentToolConfigs.stream().map(ToolConfig::getId).toList());
+        } else {
+            if (agentToolIds.isEmpty()) return;
+            agentToolConfigs = toolConfigRepository.findAllById(agentToolIds);
+        }
         if (agentToolConfigs == null || agentToolConfigs.isEmpty()) return;
 
-        Set<String> configuredToolIds = new HashSet<>();
-        for (ToolConfig tool : agentToolConfigs) {
-            configuredToolIds.add(tool.getId());
-            if (!Boolean.TRUE.equals(tool.getEnabled())) {
-                log.warn("Agent {} skipped disabled tool at runtime: toolId={}", agent.getId(), tool.getId());
+        if (!Boolean.TRUE.equals(agent.getIsSystem())) {
+            Set<String> configuredToolIds = new HashSet<>();
+            for (ToolConfig tool : agentToolConfigs) {
+                configuredToolIds.add(tool.getId());
+                if (!Boolean.TRUE.equals(tool.getEnabled())) {
+                    log.warn("Agent {} skipped disabled tool at runtime: toolId={}", agent.getId(), tool.getId());
+                }
             }
-        }
-        for (String toolId : agentToolIds) {
-            if (!configuredToolIds.contains(toolId)) {
-                log.warn("Agent {} skipped unknown tool at runtime: toolId={}", agent.getId(), toolId);
+            for (String toolId : agentToolIds) {
+                if (!configuredToolIds.contains(toolId)) {
+                    log.warn("Agent {} skipped unknown tool at runtime: toolId={}", agent.getId(), toolId);
+                }
             }
         }
 

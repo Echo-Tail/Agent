@@ -1,9 +1,11 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.dto.ToolAvailability;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.AgentService;
+import cafe.snails.ecomagents.service.AgentToolAvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +20,7 @@ import java.util.List;
 public class AgentController {
 
     private final AgentService agentService;
+    private final AgentToolAvailabilityService toolAvailabilityService;
 
     /**
      * 获取 Agent 列表。
@@ -42,6 +45,11 @@ public class AgentController {
     @GetMapping("/agents/{id}")
     public ApiResponse<Agent> getAgent(@PathVariable("id") Long id) {
         return agentService.getAgent(id);
+    }
+
+    @GetMapping("/agents/{id}/web-search-availability")
+    public ApiResponse<ToolAvailability> getWebSearchAvailability(@PathVariable("id") Long id) {
+        return ApiResponse.success(toolAvailabilityService.getWebSearchAvailability(id));
     }
 
     /** 创建 Agent */
