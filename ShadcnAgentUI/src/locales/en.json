@@ -107,7 +107,8 @@
     "to": "to",
     "success": "Success",
     "fail": "Fail",
-    "hour": ":{hour}"
+    "hour": ":{hour}",
+    "error": "Error Description"
   },
   "tooltip": {
     "lightMode": "Switch to light mode",

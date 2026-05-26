@@ -295,7 +295,7 @@ onMounted(fetchTickets)
             <div class="space-y-2">
               <label for="ticket-affected-menu" class="text-sm font-medium">{{ $t('myTickets.form.affectedMenu') }} <span class="text-destructive">*</span></label>
               <Select v-model="form.affectedMenu">
-                <SelectTrigger id="ticket-affected-menu" name="ticket-affected-menu">
+                <SelectTrigger id="ticket-affected-menu" name="ticket-affected-menu" class="w-[120px]">
                   <SelectValue :placeholder="$t('myTickets.form.affectedMenuPlaceholder')" />
                 </SelectTrigger>
                 <SelectContent>

@@ -107,7 +107,8 @@
     "to": "至",
     "success": "成功",
     "fail": "失败",
-    "hour": "{hour}时"
+    "hour": "{hour}时",
+    "error": "错误描述"
   },
   "tooltip": {
     "lightMode": "切换亮色模式",
