@@ -269,6 +269,12 @@ function newSession() {
   }
 }
 
+function toolBadgeVariant(status: string) {
+  if (status === 'timeout') return 'destructive'
+  if (status === 'degraded' || status === 'empty') return 'outline'
+  return 'secondary'
+}
+
 const availableAgents = computed(() => {
   const currentId = selectedAgent.value?.id
   const all = [...agentStore.myAgents, ...agentStore.plazaAgents]
@@ -374,9 +380,15 @@ const availableAgents = computed(() => {
             </Avatar>
             <div class="bg-muted rounded-lg p-3 text-sm max-w-[80%]">
               <!-- Tool calls -->
-              <div v-if="chatStore.currentToolCalls.length" class="flex flex-wrap gap-2 mb-2">
-                <Badge v-for="tool in chatStore.currentToolCalls" :key="tool" variant="secondary" class="text-xs">
-                  <Wrench class="mr-1 h-3 w-3" /> {{ tool }}
+              <div v-if="chatStore.currentToolStatuses.length" class="flex flex-wrap gap-2 mb-2">
+                <Badge
+                  v-for="tool in chatStore.currentToolStatuses"
+                  :key="tool.tool"
+                  :variant="toolBadgeVariant(tool.status)"
+                  class="text-xs"
+                  :title="tool.message"
+                >
+                  <Wrench class="mr-1 h-3 w-3" /> {{ tool.message }}
                 </Badge>
               </div>
               <MarkdownRenderer :content="chatStore.streamingText" />

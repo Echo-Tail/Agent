@@ -70,7 +70,7 @@ public class HarnessHooks implements Hook {
 
             } else if (event instanceof PostActingEvent e) {
                 String toolName = e.getToolUse() != null ? e.getToolUse().getName() : "unknown";
-                String summary = extractResultSummary(e);
+                String summary = extractResultSummary(toolName, e);
                 sendSse(Map.of(
                         "type", SseEvent.TYPE_TOOL_RESULT,
                         "tool", toolName,
@@ -142,15 +142,34 @@ public class HarnessHooks implements Hook {
         return msg;
     }
 
-    private String extractResultSummary(PostActingEvent e) {
+    private String extractResultSummary(String toolName, PostActingEvent e) {
         if (e.getToolResult() == null || e.getToolResult().getOutput() == null) {
             return "";
         }
-        return e.getToolResult().getOutput().stream()
+        String result = e.getToolResult().getOutput().stream()
                 .filter(block -> block instanceof TextBlock)
                 .map(block -> ((TextBlock) block).getText())
                 .findFirst()
                 .orElse("")
                 .trim();
+        if ("retrieve_knowledge".equals(toolName)) {
+            return summarizeKnowledgeRetrieval(result);
+        }
+        return result;
+    }
+
+    private String summarizeKnowledgeRetrieval(String result) {
+        if (result == null || result.isBlank()) {
+            return "knowledge_empty";
+        }
+        String firstLine = result.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .findFirst()
+                .orElse("");
+        if (firstLine.startsWith("Knowledge retrieval status:")) {
+            return firstLine.substring("Knowledge retrieval status:".length()).trim();
+        }
+        return "knowledge_done";
     }
 }

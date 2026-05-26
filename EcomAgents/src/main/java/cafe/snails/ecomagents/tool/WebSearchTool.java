@@ -20,6 +20,9 @@ public class WebSearchTool {
     private static final Logger log = LoggerFactory.getLogger(WebSearchTool.class);
     private static final String TAVILY_API_URL = "https://api.tavily.com/search";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final int DEFAULT_RESULTS = 3;
+    private static final int MAX_RESULTS = 5;
+    private static final int MAX_RESULT_CONTENT_CHARS = 700;
 
     private final String apiKey;
     private final WebClient webClient;
@@ -34,12 +37,12 @@ public class WebSearchTool {
     @Tool(name = "web_search", description = "搜索互联网获取最新信息。查询天气、新闻、价格、汇率、实时数据或知识范围外的信息时必须使用此工具，不要使用本地 shell")
     public String search(
             @ToolParam(name = "query", description = "搜索关键词，应该简洁明确") String query,
-            @ToolParam(name = "max_results", description = "返回结果数量，默认 5，最大 10") Integer maxResults) {
+            @ToolParam(name = "max_results", description = "返回结果数量，默认 3，最大 5") Integer maxResults) {
         if (query == null || query.isBlank()) {
             return "搜索失败：搜索关键词不能为空";
         }
 
-        int count = (maxResults != null && maxResults > 0) ? Math.min(maxResults, 10) : 5;
+        int count = (maxResults != null && maxResults > 0) ? Math.min(maxResults, MAX_RESULTS) : DEFAULT_RESULTS;
 
         try {
             Map<String, Object> requestBody = Map.of(
@@ -82,7 +85,7 @@ public class WebSearchTool {
             // 摘要
             Object answer = response.get("answer");
             if (answer != null && !answer.toString().isBlank()) {
-                sb.append("**摘要**: ").append(answer).append("\n\n");
+                sb.append("**摘要**: ").append(truncate(answer.toString(), 900)).append("\n\n");
             }
 
             // 结果列表
@@ -98,7 +101,9 @@ public class WebSearchTool {
                         .append(result.getOrDefault("title", "无标题"))
                         .append("\n\n");
                 sb.append("- **链接**: ").append(result.getOrDefault("url", "")).append("\n");
-                sb.append("- **内容**: ").append(result.getOrDefault("content", "无内容")).append("\n\n");
+                sb.append("- **内容**: ")
+                        .append(truncate(String.valueOf(result.getOrDefault("content", "无内容")), MAX_RESULT_CONTENT_CHARS))
+                        .append("\n\n");
             }
 
             return sb.toString();
@@ -107,5 +112,12 @@ public class WebSearchTool {
             log.error("Failed to format Tavily results: {}", e.getMessage());
             return "搜索完成，但解析结果时出错：" + e.getMessage();
         }
+    }
+
+    private String truncate(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxChars - 3)) + "...";
     }
 }

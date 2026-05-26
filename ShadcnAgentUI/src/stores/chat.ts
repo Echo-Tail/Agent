@@ -18,6 +18,13 @@ import i18n from '@/locales'
 const { t } = i18n.global
 
 export type ChatMode = 'direct' | 'agent'
+export type ToolStatus = 'running' | 'done' | 'degraded' | 'timeout' | 'empty'
+
+export interface CurrentToolStatus {
+  tool: string
+  status: ToolStatus
+  message: string
+}
 
 export const useChatStore = defineStore('chat', () => {
   const chatMode = ref<ChatMode>('direct')
@@ -30,6 +37,7 @@ export const useChatStore = defineStore('chat', () => {
   const streamingText = ref('')
   const abortController = ref<AbortController | null>(null)
   const currentToolCalls = ref<string[]>([])
+  const currentToolStatuses = ref<CurrentToolStatus[]>([])
   const inputText = ref('')
   const activeAgentId = ref<number | null>(null)
 
@@ -139,6 +147,7 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming.value = true
     streamingText.value = ''
     currentToolCalls.value = []
+    currentToolStatuses.value = []
     abortController.value = new AbortController()
 
     try {
@@ -159,6 +168,7 @@ export const useChatStore = defineStore('chat', () => {
             streamingText.value = ''
             isStreaming.value = false
             currentToolCalls.value = []
+            currentToolStatuses.value = []
             abortController.value = null
             fetchSessions()
           },
@@ -167,6 +177,7 @@ export const useChatStore = defineStore('chat', () => {
             streamingText.value = ''
             isStreaming.value = false
             currentToolCalls.value = []
+            currentToolStatuses.value = []
             abortController.value = null
             messages.value.push({
               role: 'assistant',
@@ -178,9 +189,12 @@ export const useChatStore = defineStore('chat', () => {
           },
           onToolCall: (tool) => {
             currentToolCalls.value = [...currentToolCalls.value, tool]
+            upsertToolStatus(tool, 'running', describeToolCall(tool))
           },
-          onToolResult: (tool) => {
+          onToolResult: (tool, summary) => {
             currentToolCalls.value = currentToolCalls.value.filter(t => t !== tool)
+            const result = describeToolResult(tool, summary)
+            upsertToolStatus(tool, result.status, result.message)
           },
         },
         abortController.value.signal,
@@ -190,6 +204,8 @@ export const useChatStore = defineStore('chat', () => {
       if (isStreaming.value) {
         isStreaming.value = false
         abortController.value = null
+        currentToolCalls.value = []
+        currentToolStatuses.value = []
         messages.value.push({
           role: 'assistant',
           content: e instanceof Error ? e.message : t('error.sendMessageFailed'),
@@ -212,6 +228,8 @@ export const useChatStore = defineStore('chat', () => {
     streamingText.value = ''
     isStreaming.value = false
     abortController.value = null
+    currentToolCalls.value = []
+    currentToolStatuses.value = []
   }
 
   async function retryMessage(errorMsg: SessionMessage) {
@@ -236,9 +254,46 @@ export const useChatStore = defineStore('chat', () => {
     inputText.value = ''
   }
 
+  function upsertToolStatus(tool: string, status: ToolStatus, message: string) {
+    const next = currentToolStatuses.value.filter(item => item.tool !== tool)
+    next.push({ tool, status, message })
+    currentToolStatuses.value = next
+  }
+
+  function describeToolCall(tool: string) {
+    if (tool === 'retrieve_knowledge') return '知识库检索中'
+    return `${tool} 运行中`
+  }
+
+  function describeToolResult(tool: string, summary?: string): { status: ToolStatus; message: string } {
+    if (tool !== 'retrieve_knowledge') {
+      return { status: 'done', message: `${tool} 已完成` }
+    }
+    const normalized = summary ?? ''
+    if (normalized.includes('text_search_fallback_after_vector_timeout')) {
+      return { status: 'degraded', message: '知识库向量检索超时，已使用文本检索' }
+    }
+    if (normalized.includes('degraded_vector_search')) {
+      return { status: 'degraded', message: '知识库向量检索部分降级' }
+    }
+    if (normalized.includes('text_search_fallback')) {
+      return { status: 'degraded', message: '知识库已使用文本检索' }
+    }
+    if (normalized.includes('knowledge_empty')) {
+      return { status: 'empty', message: '知识库未检索到相关内容' }
+    }
+    if (normalized.includes('vector_timeout_no_fallback')) {
+      return { status: 'timeout', message: '知识库检索超时，未找到可用降级结果' }
+    }
+    if (normalized.toLowerCase().includes('timeout')) {
+      return { status: 'timeout', message: '知识库检索超时' }
+    }
+    return { status: 'done', message: '知识库检索完成' }
+  }
+
   return {
     chatMode, sessions, activeSession, messages, sessionLoading,
-    folders, isStreaming, streamingText, currentToolCalls, inputText, activeAgentId,
+    folders, isStreaming, streamingText, currentToolCalls, currentToolStatuses, inputText, activeAgentId,
     folderTree,
     switchToDirect, switchToAgent,
     fetchSessions, loadSession, createSession, updateSession, removeSession,

@@ -236,6 +236,68 @@ describe('useChatStore', () => {
     })
   })
 
+  describe('streaming tool statuses', () => {
+    it('tracks knowledge retrieval fallback status from SSE summary', async () => {
+      const { streamChat, listSessionsApi } = await import('@/api/session')
+      vi.mocked(listSessionsApi).mockResolvedValue([] as any)
+      vi.mocked(streamChat).mockImplementation(async (_agentId, _sessionId, _content, callbacks: any) => {
+        callbacks.onToolCall('retrieve_knowledge')
+        callbacks.onToolResult('retrieve_knowledge', 'text_search_fallback_after_vector_timeout')
+        expect(store.currentToolStatuses[0]).toMatchObject({
+          tool: 'retrieve_knowledge',
+          status: 'degraded',
+          message: '知识库向量检索超时，已使用文本检索',
+        })
+        callbacks.onDone('done')
+      })
+
+      const store = useChatStore()
+      store.activeSession = { id: 1, agentId: 1, title: 'Chat', folderId: null, tags: [], messages: [], createdAt: '', updatedAt: '' }
+
+      await store.sendMessage(1, 'shipping')
+
+      expect(store.currentToolStatuses).toEqual([])
+      expect(store.messages.at(-1)?.content).toBe('done')
+    })
+
+    it('tracks empty knowledge retrieval result before stream completion', async () => {
+      const { streamChat } = await import('@/api/session')
+      vi.mocked(streamChat).mockImplementation(async (_agentId, _sessionId, _content, callbacks: any) => {
+        callbacks.onToolCall('retrieve_knowledge')
+        expect(store.currentToolStatuses[0].status).toBe('running')
+        callbacks.onToolResult('retrieve_knowledge', 'knowledge_empty')
+        expect(store.currentToolStatuses[0]).toMatchObject({
+          status: 'empty',
+          message: '知识库未检索到相关内容',
+        })
+      })
+
+      const store = useChatStore()
+      store.activeSession = { id: 1, agentId: 1, title: 'Chat', folderId: null, tags: [], messages: [], createdAt: '', updatedAt: '' }
+
+      await store.sendMessage(1, 'missing')
+
+      expect(store.isStreaming).toBe(true)
+    })
+
+    it('tracks knowledge retrieval timeout without fallback result', async () => {
+      const { streamChat } = await import('@/api/session')
+      vi.mocked(streamChat).mockImplementation(async (_agentId, _sessionId, _content, callbacks: any) => {
+        callbacks.onToolCall('retrieve_knowledge')
+        callbacks.onToolResult('retrieve_knowledge', 'vector_timeout_no_fallback')
+        expect(store.currentToolStatuses[0]).toMatchObject({
+          status: 'timeout',
+          message: '知识库检索超时，未找到可用降级结果',
+        })
+      })
+
+      const store = useChatStore()
+      store.activeSession = { id: 1, agentId: 1, title: 'Chat', folderId: null, tags: [], messages: [], createdAt: '', updatedAt: '' }
+
+      await store.sendMessage(1, 'missing')
+    })
+  })
+
   describe('mode switching', () => {
     it('switchToDirect clears agent ID and session', () => {
       const store = useChatStore()

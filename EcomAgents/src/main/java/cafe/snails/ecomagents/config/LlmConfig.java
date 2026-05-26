@@ -34,6 +34,8 @@ public class LlmConfig {
     private int embeddingDimension = 1024;
     private int ragSearchLimit = 5;
     private double ragSimilarityThreshold = 0.15;
+    private long ragRetrievalTimeout = 8;
+    private int ragMaxContextChars = 8000;
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
@@ -65,4 +67,8 @@ public class LlmConfig {
     public void setRagSearchLimit(int ragSearchLimit) { this.ragSearchLimit = ragSearchLimit; }
     public double getRagSimilarityThreshold() { return ragSimilarityThreshold; }
     public void setRagSimilarityThreshold(double ragSimilarityThreshold) { this.ragSimilarityThreshold = ragSimilarityThreshold; }
+    public long getRagRetrievalTimeout() { return ragRetrievalTimeout; }
+    public void setRagRetrievalTimeout(long ragRetrievalTimeout) { this.ragRetrievalTimeout = ragRetrievalTimeout; }
+    public int getRagMaxContextChars() { return ragMaxContextChars; }
+    public void setRagMaxContextChars(int ragMaxContextChars) { this.ragMaxContextChars = ragMaxContextChars; }
 }
