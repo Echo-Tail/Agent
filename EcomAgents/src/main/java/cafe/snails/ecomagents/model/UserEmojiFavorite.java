@@ -1,0 +1,36 @@
+package cafe.snails.ecomagents.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.LocalDateTime;
+
+/**
+ * 用户收藏的表情包，映射 user_emoji_favorites 表。
+ * <p>用户可以将内置表情包加入收藏以便快速使用（延后实现）。</p>
+ */
+@Entity
+@Table(name = "user_emoji_favorites",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "emoji_id"}))
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class UserEmojiFavorite {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Column(name = "emoji_id", nullable = false)
+    private Long emojiId;
+
+    @Column(nullable = false)
+    private LocalDateTime addedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (addedAt == null) addedAt = LocalDateTime.now();
+    }
+}

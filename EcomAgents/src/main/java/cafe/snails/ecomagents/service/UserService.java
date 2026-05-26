@@ -88,6 +88,17 @@ public class UserService {
         return ApiResponse.success(dtos);
     }
 
+    /** 按用户名搜索用户 */
+    public ApiResponse<List<UserDTO>> searchUsers(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return listUsers();
+        }
+        List<UserDTO> dtos = userRepository.findByUsernameContainingIgnoreCase(keyword.trim()).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ApiResponse.success(dtos);
+    }
+
     /** 根据 ID 获取单个用户 */
     public ApiResponse<UserDTO> getUser(Long id) {
         return userRepository.findById(id)

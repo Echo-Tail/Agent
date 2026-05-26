@@ -13,6 +13,8 @@
     "modelManage": "Model Management",
     "toolManage": "Tool Management",
     "skillManage": "Skill Management",
+    "groupChat": "Group Chat",
+    "messages": "Messages",
     "settings": "Settings"
   },
   "pageTitle": {
@@ -20,6 +22,10 @@
     "chat": "Chat",
     "agentPlaza": "Agent Plaza",
     "createAgent": "Create Agent",
+    "groupChat": "Group Chat",
+    "groupChatDetail": "Group Chat",
+    "messages": "Messages",
+    "messagesDetail": "Private Chat",
     "history": "History",
     "myTickets": "My Tickets",
     "knowledgeBase": "Knowledge Base",

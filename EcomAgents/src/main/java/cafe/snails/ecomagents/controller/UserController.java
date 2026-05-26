@@ -26,6 +26,12 @@ public class UserController {
         return userService.listUsers();
     }
 
+    /** 按用户名搜索用户 */
+    @GetMapping("/users/search")
+    public ApiResponse<List<UserDTO>> searchUsers(@RequestParam("keyword") String keyword) {
+        return userService.searchUsers(keyword);
+    }
+
     /** 获取单个用户 */
     @GetMapping("/users/{id}")
     public ApiResponse<UserDTO> getUser(@PathVariable("id") Long id) {

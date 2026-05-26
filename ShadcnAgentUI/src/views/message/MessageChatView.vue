@@ -1,0 +1,120 @@
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { getConversationApi, sendPrivateMessageApi } from '@/api/group'
+import type { ChatPrivateMessage } from '@/types/group'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'sonner'
+import { Send, ArrowLeft, Loader2 } from 'lucide-vue-next'
+
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+const otherUserId = computed(() => Number(route.params.userId))
+const messages = ref<ChatPrivateMessage[]>([])
+const loading = ref(true)
+const inputText = ref('')
+const sending = ref(false)
+
+const otherUsername = ref(`用户 #${otherUserId.value}`)
+
+onMounted(async () => {
+  try {
+    const msgs = await getConversationApi(otherUserId.value)
+    messages.value = msgs.reverse()
+  } catch {
+    toast.error('加载失败')
+  } finally {
+    loading.value = false
+  }
+})
+
+async function sendMessage() {
+  const content = inputText.value.trim()
+  if (!content || sending.value) return
+  sending.value = true
+  inputText.value = ''
+  try {
+    const msg = await sendPrivateMessageApi(otherUserId.value, content)
+    messages.value.push(msg)
+  } catch {
+    toast.error('发送失败')
+  } finally {
+    sending.value = false
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+  }
+}
+
+function goBack() {
+  router.push({ name: 'Messages' })
+}
+</script>
+
+<template>
+  <div class="flex flex-col h-[calc(100vh-8rem)] -m-6">
+    <!-- Header -->
+    <div class="flex items-center gap-3 px-4 h-14 border-b shrink-0">
+      <Button variant="ghost" size="icon" class="h-8 w-8" @click="goBack">
+        <ArrowLeft class="h-4 w-4" />
+      </Button>
+      <Avatar class="h-8 w-8">
+        <AvatarFallback>{{ otherUsername.charAt(0).toUpperCase() }}</AvatarFallback>
+      </Avatar>
+      <span class="font-semibold">{{ otherUsername }}</span>
+    </div>
+
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <div v-if="loading" class="flex justify-center py-10">
+        <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+      <div v-else-if="messages.length === 0" class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+        <p>发送第一条消息开始聊天</p>
+      </div>
+      <template v-else>
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
+          :class="['flex gap-3', msg.senderId === auth.currentUser?.id ? 'justify-end' : '']"
+        >
+          <div
+            :class="[
+              'max-w-[70%] rounded-lg p-3 text-sm',
+              msg.senderId === auth.currentUser?.id
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted'
+            ]"
+          >
+            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+            <p class="text-xs opacity-70 mt-1">{{ new Date(msg.createdAt).toLocaleTimeString() }}</p>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Input -->
+    <div class="px-4 py-3 border-t">
+      <div class="flex gap-2">
+        <Textarea
+          v-model="inputText"
+          :placeholder="'发送消息...'"
+          class="min-h-[44px] max-h-[120px] resize-none"
+          @keydown="handleKeydown"
+        />
+        <Button size="icon" class="h-[44px] w-[44px] shrink-0" :disabled="!inputText.trim() || sending" @click="sendMessage">
+          <Send class="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  </div>
+</template>

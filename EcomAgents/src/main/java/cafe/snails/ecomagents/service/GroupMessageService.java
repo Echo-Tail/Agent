@@ -1,0 +1,152 @@
+package cafe.snails.ecomagents.service;
+
+import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.model.*;
+import cafe.snails.ecomagents.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 群消息业务逻辑。
+ */
+@Service
+@RequiredArgsConstructor
+public class GroupMessageService {
+
+    private static final Logger log = LoggerFactory.getLogger(GroupMessageService.class);
+    private static final Pattern AGENT_MENTION_PATTERN = Pattern.compile("@\\[([^]]+)]\\(agent:(\\d+)\\)");
+
+    private final GroupMessageRepository groupMessageRepository;
+    private final GroupMemberRepository groupMemberRepository;
+    private final GroupAgentRepository groupAgentRepository;
+    private final GroupSseService groupSseService;
+    private final GroupService groupService;
+    private final HarnessChatService harnessChatService;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 发送群消息。
+     * <p>如果是用户发送的消息且包含 @Agent，则异步触发 Agent 回复。</p>
+     */
+    @Transactional
+    public ApiResponse<GroupMessage> sendMessage(Long groupId, Long senderId, String content) {
+        if (!groupService.isMember(groupId, senderId)) {
+            return ApiResponse.error(403, "你不是群成员，无法发送消息");
+        }
+        if (content == null || content.isBlank()) {
+            return ApiResponse.error(400, "消息内容不能为空");
+        }
+
+        GroupMessage msg = GroupMessage.builder()
+                .groupId(groupId)
+                .senderId(senderId)
+                .senderType(SenderType.USER)
+                .content(content.trim())
+                .build();
+        msg = groupMessageRepository.save(msg);
+
+        // 通过 SSE 广播新消息
+        GroupMessage finalMsg = msg;
+        groupSseService.broadcast(groupId, "message", Map.of(
+                "id", finalMsg.getId(),
+                "senderId", finalMsg.getSenderId(),
+                "senderType", "USER",
+                "content", finalMsg.getContent(),
+                "createdAt", finalMsg.getCreatedAt().toString()
+        ));
+
+        // 检测 @Agent 并异步触发回复
+        triggerAgentReplies(groupId, msg);
+
+        return ApiResponse.success("消息已发送", msg);
+    }
+
+    /**
+     * 解析消息中的 @[名称](agent:id) 并异步触发 Agent 回复。
+     */
+    private void triggerAgentReplies(Long groupId, GroupMessage userMsg) {
+        Matcher matcher = AGENT_MENTION_PATTERN.matcher(userMsg.getContent());
+        while (matcher.find()) {
+            Long agentId = Long.parseLong(matcher.group(2));
+            String agentName = matcher.group(1);
+
+            // 检查 Agent 是否在群中
+            if (!groupAgentRepository.existsByGroupIdAndAgentId(groupId, agentId)) {
+                log.warn("Agent {} not in group {}, skip", agentId, groupId);
+                continue;
+            }
+
+            // 异步触发 Agent 回复
+            Long finalAgentId = agentId;
+            Long msgId = userMsg.getId();
+            new Thread(() -> {
+                try {
+                    triggerAgentReply(groupId, finalAgentId, agentName, userMsg.getContent(), msgId);
+                } catch (Exception e) {
+                    log.error("Agent reply failed: agentId={}, groupId={}", finalAgentId, groupId, e);
+                }
+            }).start();
+        }
+    }
+
+    /**
+     * 执行 Agent 推理并通过群 SSE 广播回复。
+     */
+    private void triggerAgentReply(Long groupId, Long agentId, String agentName, String userContent, Long replyToMsgId) {
+        try {
+            // 提取去除 @ 标记后的用户真实消息
+            String cleanContent = AGENT_MENTION_PATTERN.matcher(userContent).replaceAll("").trim();
+
+            // 调用 HarnessChatService 获取 Agent 回复
+            // 使用 existingSessionId=null 让 HarnessChatService 自动创建临时会话
+            String replyText = harnessChatService.simpleChat(agentId, cleanContent);
+
+            if (replyText == null || replyText.isBlank()) return;
+
+            // 保存 Agent 回复消息
+            GroupMessage reply = GroupMessage.builder()
+                    .groupId(groupId)
+                    .senderId(agentId)
+                    .senderType(SenderType.AGENT)
+                    .content(replyText)
+                    .replyToMsgId(replyToMsgId)
+                    .build();
+            reply = groupMessageRepository.save(reply);
+
+            // 通过 SSE 广播 Agent 回复
+            GroupMessage finalReply = reply;
+            groupSseService.broadcast(groupId, "message", Map.of(
+                    "id", finalReply.getId(),
+                    "senderId", finalReply.getSenderId(),
+                    "senderType", "AGENT",
+                    "agentName", agentName,
+                    "content", finalReply.getContent(),
+                    "replyToMsgId", finalReply.getReplyToMsgId(),
+                    "createdAt", finalReply.getCreatedAt().toString()
+            ));
+        } catch (Exception e) {
+            log.error("Agent reply error: agentId={}", agentId, e);
+            groupSseService.broadcast(groupId, "error", Map.of(
+                    "message", "Agent 「" + agentName + "」回复失败: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * 获取群消息历史（分页，按时间倒序）。
+     */
+    public ApiResponse<java.util.List<GroupMessage>> listMessages(Long groupId, int page, int size) {
+        var messages = groupMessageRepository.findByGroupIdOrderByCreatedAtDesc(groupId, PageRequest.of(page, size));
+        return ApiResponse.success(messages);
+    }
+}

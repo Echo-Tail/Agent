@@ -29,6 +29,8 @@ import {
   ChevronLeft,
   Bot,
   Languages,
+  MessageCircle,
+  Mail,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -53,6 +55,10 @@ const pageTitleKey: Record<string, string> = {
   AgentPlaza: 'pageTitle.agentPlaza',
   AgentCreate: 'pageTitle.createAgent',
   Chat: 'pageTitle.chat',
+  GroupChat: 'pageTitle.groupChat',
+  GroupChatDetail: 'pageTitle.groupChatDetail',
+  Messages: 'pageTitle.messages',
+  MessagesDetail: 'pageTitle.messagesDetail',
   History: 'pageTitle.history',
   MyTickets: 'pageTitle.myTickets',
   UserManage: 'pageTitle.userManage',
@@ -83,6 +89,8 @@ const navGroups: NavItem[][] = [
   // 核心 AI 交互
   [
     { translationKey: 'nav.chat', key: 'Chat', icon: MessageSquare },
+    { translationKey: 'nav.groupChat', key: 'GroupChat', icon: MessageCircle },
+    { translationKey: 'nav.messages', key: 'Messages', icon: Mail },
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
   ],

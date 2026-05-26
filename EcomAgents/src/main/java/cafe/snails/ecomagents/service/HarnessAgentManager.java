@@ -48,6 +48,49 @@ public class HarnessAgentManager {
     /**
      * 为指定 Agent 创建带 per-request Hook 的 HarnessAgent 实例。
      */
+    /**
+     * 创建简单的 HarnessAgent（无 SSE 流式，用于群聊 @Agent 回复）。
+     */
+    public HarnessAgent createSimpleAgent(Long agentId) {
+        Agent agent = agentRepository.findById(agentId)
+                .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + agentId));
+
+        if (agent.getModelId() != null) {
+            AiModel model = aiModelRepository.findById(agent.getModelId()).orElse(null);
+            if (model == null) {
+                throw new IllegalArgumentException("Agent 绑定的模型不存在");
+            }
+            if (!model.getEnabled()) {
+                throw new IllegalArgumentException("Agent 绑定的模型已被禁用");
+            }
+        }
+
+        var chatModel = OpenAIChatModel.builder()
+                .apiKey(resolveApiKey(agent))
+                .modelName(resolveModelName(agent))
+                .baseUrl(resolveBaseUrl(agent))
+                .endpointPath(resolveEndpointPath(agent))
+                .stream(false)
+                .build();
+
+        Toolkit toolkit = new Toolkit();
+        registerAgentTools(toolkit, agent);
+
+        java.nio.file.Path workspacePath = java.nio.file.Path.of(
+                workspaceConfig.getRoot(), "agent-" + agentId);
+
+        HarnessAgent harnessAgent = HarnessAgent.builder()
+                .name(agent.getName() != null ? agent.getName() : "agent-" + agentId)
+                .model(chatModel)
+                .workspace(workspacePath)
+                .toolkit(toolkit)
+                .maxIters(4) // 群聊回复少迭代，快速响应
+                .build();
+
+        log.debug("Simple HarnessAgent created for agent {}", agentId);
+        return harnessAgent;
+    }
+
     public HarnessAgent createChatAgent(Long agentId, SseEmitter emitter, Long userId,
                                         AtomicBoolean completed, StringBuilder partialContent) {
         Agent agent = agentRepository.findById(agentId)

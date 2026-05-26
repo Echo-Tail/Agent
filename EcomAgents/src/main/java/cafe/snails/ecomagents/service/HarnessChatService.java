@@ -56,6 +56,31 @@ public class HarnessChatService {
     private final AgentToolAvailabilityService toolAvailabilityService;
 
     /**
+     * 同步聊天，返回 Agent 回复文本（无 SSE 流式，用于群聊 @Agent 回复）。
+     */
+    public String simpleChat(Long agentId, String content) {
+        try {
+            HarnessAgent agent = harnessAgentManager.createSimpleAgent(agentId);
+            String actualContent = enrichWithKnowledge(agentId, content);
+            Msg userMsg = Msg.builder()
+                    .role(MsgRole.USER)
+                    .content(List.of(TextBlock.builder().text(actualContent).build()))
+                    .build();
+            Msg reply = agent.call(userMsg, RuntimeContext.builder()
+                            .sessionId("simple-" + System.currentTimeMillis())
+                            .userId("0")
+                            .build())
+                    .block(Duration.ofSeconds(llmConfig.getStreamTimeout()));
+            if (reply != null && reply.getTextContent() != null && !reply.getTextContent().isBlank()) {
+                return reply.getTextContent();
+            }
+        } catch (Exception e) {
+            log.error("simpleChat failed: agentId={}, error={}", agentId, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * 启动 HarnessAgent 流式对话。
      */
     public SseEmitter streamChat(Long agentId, String sessionId, String content, Long userId) {

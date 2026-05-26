@@ -8,3 +8,7 @@ export function listUsersApi() {
 export function toggleUserStatusApi(id: number) {
   return http.post<any, UserDTO>(`/users/${id}/toggle`)
 }
+
+export function searchUsersApi(keyword: string) {
+  return http.get<any, UserDTO[]>('/users/search', { params: { keyword } })
+}

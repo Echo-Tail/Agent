@@ -13,6 +13,8 @@
     "modelManage": "模型管理",
     "toolManage": "工具管理",
     "skillManage": "技能管理",
+    "groupChat": "群聊",
+    "messages": "消息",
     "settings": "设置"
   },
   "pageTitle": {
@@ -20,6 +22,10 @@
     "chat": "对话",
     "agentPlaza": "Agent 广场",
     "createAgent": "创建 Agent",
+    "groupChat": "群聊",
+    "groupChatDetail": "群聊天",
+    "messages": "消息",
+    "messagesDetail": "私聊",
     "history": "历史会话",
     "myTickets": "我的工单",
     "knowledgeBase": "知识库",
