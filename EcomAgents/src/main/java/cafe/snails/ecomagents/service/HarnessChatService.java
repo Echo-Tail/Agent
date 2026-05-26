@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.dto.ToolAvailability;
 import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.harness.SseEvent;
 import cafe.snails.ecomagents.model.Agent;
@@ -52,6 +53,7 @@ public class HarnessChatService {
     private final TokenUsageService tokenUsageService;
     private final TokenCounter tokenCounter;
     private final LlmConfig llmConfig;
+    private final AgentToolAvailabilityService toolAvailabilityService;
 
     /**
      * 启动 HarnessAgent 流式对话。
@@ -64,6 +66,17 @@ public class HarnessChatService {
         llmTaskExecutor.execute(() -> {
             HarnessAgent agent = null;
             try {
+                ToolAvailability webSearch = toolAvailabilityService.getWebSearchAvailability(agentId);
+                if (requiresRealtimeLookup(content) && !webSearch.isAvailable()) {
+                    String message = webSearch.getMessage();
+                    sessionMapper.saveMessage(sessionId, "user", content);
+                    sessionMapper.saveMessage(sessionId, "assistant", message);
+                    sessionMapper.syncSessionMetadata(agentId, sessionId, userId, content, message);
+                    recordTokenUsage(resolveModel(agentId), agentId, userId, content, null, false, message);
+                    sendSseAndError(emitter, completed, message);
+                    return;
+                }
+
                 agent = harnessAgentManager.createChatAgent(agentId, emitter, userId, completed, partialContent);
 
                 sendSse(emitter, completed, Map.of("type", SseEvent.TYPE_REASONING, "content", "开始思考..."));
@@ -75,6 +88,13 @@ public class HarnessChatService {
 
                 // Build user message, inject knowledge context for GENERIC RAG mode
                 String actualContent = enrichWithKnowledge(agentId, content);
+                if (requiresRealtimeLookup(content) && webSearch.isAvailable()) {
+                    actualContent = addRealtimeToolInstruction(actualContent);
+                    sendSse(emitter, completed, Map.of(
+                            "type", SseEvent.TYPE_REASONING,
+                            "content", "检测到实时信息查询，将使用 web_search 工具。"
+                    ));
+                }
 
                 Msg userMsg = Msg.builder()
                         .role(MsgRole.USER)
@@ -118,7 +138,7 @@ public class HarnessChatService {
                 if (!completed.get()) {
                     String friendly = HarnessHooks.friendlyError(e.getMessage());
                     AiModel model = resolveModel(agentId);
-                    recordTokenUsage(model, agentId, userId, content, partial, false, friendly);
+                    recordTokenUsage(model, agentId, userId, content, partial, false, buildErrorDiagnostic(e, friendly));
                     sendSseAndError(emitter, completed, friendly);
                 }
             }
@@ -146,6 +166,31 @@ public class HarnessChatService {
 
         log.debug("Injected knowledge context for agent {} (GENERIC mode, {} KBs)", agentId, kbIds.size());
         return content + "\n\n" + knowledgeContext;
+    }
+
+    private boolean requiresRealtimeLookup(String content) {
+        if (content == null || content.isBlank()) return false;
+        String text = content.toLowerCase();
+        return text.contains("天气")
+                || text.contains("气温")
+                || text.contains("下雨")
+                || text.contains("新闻")
+                || text.contains("最新")
+                || text.contains("实时")
+                || text.contains("股价")
+                || text.contains("汇率")
+                || text.contains("weather")
+                || text.contains("temperature")
+                || text.contains("news")
+                || text.contains("latest")
+                || text.contains("price");
+    }
+
+    private String addRealtimeToolInstruction(String content) {
+        return content + "\n\n[系统工具指令]\n"
+                + "这个用户问题需要实时或外部最新信息。必须调用 web_search 工具获取结果后再回答。"
+                + "不要调用 execute、shell、本地命令或本地文件工具来查询互联网、天气、新闻、价格、汇率等实时信息。"
+                + "如果 web_search 返回失败，请直接说明网页搜索失败和失败原因。";
     }
 
     // ===== SSE helpers =====
@@ -210,5 +255,11 @@ public class HarnessChatService {
     private static String truncate(String s, int maxLen) {
         if (s == null) return null;
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    private String buildErrorDiagnostic(Exception e, String friendly) {
+        String raw = e.getMessage();
+        String type = e.getClass().getSimpleName();
+        return "friendly=" + friendly + "; type=" + type + "; raw=" + (raw != null ? raw : "");
     }
 }

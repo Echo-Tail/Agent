@@ -1,0 +1,3 @@
+# Use local SimpleKnowledge for RAG retrieval
+
+EcomAgents will use AgentScope Java `SimpleKnowledge` with Ollama `bge-m3:latest` embeddings and an in-memory vector store as the active RAG retrieval path. `knowledge_documents` remains the authoritative source of knowledge content, while the vector index is a rebuildable runtime index warmed asynchronously on startup and rebuilt per knowledge base after document changes. The previous pgvector implementation is retained for now but removed from the default retrieval flow because it adds setup and operational complexity that is not needed for the first local knowledge workflow.

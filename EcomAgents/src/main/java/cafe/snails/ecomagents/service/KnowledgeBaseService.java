@@ -44,7 +44,7 @@ public class KnowledgeBaseService {
     private final KnowledgeAuditLogRepository auditLogRepository;
     private final AgentRepository agentRepository;
     private final WorkspaceInitService workspaceInitService;
-    private final VectorEmbeddingService vectorEmbeddingService;
+    private final LocalKnowledgeIndexService localKnowledgeIndexService;
     private final LlmConfig llmConfig;
 
     // ========== Knowledge Base CRUD ==========
@@ -92,7 +92,7 @@ public class KnowledgeBaseService {
             workspaceInitService.updateKnowledgeMd(agent.getId(), null);
         }
 
-        vectorEmbeddingService.deleteByKbId(id);
+        localKnowledgeIndexService.evict(id);
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(id);
         docRepository.deleteAll(docs);
         kbRepository.deleteById(id);
@@ -141,8 +141,7 @@ public class KnowledgeBaseService {
 
         KnowledgeDocument saved = docRepository.save(doc);
 
-        // Reindex vector embeddings
-        vectorEmbeddingService.reindexDocument(kbId, saved.getId(), content);
+        localKnowledgeIndexService.rebuildAsync(kbId);
 
         // Sync to agent workspaces
         syncKnowledgeBaseToAgents(kbId);
@@ -165,8 +164,8 @@ public class KnowledgeBaseService {
         }
         KnowledgeDocument doc = docOpt.get();
 
-        vectorEmbeddingService.deleteEmbeddings(docId);
         docRepository.deleteById(docId);
+        localKnowledgeIndexService.rebuildAsync(kbId);
         syncKnowledgeBaseToAgents(kbId);
 
         // Audit log
@@ -196,7 +195,7 @@ public class KnowledgeBaseService {
     public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
-        List<String> chunks = vectorEmbeddingService.searchSimilar(
+        List<String> chunks = localKnowledgeIndexService.searchSimilar(
                 kbIds,
                 userQuery,
                 llmConfig.getRagSearchLimit(),

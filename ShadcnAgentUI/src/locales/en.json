@@ -366,7 +366,9 @@
     "errorPartial": "Partial response",
     "attachFile": "Attach file",
     "uploading": "Uploading...",
-    "fileTooLarge": "File size must not exceed {size}"
+    "fileTooLarge": "File size must not exceed {size}",
+    "webSearchReady": "Web search ready",
+    "webSearchUnavailable": "Web search unavailable"
   },
   "log": {
     "level": {

@@ -43,6 +43,9 @@ public class SessionMapper {
     public String resolveHarnessSessionId(Long dbSessionId, Long agentId, Long userId) {
         if (dbSessionId != null) {
             Session existing = sessionRepository.findById(dbSessionId).orElse(null);
+            if (existing != null && (!userId.equals(existing.getUserId()) || !agentId.equals(existing.getAgentId()))) {
+                throw new IllegalArgumentException("Session not found or not accessible");
+            }
             if (existing != null && existing.getHarnessSessionId() != null) {
                 return existing.getHarnessSessionId();
             }

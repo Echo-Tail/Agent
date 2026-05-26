@@ -4,8 +4,8 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
 import { useAgentStore } from '@/stores/agent'
-import { getAgentApi } from '@/api/agent'
-import type { Agent } from '@/types/agent'
+import { getAgentApi, getWebSearchAvailabilityApi } from '@/api/agent'
+import type { Agent, ToolAvailability } from '@/types/agent'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
@@ -24,6 +24,7 @@ import {
   File as FileIcon,
   Copy,
   Check,
+  AlertCircle,
 } from 'lucide-vue-next'
 import { toast } from 'sonner'
 import { uploadFileApi } from '@/api/file'
@@ -112,6 +113,7 @@ function removeFile(index: number) {
 }
 
 const selectedAgent = ref<Agent | null>(null)
+const webSearchAvailability = ref<ToolAvailability | null>(null)
 
 function parseQueryNumber(value: unknown): number | null {
   const raw = Array.isArray(value) ? value[0] : value
@@ -126,6 +128,22 @@ async function resolveAgent(agentId: number): Promise<Agent | null> {
     return await getAgentApi(agentId)
   } catch {
     return null
+  }
+}
+
+async function loadWebSearchAvailability(agentId: number) {
+  try {
+    webSearchAvailability.value = await getWebSearchAvailabilityApi(agentId)
+  } catch {
+    webSearchAvailability.value = null
+  }
+}
+
+async function setSelectedAgent(agent: Agent | null) {
+  selectedAgent.value = agent
+  webSearchAvailability.value = null
+  if (agent) {
+    await loadWebSearchAvailability(agent.id)
   }
 }
 
@@ -147,7 +165,7 @@ onMounted(async () => {
         await chatStore.loadSession(sessionId)
         const agentId = chatStore.activeSession?.agentId ?? routeAgentId
         if (agentId) {
-          selectedAgent.value = await resolveAgent(agentId)
+          await setSelectedAgent(await resolveAgent(agentId))
           chatStore.switchToAgent(agentId, { preserveSession: true })
         }
       } catch {
@@ -158,7 +176,7 @@ onMounted(async () => {
     }
 
     if (routeAgentId) {
-      selectedAgent.value = await resolveAgent(routeAgentId)
+      await setSelectedAgent(await resolveAgent(routeAgentId))
       if (selectedAgent.value) {
         chatStore.switchToAgent(routeAgentId)
         // Create a session if none exists
@@ -173,7 +191,7 @@ onMounted(async () => {
       try {
         const sysAgent = await agentStore.fetchSystemAgent()
         if (sysAgent) {
-          selectedAgent.value = sysAgent
+          await setSelectedAgent(sysAgent)
           chatStore.switchToAgent(sysAgent.id)
           await chatStore.createSession(sysAgent.id)
         } else {
@@ -239,7 +257,7 @@ async function selectAgent(agentId: number) {
     ?? agentStore.plazaAgents.find(a => a.id === agentId)
     ?? await resolveAgent(agentId)
   if (agent) {
-    selectedAgent.value = agent
+    await setSelectedAgent(agent)
     chatStore.switchToAgent(agentId)
     chatStore.createSession(agentId).catch(() => toast.error(t('error.createSessionFailed')))
   }
@@ -270,12 +288,29 @@ const availableAgents = computed(() => {
       <div class="flex items-center gap-2">
         <span v-if="selectedAgent" class="font-medium">{{ selectedAgent.name }}</span>
         <span v-else class="text-muted-foreground">{{ $t('chat.directChat') }}</span>
+        <Badge
+          v-if="selectedAgent && webSearchAvailability"
+          :variant="webSearchAvailability.available ? 'secondary' : 'outline'"
+          class="text-xs"
+          :title="webSearchAvailability.message"
+        >
+          <Wrench class="mr-1 h-3 w-3" />
+          {{ webSearchAvailability.available ? $t('chat.webSearchReady') : $t('chat.webSearchUnavailable') }}
+        </Badge>
       </div>
       <div class="flex gap-2">
         <Button v-if="selectedAgent" variant="outline" size="sm" @click="newSession">
           <RefreshCw class="mr-1 h-3 w-3" /> {{ $t('chat.newChat') }}
         </Button>
       </div>
+    </div>
+
+    <div
+      v-if="selectedAgent && webSearchAvailability && !webSearchAvailability.available"
+      class="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+    >
+      <AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{{ webSearchAvailability.message }}</span>
     </div>
 
     <!-- Messages -->

@@ -27,9 +27,11 @@ public class LlmConfig {
     private long connectionTimeout = 30;
     /** 模型 API 读取超时时间（秒） */
     private long readTimeout = 55;
+    private String embeddingProvider = "ollama";
     private String embeddingApiUrl;
     private String embeddingApiKey;
-    private String embeddingModel = "text-embedding-3-small";
+    private String embeddingModel = "bge-m3:latest";
+    private int embeddingDimension = 1024;
     private int ragSearchLimit = 5;
     private double ragSimilarityThreshold = 0.15;
 
@@ -49,12 +51,16 @@ public class LlmConfig {
     public void setConnectionTimeout(long connectionTimeout) { this.connectionTimeout = connectionTimeout; }
     public long getReadTimeout() { return readTimeout; }
     public void setReadTimeout(long readTimeout) { this.readTimeout = readTimeout; }
+    public String getEmbeddingProvider() { return embeddingProvider; }
+    public void setEmbeddingProvider(String embeddingProvider) { this.embeddingProvider = embeddingProvider; }
     public String getEmbeddingApiUrl() { return embeddingApiUrl; }
     public void setEmbeddingApiUrl(String embeddingApiUrl) { this.embeddingApiUrl = embeddingApiUrl; }
     public String getEmbeddingApiKey() { return embeddingApiKey; }
     public void setEmbeddingApiKey(String embeddingApiKey) { this.embeddingApiKey = embeddingApiKey; }
     public String getEmbeddingModel() { return embeddingModel; }
     public void setEmbeddingModel(String embeddingModel) { this.embeddingModel = embeddingModel; }
+    public int getEmbeddingDimension() { return embeddingDimension; }
+    public void setEmbeddingDimension(int embeddingDimension) { this.embeddingDimension = embeddingDimension; }
     public int getRagSearchLimit() { return ragSearchLimit; }
     public void setRagSearchLimit(int ragSearchLimit) { this.ragSearchLimit = ragSearchLimit; }
     public double getRagSimilarityThreshold() { return ragSimilarityThreshold; }

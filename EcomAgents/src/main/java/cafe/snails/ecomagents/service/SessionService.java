@@ -4,6 +4,7 @@ import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.SessionSummary;
 import cafe.snails.ecomagents.model.Session;
 import cafe.snails.ecomagents.model.SessionMessage;
+import cafe.snails.ecomagents.repository.SessionFolderRepository;
 import cafe.snails.ecomagents.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 public class SessionService {
 
     private final SessionRepository sessionRepository;
+    private final SessionFolderRepository folderRepository;
 
     /**
      * 查询非空会话列表，可按 folderId 或 agentId 筛选。
@@ -37,7 +39,7 @@ public class SessionService {
         if (folderId != null) {
             sessions = sessionRepository.findNonEmptyByFolderIdAndUserId(folderId, userId);
         } else if (agentId != null) {
-            sessions = sessionRepository.findNonEmptyByAgentId(agentId);
+            sessions = sessionRepository.findNonEmptyByAgentIdAndUserId(agentId, userId);
         } else {
             sessions = sessionRepository.findNonEmptyByUserId(userId);
         }
@@ -57,8 +59,8 @@ public class SessionService {
     }
 
     /** 获取单个会话详情并预加载 messages（避免 SSE 后台线程中的 LazyInitializationException） */
-    public ApiResponse<Session> getSessionWithMessages(Long id) {
-        return sessionRepository.findByIdWithMessages(id)
+    public ApiResponse<Session> getSessionWithMessages(Long id, Long userId) {
+        return sessionRepository.findByIdAndUserIdWithMessages(id, userId)
                 .map(session -> ApiResponse.success(session))
                 .orElse(ApiResponse.error(404, "会话不存在"));
     }
@@ -82,9 +84,13 @@ public class SessionService {
 
     /** 更新会话标题和/或所属文件夹 */
     @Transactional
-    public ApiResponse<Session> updateSession(Long id, String title, Long folderId) {
+    public ApiResponse<Session> updateSession(Long id, String title, Long folderId, Long userId) {
         return sessionRepository.findById(id)
+                .filter(session -> userId.equals(session.getUserId()))
                 .map(session -> {
+                    if (folderId != null && !folderRepository.existsByIdAndUserId(folderId, userId)) {
+                        return ApiResponse.<Session>error(404, "文件夹不存在");
+                    }
                     if (title != null) session.setTitle(title);
                     if (folderId != null) session.setFolderId(folderId);
                     session.setUpdatedAt(LocalDateTime.now());
@@ -96,18 +102,21 @@ public class SessionService {
 
     /** 删除会话 */
     @Transactional
-    public ApiResponse<Void> deleteSession(Long id) {
-        if (sessionRepository.existsById(id)) {
-            sessionRepository.deleteById(id);
-            return ApiResponse.success("会话已删除", null);
-        }
-        return ApiResponse.error(404, "会话不存在");
+    public ApiResponse<Void> deleteSession(Long id, Long userId) {
+        return sessionRepository.findById(id)
+                .filter(session -> userId.equals(session.getUserId()))
+                .map(session -> {
+                    sessionRepository.delete(session);
+                    return ApiResponse.<Void>success("会话已删除", null);
+                })
+                .orElse(ApiResponse.error(404, "会话不存在"));
     }
 
     /** 向指定会话中添加一条消息 */
     @Transactional
-    public ApiResponse<SessionMessage> addMessage(Long sessionId, String role, String content) {
+    public ApiResponse<SessionMessage> addMessage(Long sessionId, String role, String content, Long userId) {
         return sessionRepository.findById(sessionId)
+                .filter(session -> userId.equals(session.getUserId()))
                 .map(session -> {
                     SessionMessage msg = SessionMessage.builder()
                             .role(role)

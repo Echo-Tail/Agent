@@ -115,7 +115,10 @@ public class HarnessHooks implements Hook {
     public static String friendlyError(String msg) {
         if (msg == null) return "模型响应异常，请重试";
         if (msg.contains("EOF") || msg.contains("transport error") || msg.contains("SSE/NDJSON")) {
-            return "模型响应异常，连接中断，请重试";
+            return "模型响应连接中断，请重试";
+        }
+        if (msg.contains("CreateProcess error=2") || msg.contains("Cannot run program \"sh\"")) {
+            return "本地命令工具不可用，请启用网页搜索工具或检查 Windows Shell 配置";
         }
         if (msg.contains("timeout") || msg.contains("Timeout")) {
             return "模型响应超时，请重试";

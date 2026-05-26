@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -42,7 +41,7 @@ public class VectorEmbeddingService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void reindexDocument(Long kbId, Long docId, String content) {
         if (content == null || content.isBlank()) {
             deleteEmbeddings(docId);
@@ -63,6 +62,9 @@ public class VectorEmbeddingService {
             List<Double> embedding = embed(chunk);
             if (embedding.isEmpty()) {
                 continue;
+            }
+            if (!hasExpectedDimension(embedding, docId)) {
+                return;
             }
             try {
                 Query insert = entityManager.createNativeQuery("""
@@ -115,6 +117,9 @@ public class VectorEmbeddingService {
         if (queryEmbedding.isEmpty()) {
             return List.of();
         }
+        if (!hasExpectedDimension(queryEmbedding, null)) {
+            return List.of();
+        }
 
         try {
             Query query = entityManager.createNativeQuery("""
@@ -162,16 +167,16 @@ public class VectorEmbeddingService {
              Statement statement = connection.createStatement()) {
             connection.setAutoCommit(true);
             statement.execute("CREATE EXTENSION IF NOT EXISTS vector");
-            statement.execute("""
+            statement.execute(String.format("""
                     CREATE TABLE IF NOT EXISTS knowledge_embeddings (
                         id BIGSERIAL PRIMARY KEY,
                         document_id BIGINT NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
                         kb_id BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
                         chunk_text TEXT NOT NULL,
-                        embedding VECTOR(1536),
+                        embedding VECTOR(%d),
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
-                    """);
+                    """, embeddingDimension()));
             statement.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_embeddings_kb_id ON knowledge_embeddings(kb_id)");
             try {
                 statement.execute("""
@@ -293,6 +298,24 @@ public class VectorEmbeddingService {
             joiner.add(Double.toString(value));
         }
         return joiner.toString();
+    }
+
+    private int embeddingDimension() {
+        return Math.max(1, llmConfig.getEmbeddingDimension());
+    }
+
+    private boolean hasExpectedDimension(List<Double> embedding, Long docId) {
+        int expected = embeddingDimension();
+        if (embedding.size() == expected) {
+            return true;
+        }
+        if (docId == null) {
+            log.warn("Embedding dimension mismatch during vector search: expected {}, got {}", expected, embedding.size());
+        } else {
+            log.warn("Embedding dimension mismatch for document {}: expected {}, got {}; skipped vector indexing",
+                    docId, expected, embedding.size());
+        }
+        return false;
     }
 
     private boolean isMissingEmbeddingsTable(Throwable e) {

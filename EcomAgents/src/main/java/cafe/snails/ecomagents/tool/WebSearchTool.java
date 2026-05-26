@@ -31,7 +31,7 @@ public class WebSearchTool {
         this.objectMapper = new ObjectMapper();
     }
 
-    @Tool(name = "web_search", description = "搜索互联网获取最新信息。当需要了解实时新闻、最新数据或不在知识范围内的问题时使用此工具")
+    @Tool(name = "web_search", description = "搜索互联网获取最新信息。查询天气、新闻、价格、汇率、实时数据或知识范围外的信息时必须使用此工具，不要使用本地 shell")
     public String search(
             @ToolParam(name = "query", description = "搜索关键词，应该简洁明确") String query,
             @ToolParam(name = "max_results", description = "返回结果数量，默认 5，最大 10") Integer maxResults) {

@@ -27,6 +27,9 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     @Query("SELECT s FROM Session s LEFT JOIN FETCH s.messages WHERE s.id = :id")
     Optional<Session> findByIdWithMessages(@Param("id") Long id);
 
+    @Query("SELECT s FROM Session s LEFT JOIN FETCH s.messages WHERE s.id = :id AND s.userId = :userId")
+    Optional<Session> findByIdAndUserIdWithMessages(@Param("id") Long id, @Param("userId") Long userId);
+
     /** 查找所有非空会话（至少有一条消息），JOIN FETCH 避免 N+1 */
     @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages")
     List<Session> findAllNonEmpty();
@@ -46,6 +49,9 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     /** 按 Agent 查找非空会话 */
     @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.agentId = :agentId")
     List<Session> findNonEmptyByAgentId(@Param("agentId") Long agentId);
+
+    @Query("SELECT DISTINCT s FROM Session s JOIN FETCH s.messages WHERE s.agentId = :agentId AND s.userId = :userId")
+    List<Session> findNonEmptyByAgentIdAndUserId(@Param("agentId") Long agentId, @Param("userId") Long userId);
 
     /** 批量删除所有空会话（无消息的会话） */
     @Modifying
