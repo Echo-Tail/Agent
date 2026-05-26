@@ -123,7 +123,7 @@ async function fetchEnabledModels() {
     models.value = list
       .filter((m) => m.enabled)
       .map((m) => ({
-        label: `${m.name}（${m.provider} · ${m.modelName}）`,
+        label: `${m.name}`,
         value: m.id,
       }))
   } catch {
@@ -280,7 +280,7 @@ async function handleSaveConfig() {
               <div class="space-y-2">
                 <label for="tool-model" class="text-sm font-medium">{{ $t('agent.model') }}</label>
                 <Select v-model="configModelId">
-                  <SelectTrigger id="tool-model" name="tool-model" class="w-[300px]">
+                  <SelectTrigger id="tool-model" name="tool-model" class="w-[180px]">
                     <SelectValue :placeholder="$t('common.select')" />
                   </SelectTrigger>
                   <SelectContent>
