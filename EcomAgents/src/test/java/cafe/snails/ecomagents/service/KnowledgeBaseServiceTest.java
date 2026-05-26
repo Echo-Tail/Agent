@@ -41,7 +41,7 @@ class KnowledgeBaseServiceTest {
     @Mock
     private WorkspaceInitService workspaceInitService;
     @Mock
-    private VectorEmbeddingService vectorEmbeddingService;
+    private LocalKnowledgeIndexService localKnowledgeIndexService;
     @Mock
     private LlmConfig llmConfig;
 
@@ -52,7 +52,7 @@ class KnowledgeBaseServiceTest {
     void setUp() {
         lenient().when(llmConfig.getRagSearchLimit()).thenReturn(5);
         lenient().when(llmConfig.getRagSimilarityThreshold()).thenReturn(0.15);
-        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, vectorEmbeddingService, llmConfig);
+        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, localKnowledgeIndexService, llmConfig);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();
@@ -112,6 +112,7 @@ class KnowledgeBaseServiceTest {
         when(docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(1L)).thenReturn(List.of());
         ApiResponse<Void> result = service.deleteKnowledgeBase(1L);
         assertEquals(200, result.getCode());
+        verify(localKnowledgeIndexService).evict(1L);
         verify(kbRepository).deleteById(1L);
     }
 
@@ -134,7 +135,29 @@ class KnowledgeBaseServiceTest {
         assertDoesNotThrow(() -> agent.getKnowledgeBaseIds().clear());
         verify(agentRepository).save(agent);
         verify(workspaceInitService).updateKnowledgeMd(2L, null);
+        verify(localKnowledgeIndexService).evict(1L);
         verify(kbRepository).deleteById(1L);
+    }
+
+    @Test
+    void deleteDocument_shouldRebuildKnowledgeIndex() {
+        KnowledgeDocument doc = KnowledgeDocument.builder()
+                .id(7L)
+                .knowledgeBaseId(1L)
+                .fileName("policy.md")
+                .content("shipping policy")
+                .charCount(15)
+                .uploadedAt(LocalDateTime.now())
+                .uploadedBy(1L)
+                .build();
+        when(kbRepository.existsById(1L)).thenReturn(true);
+        when(docRepository.findById(7L)).thenReturn(Optional.of(doc));
+
+        ApiResponse<Void> result = service.deleteDocument(1L, 7L, 1L, "admin", null);
+
+        assertEquals(200, result.getCode());
+        verify(docRepository).deleteById(7L);
+        verify(localKnowledgeIndexService).rebuildAsync(1L);
     }
 
     @Test
@@ -172,7 +195,7 @@ class KnowledgeBaseServiceTest {
                 .id(1L).knowledgeBaseId(1L).fileName("policy.md")
                 .content("退换货政策内容").charCount(100)
                 .uploadedAt(LocalDateTime.now()).uploadedBy(1L).build();
-        when(vectorEmbeddingService.searchSimilar(List.of(1L), "退换货", 5, 0.15)).thenReturn(List.of());
+        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "退换货", 5, 0.15)).thenReturn(List.of());
         when(docRepository.searchByKeywordAndKbIds("退换货", List.of(1L))).thenReturn(List.of(doc));
         String context = service.buildKnowledgeContext(List.of(1L), "退换货");
         assertTrue(context.contains("policy.md"));
@@ -181,7 +204,7 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_withVectorChunks_shouldPreferVectorSearch() {
-        when(vectorEmbeddingService.searchSimilar(List.of(1L), "shipping", 5, 0.15))
+        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "shipping", 5, 0.15))
                 .thenReturn(List.of("shipping policy chunk"));
 
         String context = service.buildKnowledgeContext(List.of(1L), "shipping");
@@ -198,7 +221,7 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_noResults_shouldReturnEmpty() {
-        when(vectorEmbeddingService.searchSimilar(List.of(1L), "nonexistent", 5, 0.15)).thenReturn(List.of());
+        when(localKnowledgeIndexService.searchSimilar(List.of(1L), "nonexistent", 5, 0.15)).thenReturn(List.of());
         when(docRepository.searchByKeywordAndKbIds("nonexistent", List.of(1L))).thenReturn(List.of());
         when(docRepository.findByKnowledgeBaseIdIn(List.of(1L))).thenReturn(List.of());
         assertEquals("", service.buildKnowledgeContext(List.of(1L), "nonexistent"));
