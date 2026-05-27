@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/login", "/v1/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/files/*/download").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/groups/*/files/*/download").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/groups/*/files/*").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
