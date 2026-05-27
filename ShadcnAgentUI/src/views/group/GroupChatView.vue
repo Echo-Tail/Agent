@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { STORAGE_KEY_TOKEN } from '@/constants'
 
-import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi, uploadGroupFileApi } from '@/api/group'
+import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi, uploadGroupFileApi, kickMemberApi } from '@/api/group'
 
 import type { ChatGroup, UnifiedMember, GroupMessage, GroupFile } from '@/types/group'
 import GroupFileDialog from '@/components/GroupFileDialog.vue'
@@ -17,7 +17,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import MentionInput from '@/components/MentionInput.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import { toast } from 'sonner'
-import { Send, ArrowLeft, Users, Bot, Loader2, FileIcon, UserPlus, Paperclip } from 'lucide-vue-next'
+import { Send, ArrowLeft, Users, Bot, Loader2, FileIcon, UserPlus, Paperclip, Mail, UserX } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -71,6 +71,22 @@ function renderContent(text: string): string {
 function senderName(msg: GroupMessage): string {
   const key = `${msg.senderType}-${msg.senderId}`
   return memberNames.value.get(key) || (msg.senderType === 'USER' ? `用户#${msg.senderId}` : `Agent #${msg.senderId}`)
+}
+
+const isCreator = computed(() => group.value?.createdBy === auth.currentUser?.id)
+
+function startPrivateChat(userId: number) {
+  router.push({ name: 'MessagesDetail', params: { userId } })
+}
+
+async function kickUser(targetUserId: number) {
+  try {
+    await kickMemberApi(groupId.value, targetUserId)
+    toast.success('已移除')
+    members.value = await getUnifiedMembersApi(groupId.value)
+  } catch {
+    toast.error('移除失败')
+  }
 }
 
 function isMyMessage(msg: GroupMessage) {
@@ -296,12 +312,19 @@ async function onInvited() {
           <div v-else class="h-8 w-8 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">
             <AgentIcon :icon="m.icon" :avatar="m.avatar" class="h-5 w-5" />
           </div>
-          <div class="flex items-center gap-2 flex-1 min-w-0">
-            <p class="text-sm truncate">{{ m.name }}</p>
-            <Badge v-if="m.role === 'CREATOR'" variant="secondary" class="text-xs">创建者</Badge>
-            <Badge v-else-if="m.memberType === 'AGENT'" variant="outline" class="text-xs bg-primary/5">Agent</Badge>
-            <Badge v-else variant="outline" class="text-xs">成员</Badge>
+          <div class="flex items-center flex-1 min-w-0">
+            <p class="text-sm truncate mr-2">{{ m.name }}</p>
           </div>
+          <div class="flex gap-1 shrink-0">
+            <Button v-if="m.memberType === 'USER' && m.refId !== currentUserId" variant="ghost" size="icon" class="h-7 w-7" title="私聊" @click.stop="startPrivateChat(m.refId)">
+              <Mail class="h-3.5 w-3.5" />
+            </Button>
+            <Button v-if="m.memberType === 'USER' && isCreator && m.refId !== currentUserId" variant="ghost" size="icon" class="h-7 w-7 text-destructive hover:text-destructive" title="移出群" @click.stop="kickUser(m.refId)">
+              <UserX class="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <Badge v-if="m.role === 'CREATOR'" variant="secondary" class="text-xs shrink-0">创建者</Badge>
+          <Badge v-else-if="m.memberType === 'AGENT'" variant="outline" class="text-xs bg-primary/5 shrink-0">Agent</Badge>
         </div>
       </div>
     </div>
