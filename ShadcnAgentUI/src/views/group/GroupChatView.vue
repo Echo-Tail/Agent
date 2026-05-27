@@ -50,9 +50,9 @@ const memberNames = computed(() => {
 })
 
 // 将 @[名称](type:id) 渲染为高亮标签，[text](url) 渲染为下载链接
-function renderContent(text: string, isOwn: boolean): string {
-  const mentionClass = isOwn ? 'text-[#8B4513] font-medium' : 'text-[#1F2329] font-medium'
-  const linkClass = isOwn ? 'text-[#8B4513] underline hover:no-underline' : 'text-[#1F2329] underline hover:no-underline'
+function renderContent(text: string): string {
+  const mentionClass = 'text-[#1A365D] font-medium'
+  const linkClass = 'text-[#1A365D] underline hover:no-underline'
   // 先处理下载链接 [text](url)
   let result = text.replace(
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g,
@@ -215,7 +215,7 @@ async function onInvited() {
       </div>
 
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F3F3F3]">
         <div v-if="loading" class="flex justify-center py-10">
           <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -233,14 +233,14 @@ async function onInvited() {
             </Avatar>
             <div class="min-w-0">
               <div :class="['flex items-center gap-2 mb-1', isMyMessage(msg) ? 'flex-row-reverse' : '']">
-                <span class="text-xs font-medium">
+                <span :class="['text-xs', isMyMessage(msg) ? 'font-medium' : 'text-[#888888]']">
                   {{ senderName(msg) }}
                 </span>
-                <span class="text-xs text-muted-foreground">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
+                <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
               </div>
-              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#EAE0CF] text-foreground dark:bg-primary/20 dark:text-foreground' : 'bg-[#F0F2F5] dark:bg-muted']">
+              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#07C160] text-[#191919]' : 'bg-white text-[#191919] shadow-sm']">
                 <MarkdownRenderer v-if="msg.senderType === 'AGENT'" :content="msg.content" />
-                <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content, isMyMessage(msg))"></div>
+                <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content)"></div>
               </div>
             </div>
           </div>
