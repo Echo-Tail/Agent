@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { listMyGroupsApi, createGroupApi, updateGroupApi, disbandGroupApi } from '@/api/group'
+import { listMyGroupsApi, createGroupApi, getGroupApi, updateGroupApi, disbandGroupApi, uploadGroupAvatarApi } from '@/api/group'
 import type { ChatGroup } from '@/types/group'
 // import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ const groups = ref<ChatGroup[]>([])
 const loading = ref(true)
 const showCreateDialog = ref(false)
 const newGroupName = ref('')
+const newGroupAvatar = ref<File | null>(null)
+const newGroupAvatarPreview = ref<string | null>(null)
 
 // 重命名
 const renamingGroupId = ref<number | null>(null)
@@ -37,6 +39,22 @@ onMounted(async () => {
   }
 })
 
+function onAvatarSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+    toast.error('仅支持 JPG/PNG/GIF/WEBP 格式')
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    toast.error('头像文件不能超过 2MB')
+    return
+  }
+  newGroupAvatar.value = file
+  newGroupAvatarPreview.value = URL.createObjectURL(file)
+}
+
 async function createGroup() {
   const name = newGroupName.value.trim()
   if (!name) {
@@ -45,9 +63,17 @@ async function createGroup() {
   }
   try {
     const group = await createGroupApi(name)
+    // 如果有选中的头像，上传头像
+    if (newGroupAvatar.value) {
+      await uploadGroupAvatarApi(group.id, newGroupAvatar.value)
+      const updated = await getGroupApi(group.id)
+      Object.assign(group, updated)
+    }
     groups.value.unshift(group)
     showCreateDialog.value = false
     newGroupName.value = ''
+    newGroupAvatar.value = null
+    newGroupAvatarPreview.value = null
     toast.success('群创建成功')
     router.push({ name: 'GroupChatDetail', params: { id: group.id } })
   } catch {
@@ -119,6 +145,17 @@ async function confirmDisband() {
             <DialogTitle>创建群</DialogTitle>
           </DialogHeader>
           <div class="space-y-4 pt-4">
+            <!-- 头像选择 -->
+            <div class="flex flex-col items-center gap-2">
+              <label class="relative cursor-pointer group">
+                <div class="w-20 h-20 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/30 group-hover:border-primary/50 transition-colors">
+                  <img v-if="newGroupAvatarPreview" :src="newGroupAvatarPreview" class="w-full h-full object-cover" />
+                  <Plus v-else class="h-6 w-6 text-muted-foreground/60" />
+                </div>
+                <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" @change="onAvatarSelected" />
+              </label>
+              <span class="text-xs text-muted-foreground">{{ newGroupAvatar ? newGroupAvatar.name : '点击选择群头像' }}</span>
+            </div>
             <Input v-model="newGroupName" placeholder="输入群名称" @keydown.enter="createGroup" />
             <Button class="w-full" @click="createGroup">确认创建</Button>
           </div>
@@ -145,7 +182,12 @@ async function confirmDisband() {
       >
         <CardHeader class="pb-2">
           <CardTitle class="flex items-center gap-2 text-base">
-            <MessageCircle class="h-5 w-5 text-primary shrink-0" />
+            <div v-if="group.avatar" class="w-8 h-8 rounded-full overflow-hidden shrink-0">
+              <img :src="group.avatar" class="w-full h-full object-cover" />
+            </div>
+            <div v-else class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <MessageCircle class="h-4 w-4 text-primary" />
+            </div>
             <!-- 重命名模式 -->
             <div v-if="renamingGroupId === group.id" class="flex-1 flex items-center gap-1" @click.stop>
               <Input v-model="renameValue" class="h-7 text-sm" @keydown.enter="confirmRename(group.id)" @keydown.esc="cancelRename" />

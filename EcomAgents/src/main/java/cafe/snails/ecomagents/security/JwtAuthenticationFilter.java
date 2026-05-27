@@ -59,6 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {
             return bearer.substring(7);
         }
+        // SSE EventSource 不支持自定义请求头，通过 query param 传递 token
+        String tokenParam = request.getParameter("token");
+        if (StringUtils.hasText(tokenParam)) {
+            return tokenParam;
+        }
         return null;
     }
 }

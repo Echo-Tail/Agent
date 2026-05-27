@@ -1,11 +1,14 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.dto.UnifiedMemberDTO;
+import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.ChatGroup;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.GroupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -54,5 +57,26 @@ public class GroupController {
     public ApiResponse<Void> disbandGroup(@PathVariable Long groupId,
                                           @CurrentUserId Long userId) {
         return groupService.disbandGroup(groupId, userId);
+    }
+
+    /** 上传群头像（仅创建者） */
+    @PostMapping("/{groupId}/avatar")
+    public ApiResponse<String> uploadAvatar(@PathVariable Long groupId,
+                                            @RequestParam("file") MultipartFile file,
+                                            @CurrentUserId Long userId) {
+        return groupService.uploadAvatar(groupId, file, userId);
+    }
+
+    /** 获取统一成员列表（USER + AGENT 合并） */
+    @GetMapping("/{groupId}/unified-members")
+    public ApiResponse<List<UnifiedMemberDTO>> getUnifiedMembers(@PathVariable Long groupId) {
+        return groupService.getUnifiedMembers(groupId);
+    }
+
+    /** 获取当前用户可邀请的 Agent（已创建且未入群的） */
+    @GetMapping("/{groupId}/invitable-agents")
+    public ApiResponse<List<Agent>> getInvitableAgents(@PathVariable Long groupId,
+                                                        @CurrentUserId Long userId) {
+        return groupService.getInvitableAgents(groupId, userId);
     }
 }

@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { STORAGE_KEY_TOKEN } from '@/constants'
 
-import { getGroupApi, listMembersApi, listGroupAgentsApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi } from '@/api/group'
+import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi } from '@/api/group'
 
-import type { ChatGroup, GroupMember, GroupMessage, GroupFile } from '@/types/group'
+import type { ChatGroup, UnifiedMember, GroupMessage, GroupFile } from '@/types/group'
 import GroupFileDialog from '@/components/GroupFileDialog.vue'
 import InviteMemberDialog from '@/components/InviteMemberDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import AgentIcon from '@/components/AgentIcon.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import MentionInput from '@/components/MentionInput.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
@@ -23,8 +25,7 @@ const auth = useAuthStore()
 
 const groupId = computed(() => Number(route.params.id))
 const group = ref<ChatGroup | null>(null)
-const members = ref<GroupMember[]>([])
-const agents = ref<Array<{ id: number; agentId: number }>>([])
+const members = ref<UnifiedMember[]>([])
 const messages = ref<GroupMessage[]>([])
 const files = ref<GroupFile[]>([])
 const loading = ref(true)
@@ -34,42 +35,63 @@ const showFileDialog = ref(false)
 const showInviteDialog = ref(false)
 const sending = ref(false)
 
-const existingMemberIds = computed(() => members.value.map(m => m.userId))
+const existingMemberIds = computed(() => members.value.filter(m => m.memberType === 'USER').map(m => m.refId))
 
 const currentUserId = computed(() => auth.currentUser?.id)
 
-// userId → username 映射表（从成员列表构建）
-const userNames = computed(() => {
-  const map = new Map<number, string>()
+// 成员名称映射表（按 memberType + refId 复合键区分）
+const memberNames = computed(() => {
+  const map = new Map<string, string>()
   for (const m of members.value) {
-    map.set(m.userId, m.username)
+    map.set(`${m.memberType}-${m.refId}`, m.name)
   }
   return map
 })
 
 function senderName(msg: GroupMessage): string {
-  if (msg.senderType === 'USER') {
-    return userNames.value.get(msg.senderId) || `用户#${msg.senderId}`
-  }
-  return `Agent #${msg.senderId}`
+  const key = `${msg.senderType}-${msg.senderId}`
+  return memberNames.value.get(key) || (msg.senderType === 'USER' ? `用户#${msg.senderId}` : `Agent #${msg.senderId}`)
 }
 
 function isMyMessage(msg: GroupMessage) {
   return msg.senderType === 'USER' && msg.senderId === currentUserId.value
 }
 
+// SSE 连接
+let eventSource: EventSource | null = null
+
+function connectSse() {
+  if (eventSource) eventSource.close()
+  const token = localStorage.getItem(STORAGE_KEY_TOKEN)
+  const url = token ? `/v1/groups/${groupId.value}/sse?token=${encodeURIComponent(token)}` : `/v1/groups/${groupId.value}/sse`
+  eventSource = new EventSource(url)
+
+  eventSource.addEventListener('message', (e) => {
+    try {
+      const msg: GroupMessage = JSON.parse(e.data)
+      // 去重：避免自己发的消息重复添加（sendMessage 已本地追加）
+      if (!messages.value.find(m => m.id === msg.id)) {
+        messages.value.push(msg)
+      }
+    } catch { /* ignore parse errors */ }
+  })
+
+  eventSource.onerror = () => {
+    // 断线后 3 秒重连
+    setTimeout(() => connectSse(), 3000)
+  }
+}
+
 onMounted(async () => {
   try {
-    const [g, m, ag, msgs, fs] = await Promise.all([
+    const [g, unified, msgs, fs] = await Promise.all([
       getGroupApi(groupId.value),
-      listMembersApi(groupId.value),
-      listGroupAgentsApi(groupId.value),
+      getUnifiedMembersApi(groupId.value),
       listGroupMessagesApi(groupId.value),
       listGroupFilesApi(groupId.value),
     ])
     group.value = g
-    members.value = m
-    agents.value = ag
+    members.value = unified
     messages.value = msgs.reverse() // 倒序变正序
     files.value = fs
   } catch {
@@ -77,6 +99,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  connectSse()
+})
+
+onUnmounted(() => {
+  eventSource?.close()
 })
 
 async function sendMessage() {
@@ -108,13 +135,13 @@ function goBack() {
 const memberList = computed(() =>
   members.value.map(m => ({
     ...m,
-    isCreator: group.value?.createdBy === m.userId,
+    isCreator: group.value?.createdBy === m.refId && m.memberType === 'USER',
   }))
 )
 
 // 邀请成功后刷新
 async function onInvited() {
-  members.value = await listMembersApi(groupId.value)
+  members.value = await getUnifiedMembersApi(groupId.value)
 }
 </script>
 
@@ -129,7 +156,7 @@ async function onInvited() {
         </Button>
         <div class="flex-1">
           <h2 class="font-semibold">{{ group?.name || '群聊' }}</h2>
-          <p class="text-xs text-muted-foreground">{{ members.length }} 位成员 · {{ agents.length }} 个 Agent</p>
+          <p class="text-xs text-muted-foreground">{{ members.filter(m => m.memberType === 'USER').length }} 位成员 · {{ members.filter(m => m.memberType === 'AGENT').length }} 个 Agent</p>
         </div>
         <Button variant="outline" size="sm" @click="showInviteDialog = true">
           <UserPlus class="h-4 w-4 mr-1" /> 邀请
@@ -194,32 +221,21 @@ async function onInvited() {
 
     <!-- Members sidebar -->
     <div v-if="showMembers" class="w-72 border-l shrink-0 overflow-y-auto p-4 space-y-4">
-      <!-- 成员列表 -->
       <div>
         <h3 class="font-semibold text-sm mb-2">成员 ({{ members.length }})</h3>
         <div v-for="m in memberList" :key="m.id" class="flex items-center gap-3 py-1.5">
-          <Avatar class="h-8 w-8">
-            <AvatarFallback class="text-xs">{{ m.username.charAt(0).toUpperCase() }}</AvatarFallback>
-          </Avatar>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm truncate">{{ m.username }}</p>
-            <Badge v-if="m.isCreator" variant="secondary" class="text-xs">创建者</Badge>
-            <Badge v-else variant="outline" class="text-xs">成员</Badge>
+          <div v-if="m.memberType === 'USER'" class="h-8 w-8 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0">
+            <img v-if="m.avatar" :src="m.avatar" class="h-full w-full object-cover" />
+            <span v-else class="text-xs font-medium">{{ m.name.charAt(0).toUpperCase() }}</span>
           </div>
-        </div>
-      </div>
-
-      <hr />
-
-      <!-- Agent 列表 -->
-      <div>
-        <h3 class="font-semibold text-sm mb-2">Agent ({{ agents.length }})</h3>
-        <div v-for="ag in agents" :key="ag.id" class="flex items-center gap-3 py-1.5">
-          <Avatar class="h-8 w-8">
-            <AvatarFallback class="bg-primary text-primary-foreground text-xs">A</AvatarFallback>
-          </Avatar>
-          <div>
-            <p class="text-sm">Agent #{{ ag.agentId }}</p>
+          <div v-else class="h-8 w-8 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">
+            <AgentIcon :icon="m.icon" :avatar="m.avatar" class="h-5 w-5" />
+          </div>
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <p class="text-sm truncate">{{ m.name }}</p>
+            <Badge v-if="m.role === 'CREATOR'" variant="secondary" class="text-xs">创建者</Badge>
+            <Badge v-else-if="m.memberType === 'AGENT'" variant="outline" class="text-xs bg-primary/5">Agent</Badge>
+            <Badge v-else variant="outline" class="text-xs">成员</Badge>
           </div>
         </div>
       </div>

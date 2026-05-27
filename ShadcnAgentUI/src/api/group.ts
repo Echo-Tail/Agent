@@ -1,6 +1,6 @@
 import http from './request'
 
-import type { ChatGroup, GroupMember, GroupAgent, GroupMessage, GroupFile, ChatPrivateMessage, EmojiPack } from '@/types/group'
+import type { ChatGroup, GroupMember, GroupAgent, GroupMessage, GroupFile, UnifiedMember, ChatPrivateMessage, EmojiPack } from '@/types/group'
 
 // ===== 群 CRUD =====
 
@@ -22,6 +22,14 @@ export function updateGroupApi(groupId: number, data: { name?: string; avatar?: 
 
 export function disbandGroupApi(groupId: number) {
   return http.delete<any, void>(`/groups/${groupId}`)
+}
+
+export function uploadGroupAvatarApi(groupId: number, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post<any, string>(`/groups/${groupId}/avatar`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }
 
 // ===== 群成员 =====
@@ -50,6 +58,14 @@ export function removeGroupAgentApi(groupId: number, agentId: number) {
 
 export function listGroupAgentsApi(groupId: number) {
   return http.get<any, GroupAgent[]>(`/groups/${groupId}/agents`)
+}
+
+export function getUnifiedMembersApi(groupId: number) {
+  return http.get<any, UnifiedMember[]>(`/groups/${groupId}/unified-members`)
+}
+
+export function getInvitableAgentsApi(groupId: number) {
+  return http.get<any, Array<{ id: number; name: string; icon: string; avatar?: string }>>(`/groups/${groupId}/invitable-agents`)
 }
 
 // ===== 群消息 =====

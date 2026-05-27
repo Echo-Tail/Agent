@@ -14,12 +14,19 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -144,6 +151,7 @@ public class AgentService {
 
                     if (update.getName() != null) existing.setName(update.getName());
                     if (update.getIcon() != null) existing.setIcon(update.getIcon());
+                    if (update.getAvatar() != null) existing.setAvatar(update.getAvatar());
                     if (update.getDescription() != null) existing.setDescription(update.getDescription());
                     if (update.getSystemPrompt() != null) {
                         existing.setSystemPrompt(update.getSystemPrompt());
@@ -197,6 +205,50 @@ public class AgentService {
                     return ApiResponse.success("删除成功", agent);
                 })
                 .orElse(ApiResponse.error(404, "Agent不存在"));
+    }
+
+    /** 上传 Agent 头像 */
+    @Transactional
+    public ApiResponse<String> uploadAvatar(Long id, MultipartFile file, Long userId) {
+        var opt = agentRepository.findById(id);
+        if (opt.isEmpty()) {
+            return ApiResponse.error(404, "Agent不存在");
+        }
+        Agent agent = opt.get();
+        if (!hasAgentPermission(agent, userId)) {
+            return ApiResponse.error(403, "没有权限修改此 Agent");
+        }
+
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) {
+            return ApiResponse.error(400, "文件名不能为空");
+        }
+
+        String ext = originalName.substring(originalName.lastIndexOf('.') + 1).toLowerCase();
+        if (!Set.of("jpg", "jpeg", "png", "gif", "webp").contains(ext)) {
+            return ApiResponse.error(400, "仅支持 JPG/PNG/GIF/WEBP 格式");
+        }
+
+        if (file.getSize() > 2 * 1024 * 1024) {
+            return ApiResponse.error(400, "头像文件不能超过 2MB");
+        }
+
+        try {
+            Path uploadPath = Paths.get("./uploads/agent-avatars").toAbsolutePath().normalize();
+            Files.createDirectories(uploadPath);
+
+            String storedName = "agent-" + id + "-" + UUID.randomUUID() + "." + ext;
+            Path targetPath = uploadPath.resolve(storedName);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            String avatarUrl = "/uploads/agent-avatars/" + storedName;
+            agent.setAvatar(avatarUrl);
+            agentRepository.save(agent);
+
+            return ApiResponse.success("头像上传成功", avatarUrl);
+        } catch (IOException e) {
+            return ApiResponse.error(500, "头像上传失败: " + e.getMessage());
+        }
     }
 
     /** 检查当前用户是否有权限操作该 Agent */

@@ -2,13 +2,24 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.GroupMemberDTO;
+import cafe.snails.ecomagents.dto.UnifiedMemberDTO;
 import cafe.snails.ecomagents.model.*;
 import cafe.snails.ecomagents.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 群聊业务逻辑层。
@@ -21,6 +32,7 @@ public class GroupService {
     private final GroupMemberRepository groupMemberRepository;
     private final GroupAgentRepository groupAgentRepository;
     private final AgentService agentService;
+    private final AgentRepository agentRepository;
     private final UserRepository userRepository;
 
     // ===== 群 CRUD =====
@@ -188,6 +200,98 @@ public class GroupService {
     /** 获取群绑定的 Agent 列表 */
     public ApiResponse<List<GroupAgent>> listAgents(Long groupId) {
         return ApiResponse.success(groupAgentRepository.findByGroupId(groupId));
+    }
+
+    /** 上传群头像 */
+    @Transactional
+    public ApiResponse<String> uploadAvatar(Long groupId, MultipartFile file, Long userId) {
+        var groupOpt = chatGroupRepository.findById(groupId);
+        if (groupOpt.isEmpty()) return ApiResponse.error(404, "群不存在");
+        if (!groupOpt.get().getCreatedBy().equals(userId)) return ApiResponse.error(403, "仅创建者可修改群头像");
+
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) {
+            return ApiResponse.error(400, "文件名不能为空");
+        }
+
+        String ext = originalName.substring(originalName.lastIndexOf('.') + 1).toLowerCase();
+        if (!Set.of("jpg", "jpeg", "png", "gif", "webp").contains(ext)) {
+            return ApiResponse.error(400, "仅支持 JPG/PNG/GIF/WEBP 格式");
+        }
+
+        if (file.getSize() > 2 * 1024 * 1024) {
+            return ApiResponse.error(400, "头像文件不能超过 2MB");
+        }
+
+        try {
+            Path uploadPath = Paths.get("./uploads/group-avatars").toAbsolutePath().normalize();
+            Files.createDirectories(uploadPath);
+
+            String storedName = "group-" + groupId + "-" + UUID.randomUUID() + "." + ext;
+            Path targetPath = uploadPath.resolve(storedName);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            String avatarUrl = "/uploads/group-avatars/" + storedName;
+            ChatGroup group = groupOpt.get();
+            group.setAvatar(avatarUrl);
+            chatGroupRepository.save(group);
+
+            return ApiResponse.success("头像上传成功", avatarUrl);
+        } catch (IOException e) {
+            return ApiResponse.error(500, "头像上传失败: " + e.getMessage());
+        }
+    }
+
+    /** 获取统一成员列表（USER + AGENT 合并） */
+    public ApiResponse<List<UnifiedMemberDTO>> getUnifiedMembers(Long groupId) {
+        List<UnifiedMemberDTO> members = new ArrayList<>();
+
+        // 用户成员
+        List<GroupMember> userMembers = groupMemberRepository.findByGroupId(groupId);
+        for (GroupMember gm : userMembers) {
+            User user = userRepository.findById(gm.getUserId()).orElse(null);
+            members.add(UnifiedMemberDTO.builder()
+                    .id(gm.getId())
+                    .memberType("USER")
+                    .refId(gm.getUserId())
+                    .name(user != null ? user.getUsername() : "未知用户")
+                    .avatar(null)
+                    .role(gm.getRole().name())
+                    .build());
+        }
+
+        // Agent 成员
+        List<GroupAgent> agentMembers = groupAgentRepository.findByGroupId(groupId);
+        for (GroupAgent ga : agentMembers) {
+            Agent agent = agentRepository.findById(ga.getAgentId()).orElse(null);
+            if (agent == null) continue;
+            members.add(UnifiedMemberDTO.builder()
+                    .id(ga.getId())
+                    .memberType("AGENT")
+                    .refId(ga.getAgentId())
+                    .name(agent.getName())
+                    .avatar(agent.getAvatar())
+                    .icon(agent.getIcon())
+                    .role("MEMBER")
+                    .build());
+        }
+
+        return ApiResponse.success(members);
+    }
+
+    /** 获取可邀请的 Agent（当前用户创建且未入群的） */
+    public ApiResponse<List<Agent>> getInvitableAgents(Long groupId, Long userId) {
+        List<Agent> userAgents = agentRepository.findByCreatedByAndIsSystemFalse(userId);
+        List<GroupAgent> existingAgents = groupAgentRepository.findByGroupId(groupId);
+        Set<Long> existingAgentIds = existingAgents.stream()
+                .map(GroupAgent::getAgentId)
+                .collect(Collectors.toSet());
+
+        List<Agent> invitable = userAgents.stream()
+                .filter(a -> !existingAgentIds.contains(a.getId()))
+                .collect(Collectors.toList());
+
+        return ApiResponse.success(invitable);
     }
 
     /** 校验用户是群的创建者 */

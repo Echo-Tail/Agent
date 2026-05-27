@@ -33,3 +33,11 @@ export function getSystemAgentApi() {
 export function getWebSearchAvailabilityApi(id: number) {
   return http.get<any, ToolAvailability>(`/agents/${id}/web-search-availability`)
 }
+
+export function uploadAgentAvatarApi(id: number, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post<any, string>(`/agents/${id}/avatar`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

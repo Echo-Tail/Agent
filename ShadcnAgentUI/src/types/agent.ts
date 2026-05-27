@@ -2,6 +2,7 @@ export interface Agent {
   id: number
   name: string
   icon: string
+  avatar?: string
   description: string
   tags: string[]
   systemPrompt: string
@@ -36,6 +37,7 @@ export interface AgentSummary {
 export interface AgentCreateRequest {
   name: string
   icon?: string
+  avatar?: string
   description?: string
   tags?: string[]
   systemPrompt?: string
@@ -50,6 +52,7 @@ export interface AgentCreateRequest {
 export interface AgentUpdateRequest {
   name?: string
   icon?: string
+  avatar?: string
   description?: string
   tags?: string[]
   systemPrompt?: string
