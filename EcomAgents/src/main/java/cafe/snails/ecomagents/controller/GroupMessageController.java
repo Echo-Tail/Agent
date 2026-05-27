@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.GroupMessage;
+import cafe.snails.ecomagents.repository.GroupMessageRepository;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.GroupMessageService;
 import cafe.snails.ecomagents.service.GroupSseService;
@@ -23,6 +24,7 @@ public class GroupMessageController {
 
     private final GroupMessageService groupMessageService;
     private final GroupSseService groupSseService;
+    private final GroupMessageRepository groupMessageRepository;
 
     /** 发送群消息 */
     @PostMapping("/messages")
@@ -39,6 +41,19 @@ public class GroupMessageController {
                                                          @RequestParam(defaultValue = "0") int page,
                                                          @RequestParam(defaultValue = "50") int size) {
         return groupMessageService.listMessages(groupId, page, size);
+    }
+
+    /** 获取未读消息数（after 参数为上次查看时间，ISO 格式） */
+    @GetMapping("/messages/unread-count")
+    public ApiResponse<Long> getUnreadCount(@PathVariable Long groupId,
+                                            @RequestParam("after") String after) {
+        try {
+            var afterTime = java.time.LocalDateTime.parse(after);
+            long count = groupMessageRepository.countByGroupIdAndCreatedAtAfter(groupId, afterTime);
+            return ApiResponse.success(count);
+        } catch (Exception e) {
+            return ApiResponse.success(0L);
+        }
     }
 
     /** 群 SSE 长连接 */

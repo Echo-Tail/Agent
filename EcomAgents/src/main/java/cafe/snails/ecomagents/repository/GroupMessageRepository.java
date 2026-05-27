@@ -11,4 +11,7 @@ public interface GroupMessageRepository extends JpaRepository<GroupMessage, Long
     List<GroupMessage> findByGroupIdOrderByCreatedAtDesc(Long groupId, Pageable pageable);
     /** 查询某个时间点之后的消息（SSE 重连时拉取遗漏消息） */
     List<GroupMessage> findByGroupIdAndCreatedAtAfterOrderByCreatedAtAsc(Long groupId, java.time.LocalDateTime after);
+
+    /** 统计某个时间点之后的未读消息数 */
+    long countByGroupIdAndCreatedAtAfter(Long groupId, java.time.LocalDateTime after);
 }
