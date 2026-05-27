@@ -25,4 +25,12 @@ public class SessionMessage {
     /** 消息发送时间 */
     @Column(nullable = false)
     private LocalDateTime timestamp;
+
+    /** 关联的 FileRecord ID（Agent 生成的文件） */
+    @Column(name = "file_id")
+    private Long fileId;
+
+    /** 文件名（冗余存储，方便前端显示） */
+    @Column(name = "file_name", length = 255)
+    private String fileName;
 }

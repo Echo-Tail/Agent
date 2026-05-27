@@ -50,6 +50,7 @@ export interface StreamChatCallbacks {
   onReasoning?: (content: string) => void
   onToolCall?: (tool: string) => void
   onToolResult?: (tool: string, summary?: string) => void
+  onFile?: (file: { id: number; name: string; url: string; size: number }) => void
 }
 
 export async function streamChat(
@@ -60,7 +61,7 @@ export async function streamChat(
   abortSignal?: AbortSignal,
   timeoutMs: number = STREAM_TIMEOUT,
 ): Promise<void> {
-  const { onToken, onDone, onError, onReasoning, onToolCall, onToolResult } = callbacks
+  const { onToken, onDone, onError, onReasoning, onToolCall, onToolResult, onFile } = callbacks
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
 
   const timeoutController = new AbortController()
@@ -142,6 +143,8 @@ export async function streamChat(
             onToolCall?.(event.tool)
           } else if (event.type === 'tool_result') {
             onToolResult?.(event.tool, event.summary)
+          } else if (event.type === 'file') {
+            onFile?.({ id: event.id, name: event.name, url: event.url, size: event.size })
           }
         } catch {
           console.warn('streamChat: malformed SSE JSON, skipping line:', trimmed)

@@ -103,11 +103,22 @@ public class SessionMapper {
      */
     @Transactional
     public void saveMessage(String harnessSessionId, String role, String content) {
+        saveMessage(harnessSessionId, role, content, null, null);
+    }
+
+    /**
+     * 向 DB 会话中追加一条消息，可附带文件元数据。
+     */
+    @Transactional
+    public void saveMessage(String harnessSessionId, String role, String content,
+                            Long fileId, String fileName) {
         sessionRepository.findByHarnessSessionId(harnessSessionId).ifPresent(session -> {
             session.getMessages().add(SessionMessage.builder()
                     .role(role)
                     .content(content)
                     .timestamp(LocalDateTime.now())
+                    .fileId(fileId)
+                    .fileName(fileName)
                     .build());
             sessionRepository.save(session);
         });

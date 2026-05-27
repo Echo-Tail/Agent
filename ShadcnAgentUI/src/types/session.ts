@@ -4,6 +4,7 @@ export interface SessionMessage {
   timestamp: string
   isError?: boolean
   partialContent?: string
+  file?: { id: number; name: string; url: string; size: number }
 }
 
 export interface Session {
@@ -68,4 +69,12 @@ export interface SseToolResultEvent {
   summary?: string
 }
 
-export type SseEvent = SseTokenEvent | SseDoneEvent | SseErrorEvent | SseReasoningEvent | SseToolCallEvent | SseToolResultEvent
+export interface SseFileEvent {
+  type: 'file'
+  id: number
+  name: string
+  url: string
+  size: number
+}
+
+export type SseEvent = SseTokenEvent | SseDoneEvent | SseErrorEvent | SseReasoningEvent | SseToolCallEvent | SseToolResultEvent | SseFileEvent

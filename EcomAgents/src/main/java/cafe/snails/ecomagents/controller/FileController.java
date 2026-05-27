@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -60,10 +62,20 @@ public class FileController {
                     .contentType(MediaType.parseMediaType(
                             record.getMimeType() != null ? record.getMimeType() : "application/octet-stream"))
                     .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "inline; filename=\"" + record.getOriginalName() + "\"")
+                            buildContentDisposition(record.getOriginalName()))
                     .body(content);
         } catch (IOException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /**
+     * 构建 RFC 5987 兼容的 Content-Disposition header 值，
+     * 支持中文等非 ASCII 文件名。
+     */
+    private static String buildContentDisposition(String fileName) {
+        String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8)
+                .replace("+", " ");
+        return "inline; filename=\"" + encoded + "\"; filename*=UTF-8''" + encoded;
     }
 }

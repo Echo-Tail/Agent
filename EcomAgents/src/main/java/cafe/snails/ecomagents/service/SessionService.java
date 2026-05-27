@@ -163,6 +163,8 @@ public class SessionService {
             dto.setRole(last.getRole());
             dto.setContent(last.getContent());
             dto.setTimestamp(last.getTimestamp());
+            dto.setFileId(last.getFileId());
+            dto.setFileName(last.getFileName());
             s.setLastMessage(dto);
         }
         return s;

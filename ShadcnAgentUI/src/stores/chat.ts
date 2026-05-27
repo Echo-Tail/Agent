@@ -40,6 +40,7 @@ export const useChatStore = defineStore('chat', () => {
   const currentToolStatuses = ref<CurrentToolStatus[]>([])
   const inputText = ref('')
   const activeAgentId = ref<number | null>(null)
+  const pendingFile = ref<{ id: number; name: string; url: string; size: number } | null>(null)
 
   const folderTree = computed(() => {
     return [...folders.value].sort((a, b) => a.orderNum - b.orderNum)
@@ -60,7 +61,21 @@ export const useChatStore = defineStore('chat', () => {
       const data = await getSessionApi(id)
       if (data) {
         activeSession.value = data
-        messages.value = data.messages ?? []
+        // Map backend flat fileId/fileName → frontend structured file object
+        messages.value = (data.messages ?? []).map((msg: any) => {
+          if (msg.fileId) {
+            return {
+              ...msg,
+              file: {
+                id: msg.fileId,
+                name: msg.fileName || 'file',
+                url: `/v1/files/${msg.fileId}/download`,
+                size: 0,
+              },
+            }
+          }
+          return msg
+        })
       }
     } finally {
       sessionLoading.value = false
@@ -149,6 +164,7 @@ export const useChatStore = defineStore('chat', () => {
     currentToolCalls.value = []
     currentToolStatuses.value = []
     abortController.value = new AbortController()
+    pendingFile.value = null
 
     try {
       await streamChat(
@@ -160,11 +176,16 @@ export const useChatStore = defineStore('chat', () => {
             streamingText.value += token
           },
           onDone: (fullText) => {
-            messages.value.push({
+            const msg: SessionMessage = {
               role: 'assistant',
               content: fullText,
               timestamp: new Date().toISOString(),
-            })
+            }
+            if (pendingFile.value) {
+              msg.file = { ...pendingFile.value }
+              pendingFile.value = null
+            }
+            messages.value.push(msg)
             streamingText.value = ''
             isStreaming.value = false
             currentToolCalls.value = []
@@ -195,6 +216,9 @@ export const useChatStore = defineStore('chat', () => {
             currentToolCalls.value = currentToolCalls.value.filter(t => t !== tool)
             const result = describeToolResult(tool, summary)
             upsertToolStatus(tool, result.status, result.message)
+          },
+          onFile: (file) => {
+            pendingFile.value = file
           },
         },
         abortController.value.signal,

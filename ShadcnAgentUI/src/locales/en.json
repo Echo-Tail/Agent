@@ -225,7 +225,8 @@
     "loadLogsFailed": "Failed to load logs",
     "clearLogsFailed": "Failed to clear logs",
     "noSessionMatch": "No matching sessions",
-    "noSessions": "No chat history"
+    "noSessions": "No chat history",
+    "downloadFailed": "Download failed"
   },
   "dialog": {
     "deleteConfirm": {
@@ -375,7 +376,8 @@
     "uploading": "Uploading...",
     "fileTooLarge": "File size must not exceed {size}",
     "webSearchReady": "Web search ready",
-    "webSearchUnavailable": "Web search unavailable"
+    "webSearchUnavailable": "Web search unavailable",
+    "downloadFile": "Download"
   },
   "log": {
     "level": {

@@ -32,7 +32,8 @@ public class WorkspaceInitService {
         try {
             Files.createDirectories(agentDir);
 
-            writeIfNotExists(agentDir.resolve("AGENTS.md"), buildAgentsMd(agent));
+            // Always rewrite AGENTS.md so existing agents get updated instructions
+            Files.writeString(agentDir.resolve("AGENTS.md"), buildAgentsMd(agent));
             writeIfNotExists(agentDir.resolve("MEMORY.md"), "# Agent Memory\n\n");
 
             Files.createDirectories(agentDir.resolve("sessions"));
@@ -106,7 +107,23 @@ public class WorkspaceInitService {
     }
 
     private String buildAgentsMd(String systemPrompt, Long agentId) {
-        return (systemPrompt != null ? systemPrompt : "You are a helpful AI assistant.")
+        String base = (systemPrompt != null ? systemPrompt : "You are a helpful AI assistant.");
+        return base
+                + "\n\n## File Sending Capability"
+                + "\n\nWhen the user asks you to generate a downloadable file (such as Markdown, CSV, JSON, TXT, HTML, etc.), "
+                + "wrap the file content in a `<file name=\"filename.ext\">` tag like this:"
+                + "\n\n```"
+                + "\nHere is the document you requested:"
+                + "\n<file name=\"report.md\">"
+                + "\n# Report Title"
+                + "\n\nContent here..."
+                + "\n</file>"
+                + "\n```"
+                + "\n\nThe file content will be automatically saved and provided as a downloadable link to the user. "
+                + "The text outside the `<file>` tags will be displayed normally as your response."
+                + "\n\nIMPORTANT: Do NOT create markdown links to workspace paths or local file paths in your response. "
+                + "Those paths are not accessible to the user. Just describe the filename in plain text."
+                + "\n\nSupported file types: .md, .txt, .json, .csv, .xml, .html, .pdf"
                 + "\n\n<!-- Agent ID: " + agentId + " -->\n";
     }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { STORAGE_KEY_TOKEN } from '@/constants'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
@@ -22,6 +23,7 @@ import {
   Paperclip,
   X,
   File as FileIcon,
+  Download,
   Copy,
   Check,
   AlertCircle,
@@ -218,6 +220,30 @@ async function copyMessage(idx: number, content: string) {
   } catch { /* ignore */ }
 }
 
+async function downloadFile(file: { id: number; name: string; url: string; size: number }) {
+  try {
+    const token = localStorage.getItem(STORAGE_KEY_TOKEN)
+    const response = await fetch(file.url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      toast.error(t('error.downloadFailed'))
+      return
+    }
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    toast.error(t('error.downloadFailed'))
+  }
+}
+
 async function handleSend() {
   const content = inputText.value.trim()
   if (!content || chatStore.isStreaming) return
@@ -345,7 +371,18 @@ const availableAgents = computed(() => {
             </Avatar>
             <div :class="['group relative rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
               <MarkdownRenderer v-if="msg.role === 'assistant' && !msg.isError" :content="msg.content" />
-              <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
+              <div v-if="msg.file" class="mt-2 flex items-center gap-2 border-t pt-2">
+                <FileIcon class="h-4 w-4 text-muted-foreground" />
+                <span class="text-xs text-muted-foreground truncate max-w-[200px]">{{ msg.file.name }}</span>
+                <button
+                  class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  @click="downloadFile(msg.file)"
+                >
+                  <Download class="h-3.5 w-3.5" />
+                  {{ $t('chat.downloadFile') }}
+                </button>
+              </div>
+              <div v-if="msg.role !== 'assistant' || msg.isError" class="whitespace-pre-wrap">{{ msg.content }}</div>
               <button
                 v-if="msg.role === 'assistant' && !msg.isError"
                 class="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
