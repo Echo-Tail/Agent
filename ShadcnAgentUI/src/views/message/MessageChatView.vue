@@ -33,11 +33,11 @@ watch(() => messages.value.length, () => {
 
 onMounted(async () => {
   try {
-    const [user, msgs] = await Promise.all([
+    const [userInfo, msgs] = await Promise.all([
       getUserApi(otherUserId.value),
       getConversationApi(otherUserId.value),
     ])
-    otherUsername.value = user.username
+    otherUsername.value = userInfo.username
     messages.value = msgs.reverse()
   } catch {
     toast.error('加载失败')

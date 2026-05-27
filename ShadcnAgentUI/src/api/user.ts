@@ -10,7 +10,7 @@ export function toggleUserStatusApi(id: number) {
 }
 
 export function getUserApi(id: number) {
-  return http.get<any, UserDTO>(`/users/${id}`)
+  return http.get<any, { id: number; username: string }>(`/user/${id}`)
 }
 
 export function searchUsersApi(keyword: string) {
