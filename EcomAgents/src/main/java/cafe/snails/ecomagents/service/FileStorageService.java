@@ -91,6 +91,59 @@ public class FileStorageService {
     }
 
     /**
+     * 保存字符串内容为文件（供 Agent 生成的文件使用，非 MultipartFile 上传）。
+     *
+     * @param content      文件内容字符串
+     * @param originalName 原始文件名
+     * @param userId       上传者用户 ID
+     * @return FileRecord 或 null（失败时）
+     */
+    public FileRecord saveContentAsFile(String content, String originalName, Long userId) {
+        if (content == null || content.isBlank()) return null;
+
+        String ext = getExtension(originalName).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            log.warn("Unsupported file type for agent-generated file: .{}", ext);
+            return null;
+        }
+
+        try {
+            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+            Files.createDirectories(uploadPath);
+
+            String storedName = UUID.randomUUID() + "_" + originalName;
+            Path targetPath = uploadPath.resolve(storedName);
+            Files.writeString(targetPath, content);
+
+            String mimeType = switch (ext) {
+                case "md" -> "text/markdown";
+                case "txt" -> "text/plain";
+                case "json" -> "application/json";
+                case "csv" -> "text/csv";
+                case "xml" -> "application/xml";
+                case "html" -> "text/html";
+                default -> "application/octet-stream";
+            };
+
+            FileRecord record = FileRecord.builder()
+                    .originalName(originalName)
+                    .storedPath(targetPath.toString())
+                    .fileSize((long) content.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+                    .mimeType(mimeType)
+                    .uploadedAt(LocalDateTime.now())
+                    .uploadedBy(userId)
+                    .build();
+
+            FileRecord saved = fileRecordRepository.save(record);
+            log.info("Agent-generated file saved: {} -> {} ({} bytes)", originalName, targetPath, record.getFileSize());
+            return saved;
+        } catch (IOException e) {
+            log.error("Failed to save agent-generated file: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 根据记录 ID 获取文件元数据。
      */
     public ApiResponse<FileRecord> getFileRecord(Long id) {

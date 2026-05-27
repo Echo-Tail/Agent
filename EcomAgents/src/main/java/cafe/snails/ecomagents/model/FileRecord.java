@@ -45,9 +45,9 @@ public class FileRecord {
     @Column(name = "uploaded_by", nullable = false)
     private Long uploadedBy;
 
-    /** 文件在聊天中的可访问 URL */
+    /** 文件在聊天中的可访问 URL（指向公开的下载端点，无需认证即可访问） */
     @Transient
     public String getUrl() {
-        return "/v1/files/" + id;
+        return "/v1/files/" + id + "/download";
     }
 }

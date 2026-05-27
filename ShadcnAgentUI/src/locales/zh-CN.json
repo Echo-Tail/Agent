@@ -225,7 +225,8 @@
     "loadLogsFailed": "加载日志失败",
     "clearLogsFailed": "清除日志失败",
     "noSessionMatch": "没有匹配的会话",
-    "noSessions": "还没有历史会话"
+    "noSessions": "还没有历史会话",
+    "downloadFailed": "下载失败"
   },
   "dialog": {
     "deleteConfirm": {
@@ -375,7 +376,8 @@
     "uploading": "上传中...",
     "fileTooLarge": "文件大小不能超过 {size}",
     "webSearchReady": "网页搜索可用",
-    "webSearchUnavailable": "网页搜索不可用"
+    "webSearchUnavailable": "网页搜索不可用",
+    "downloadFile": "下载文件"
   },
   "log": {
     "level": {

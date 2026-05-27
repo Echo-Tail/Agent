@@ -6,9 +6,13 @@ import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.harness.SseEvent;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.FileRecord;
+import cafe.snails.ecomagents.model.Session;
+import cafe.snails.ecomagents.model.SessionMessage;
 import cafe.snails.ecomagents.model.TokenUsageRecord;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
+import cafe.snails.ecomagents.repository.SessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
@@ -22,10 +26,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * HarnessAgent 聊天服务，封装 HarnessAgent.call() + SSE 事件推送。
@@ -52,6 +59,8 @@ public class HarnessChatService {
     private final KnowledgeBaseService knowledgeBaseService;
     private final TokenUsageService tokenUsageService;
     private final TokenCounter tokenCounter;
+    private final FileStorageService fileStorageService;
+    private final SessionRepository sessionRepository;
     private final LlmConfig llmConfig;
     private final AgentToolAvailabilityService toolAvailabilityService;
 
@@ -113,6 +122,10 @@ public class HarnessChatService {
 
                 // Build user message, inject knowledge context for GENERIC RAG mode
                 String actualContent = enrichWithKnowledge(agentId, content);
+                // Inject conversation history for session continuity
+                actualContent = enrichWithHistory(sessionId, actualContent);
+                // Inject file-sending capability instruction
+                actualContent = addFileCapabilityInstruction(actualContent);
                 if (requiresRealtimeLookup(content) && webSearch.isAvailable()) {
                     actualContent = addRealtimeToolInstruction(actualContent);
                     sendSse(emitter, completed, Map.of(
@@ -133,15 +146,56 @@ public class HarnessChatService {
                 if (reply != null && reply.getTextContent() != null && !reply.getTextContent().isBlank()) {
                     String fullText = reply.getTextContent();
 
+                    // Parse <file name="...">...</file> markers for downloadable files
+                    Pattern filePattern = Pattern.compile("<file\\s+name=\"([^\"]+)\">([\\s\\S]*?)</file>", Pattern.DOTALL);
+                    Matcher matcher = filePattern.matcher(fullText);
+                    List<Map<String, Object>> fileEvents = new ArrayList<>();
+                    StringBuilder cleanedBuffer = new StringBuilder();
+                    Long assistantFileId = null;
+                    String assistantFileName = null;
+                    int lastEnd = 0;
+
+                    while (matcher.find()) {
+                        // Append text before this match
+                        cleanedBuffer.append(fullText, lastEnd, matcher.start());
+                        lastEnd = matcher.end();
+
+                        String fileName = matcher.group(1);
+                        String fileContent = matcher.group(2);
+
+                        FileRecord fileRecord = fileStorageService.saveContentAsFile(fileContent, fileName, userId);
+                        if (fileRecord != null) {
+                            fileEvents.add(Map.of(
+                                    "type", SseEvent.TYPE_FILE,
+                                    "id", fileRecord.getId(),
+                                    "name", fileRecord.getOriginalName(),
+                                    "url", fileRecord.getUrl(),
+                                    "size", fileRecord.getFileSize()
+                            ));
+                            if (assistantFileId == null) {
+                                assistantFileId = fileRecord.getId();
+                                assistantFileName = fileRecord.getOriginalName();
+                            }
+                        }
+                    }
+                    // Append remaining text after last file marker
+                    cleanedBuffer.append(fullText.substring(lastEnd));
+                    String cleanText = cleanedBuffer.toString().trim();
+
                     recordTokenUsage(model, agentId, userId, actualContent, fullText, true, null);
 
                     sessionMapper.saveMessage(sessionId, "user", content);
-                    sessionMapper.saveMessage(sessionId, "assistant", fullText);
-                    sessionMapper.syncSessionMetadata(agentId, sessionId, userId, content, fullText);
+                    sessionMapper.saveMessage(sessionId, "assistant", cleanText, assistantFileId, assistantFileName);
+                    sessionMapper.syncSessionMetadata(agentId, sessionId, userId, content, cleanText);
+
+                    // Send file events before done
+                    for (Map<String, Object> fileEvent : fileEvents) {
+                        sendSse(emitter, completed, fileEvent);
+                    }
 
                     sendSse(emitter, completed, Map.of(
                             "type", SseEvent.TYPE_DONE,
-                            "content", fullText
+                            "content", cleanText
                     ));
                     if (completed.compareAndSet(false, true)) {
                         emitter.complete();
@@ -170,6 +224,33 @@ public class HarnessChatService {
         });
 
         return emitter;
+    }
+
+    /**
+     * 为消息注入历史对话上下文，使 Agent 能感知之前的对话内容。
+     * 加载当前 session 的已有消息列表，格式化为对话历史追加在用户消息之前。
+     */
+    private String enrichWithHistory(String harnessSessionId, String content) {
+        try {
+            Session session = sessionRepository.findByHarnessSessionIdWithMessages(harnessSessionId).orElse(null);
+            if (session == null || session.getMessages() == null || session.getMessages().isEmpty()) {
+                return content;
+            }
+
+            // Build conversation history, excluding the current user message
+            StringBuilder history = new StringBuilder("\n\n[历史对话]\n");
+            for (SessionMessage msg : session.getMessages()) {
+                String role = "user".equals(msg.getRole()) ? "用户" : "助手";
+                history.append(role).append("：").append(msg.getContent()).append("\n");
+            }
+            history.append("\n[以上是历史对话内容，请基于这些上下文回答用户最新的问题]\n");
+
+            log.debug("Injected {} history messages for session {}", session.getMessages().size(), harnessSessionId);
+            return history.toString() + content;
+        } catch (Exception e) {
+            log.warn("Failed to load session history: {}", e.getMessage());
+            return content;
+        }
     }
 
     /**
@@ -216,6 +297,20 @@ public class HarnessChatService {
                 + "这个用户问题需要实时或外部最新信息。必须调用 web_search 工具获取结果后再回答。"
                 + "不要调用 execute、shell、本地命令或本地文件工具来查询互联网、天气、新闻、价格、汇率等实时信息。"
                 + "如果 web_search 返回失败，请直接说明网页搜索失败和失败原因。";
+    }
+
+    /**
+     * 为消息注入文件发送能力说明，指导 Agent 使用 &lt;file name=&quot;...&quot;&gt; 标记提供可下载文件。
+     */
+    private String addFileCapabilityInstruction(String content) {
+        return content + "\n\n[系统指令]\n"
+                + "当用户要求你生成可下载的文件（如 .md、.txt、.json、.csv、.xml、.html 等）时，"
+                + "请将文件内容包裹在 <file name=\"filename.ext\"> 和 </file> 标签中。"
+                + "例如：<file name=\"report.md\"># 标题\n\n内容</file>。"
+                + "文件内容会被自动保存为一个独立的可下载文件，用户在对话中可以看到下载链接。"
+                + "回复中的非文件内容正常输出即可，仅将需要下载的部分用 <file> 标签包裹。"
+                + "注意：不要在回复中创建指向 workspace 路径或本地文件路径的 markdown 链接，"
+                + "文件路径对用户不可访问。只描述文件名即可。";
     }
 
     // ===== SSE helpers =====

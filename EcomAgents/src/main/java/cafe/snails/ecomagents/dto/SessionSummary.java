@@ -36,5 +36,9 @@ public class SessionSummary {
         private String content;
         /** 时间戳 */
         private java.time.LocalDateTime timestamp;
+        /** 关联的 FileRecord ID（Agent 生成的文件） */
+        private Long fileId;
+        /** 文件名 */
+        private String fileName;
     }
 }

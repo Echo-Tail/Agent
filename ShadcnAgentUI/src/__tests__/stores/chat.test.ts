@@ -236,6 +236,44 @@ describe('useChatStore', () => {
     })
   })
 
+  describe('file-sending via onFile callback', () => {
+    it('attaches file metadata to assistant message when onFile fires before onDone', async () => {
+      const { streamChat } = await import('@/api/session')
+      const mockFile = { id: 1, name: 'report.md', url: '/v1/files/1', size: 256 }
+
+      vi.mocked(streamChat).mockImplementation(async (_agentId, _sessionId, _content, callbacks: any) => {
+        callbacks.onFile(mockFile)
+        callbacks.onDone('文件已生成')
+      })
+
+      const store = useChatStore()
+      store.activeSession = { id: 1, agentId: 1, title: 'Chat', folderId: null, tags: [], messages: [], createdAt: '', updatedAt: '' }
+
+      await store.sendMessage(1, '帮我生成一个 markdown 文件')
+
+      const lastMessage = store.messages.at(-1)
+      expect(lastMessage?.content).toBe('文件已生成')
+      expect(lastMessage?.file).toEqual(mockFile)
+    })
+
+    it('does not attach file when onFile never fires', async () => {
+      const { streamChat } = await import('@/api/session')
+
+      vi.mocked(streamChat).mockImplementation(async (_agentId, _sessionId, _content, callbacks: any) => {
+        callbacks.onDone('普通回复')
+      })
+
+      const store = useChatStore()
+      store.activeSession = { id: 1, agentId: 1, title: 'Chat', folderId: null, tags: [], messages: [], createdAt: '', updatedAt: '' }
+
+      await store.sendMessage(1, '你好')
+
+      const lastMessage = store.messages.at(-1)
+      expect(lastMessage?.content).toBe('普通回复')
+      expect(lastMessage?.file).toBeUndefined()
+    })
+  })
+
   describe('streaming tool statuses', () => {
     it('tracks knowledge retrieval fallback status from SSE summary', async () => {
       const { streamChat, listSessionsApi } = await import('@/api/session')

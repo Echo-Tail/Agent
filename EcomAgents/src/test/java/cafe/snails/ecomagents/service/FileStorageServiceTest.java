@@ -15,6 +15,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,5 +77,53 @@ class FileStorageServiceTest {
 
         assertEquals(400, result.getCode());
         assertEquals("文件名不能为空", result.getMessage());
+    }
+
+    @Test
+    void saveContentAsFile_shouldSaveMdContentAndReturnRecord() {
+        ReflectionTestUtils.setField(fileStorageService, "uploadDir", tempDir.toString());
+
+        String content = "# Hello\n\nWorld";
+        var savedRecord = FileRecord.builder()
+                .id(1L)
+                .originalName("test.md")
+                .fileSize(14L)
+                .mimeType("text/markdown")
+                .build();
+
+        when(fileRecordRepository.save(any())).thenReturn(savedRecord);
+
+        var result = fileStorageService.saveContentAsFile(content, "test.md", 1L);
+
+        assertNotNull(result);
+        assertEquals("test.md", result.getOriginalName());
+        verify(fileRecordRepository).save(any());
+    }
+
+    @Test
+    void saveContentAsFile_shouldRejectNullContent() {
+        ReflectionTestUtils.setField(fileStorageService, "uploadDir", tempDir.toString());
+
+        var result = fileStorageService.saveContentAsFile(null, "test.md", 1L);
+
+        assertNull(result);
+    }
+
+    @Test
+    void saveContentAsFile_shouldRejectBlankContent() {
+        ReflectionTestUtils.setField(fileStorageService, "uploadDir", tempDir.toString());
+
+        var result = fileStorageService.saveContentAsFile("   ", "test.md", 1L);
+
+        assertNull(result);
+    }
+
+    @Test
+    void saveContentAsFile_shouldRejectUnsupportedExtension() {
+        ReflectionTestUtils.setField(fileStorageService, "uploadDir", tempDir.toString());
+
+        var result = fileStorageService.saveContentAsFile("content", "test.exe", 1L);
+
+        assertNull(result);
     }
 }

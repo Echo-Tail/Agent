@@ -11,6 +11,7 @@ public final class SseEvent {
     public static final String TYPE_TOOL_RESULT = "tool_result";
     public static final String TYPE_DONE = "done";
     public static final String TYPE_ERROR = "error";
+    public static final String TYPE_FILE = "file";
 
     private SseEvent() {}
 }
