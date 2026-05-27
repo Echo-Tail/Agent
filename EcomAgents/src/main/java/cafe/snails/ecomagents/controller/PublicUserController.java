@@ -23,11 +23,12 @@ public class PublicUserController {
     /** 获取用户基本信息（用户名），任何已认证用户可访问 */
     @GetMapping("/user/{id}")
     public ApiResponse<Map<String, Object>> getUserInfo(@PathVariable Long id) {
-        return userRepository.findById(id)
-                .map(user -> ApiResponse.success(Map.of(
-                        "id", user.getId(),
-                        "username", user.getUsername()
-                )))
-                .orElse(ApiResponse.error(404, "用户不存在"));
+        var opt = userRepository.findById(id);
+        if (opt.isEmpty()) return ApiResponse.error(404, "用户不存在");
+        var user = opt.get();
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("id", user.getId());
+        data.put("username", user.getUsername());
+        return ApiResponse.success(data);
     }
 }
