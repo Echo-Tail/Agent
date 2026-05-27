@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getConversationApi, sendPrivateMessageApi } from '@/api/group'
+import { getUserApi } from '@/api/user'
 import type { ChatPrivateMessage } from '@/types/group'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -20,17 +21,40 @@ const loading = ref(true)
 const inputText = ref('')
 const sending = ref(false)
 
-const otherUsername = ref(`用户 #${otherUserId.value}`)
+const otherUsername = ref('')
+const myUsername = computed(() => auth.currentUser?.username || '我')
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   try {
-    const msgs = await getConversationApi(otherUserId.value)
+    const [user, msgs] = await Promise.all([
+      getUserApi(otherUserId.value),
+      getConversationApi(otherUserId.value),
+    ])
+    otherUsername.value = user.username
     messages.value = msgs.reverse()
   } catch {
     toast.error('加载失败')
   } finally {
     loading.value = false
   }
+
+  // 轮询新消息
+  pollTimer = setInterval(async () => {
+    if (document.hidden) return
+    try {
+      const msgs = await getConversationApi(otherUserId.value)
+      const reversed = msgs.reverse()
+      if (reversed.length > messages.value.length) {
+        messages.value = reversed
+      }
+    } catch { /* ignore */ }
+  }, 3000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
 })
 
 async function sendMessage() {
@@ -68,9 +92,9 @@ function goBack() {
         <ArrowLeft class="h-4 w-4" />
       </Button>
       <Avatar class="h-8 w-8">
-        <AvatarFallback>{{ otherUsername.charAt(0).toUpperCase() }}</AvatarFallback>
+        <AvatarFallback>{{ (otherUsername || 'U').charAt(0).toUpperCase() }}</AvatarFallback>
       </Avatar>
-      <span class="font-semibold">{{ otherUsername }}</span>
+      <span class="font-semibold">{{ otherUsername || `用户 #${otherUserId}` }}</span>
     </div>
 
     <!-- Messages -->
@@ -89,7 +113,7 @@ function goBack() {
         >
           <div class="min-w-0">
             <div :class="['flex items-center gap-2 mb-1', msg.senderId === auth.currentUser?.id ? 'flex-row-reverse' : '']">
-              <span class="text-xs text-[#888888]">{{ otherUsername }}</span>
+              <span class="text-xs text-[#888888]">{{ msg.senderId === auth.currentUser?.id ? myUsername : otherUsername }}</span>
               <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
             </div>
             <div :class="[

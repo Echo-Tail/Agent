@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // 普通用户可查看单个用户信息
+                        .requestMatchers(HttpMethod.GET, "/v1/users/*").authenticated()
                         // 管理员端点
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/models", "/v1/models/**").authenticated()
