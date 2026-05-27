@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getConversationApi, sendPrivateMessageApi } from '@/api/group'
@@ -23,8 +23,13 @@ const sending = ref(false)
 
 const otherUsername = ref('')
 const myUsername = computed(() => auth.currentUser?.username || '我')
+const messagesEnd = ref<HTMLDivElement | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+watch(() => messages.value.length, () => {
+  nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
+})
 
 onMounted(async () => {
   try {
@@ -126,6 +131,7 @@ function goBack() {
             </div>
           </div>
         </div>
+        <div ref="messagesEnd" />
       </template>
     </div>
 
