@@ -10,9 +10,11 @@ import cafe.snails.ecomagents.model.FileRecord;
 import cafe.snails.ecomagents.model.Session;
 import cafe.snails.ecomagents.model.SessionMessage;
 import cafe.snails.ecomagents.model.TokenUsageRecord;
+import cafe.snails.ecomagents.model.User;
 import cafe.snails.ecomagents.repository.AgentRepository;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import cafe.snails.ecomagents.repository.SessionRepository;
+import cafe.snails.ecomagents.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
@@ -61,6 +63,7 @@ public class HarnessChatService {
     private final TokenCounter tokenCounter;
     private final FileStorageService fileStorageService;
     private final SessionRepository sessionRepository;
+    private final UserRepository userRepository;
     private final LlmConfig llmConfig;
     private final AgentToolAvailabilityService toolAvailabilityService;
 
@@ -361,12 +364,17 @@ public class HarnessChatService {
             int promptTokens = tokenCounter.count(apiModelName, inputText);
             int completionTokens = outputText != null ? tokenCounter.count(apiModelName, outputText) : 0;
 
+            String resolvedAgentName = resolveAgentName(agentId);
+            String resolvedUsername = resolveUsername(userId);
+
             TokenUsageRecord record = TokenUsageRecord.builder()
                     .modelId(model != null ? model.getId() : null)
                     .modelName(modelName)
                     .modelType(modelType)
                     .userId(userId)
                     .agentId(agentId)
+                    .agentName(resolvedAgentName)
+                    .username(resolvedUsername)
                     .promptTokens(promptTokens)
                     .completionTokens(completionTokens)
                     .totalTokens(promptTokens + completionTokens)
@@ -378,6 +386,20 @@ public class HarnessChatService {
         } catch (Exception e) {
             log.warn("Failed to record token usage: {}", e.getMessage());
         }
+    }
+
+    private String resolveAgentName(Long agentId) {
+        if (agentId == null) return null;
+        return agentRepository.findById(agentId)
+                .map(Agent::getName)
+                .orElse(null);
+    }
+
+    private String resolveUsername(Long userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(User::getUsername)
+                .orElse(null);
     }
 
     private static String truncate(String s, int maxLen) {

@@ -39,6 +39,14 @@ public class TokenUsageRecord {
     @Column(name = "agent_id")
     private Long agentId;
 
+    /** Agent 名称（冗余，Agent 被删后仍可追溯） */
+    @Column(name = "agent_name", length = 100)
+    private String agentName;
+
+    /** 用户名（冗余，用户被删后仍可追溯） */
+    @Column(length = 100)
+    private String username;
+
     /** 输入 token 数 */
     @Column(name = "prompt_tokens")
     private Integer promptTokens;

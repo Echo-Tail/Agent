@@ -716,10 +716,13 @@
     "detailRecords": "详细调用记录",
     "columns": {
       "agentName": "Agent 名称",
+      "modelName": "模型名称",
+      "username": "用户名",
       "inputTokens": "输入 Token",
       "outputTokens": "输出 Token",
       "totalTokens": "总 Token",
       "cost": "费用",
+      "cnyCost": "费用 (CNY)",
       "date": "日期"
     },
     "statCards": {

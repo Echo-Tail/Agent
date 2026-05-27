@@ -37,9 +37,9 @@ public class TokenUsageController {
         return ApiResponse.success(tokenUsageService.getImageModelCallCount(startDate, endDate));
     }
 
-    /** 按日期区间查询详细调用记录 */
+    /** 按日期区间查询详细调用记录，含费用计算 */
     @GetMapping("/token-usage/detail")
-    public ApiResponse<List<TokenUsageRecord>> getDetail(
+    public ApiResponse<List<Map<String, Object>>> getDetail(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return ApiResponse.success(tokenUsageService.getDetailByDateRange(startDate, endDate));

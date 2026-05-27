@@ -13,13 +13,13 @@ import java.util.List;
  */
 public interface TokenUsageRecordRepository extends JpaRepository<TokenUsageRecord, Long> {
 
-    /** 按日期区间汇总各模型的调用次数和 token 消耗 */
+    /** 按日期区间汇总各 Agent + 模型的调用次数和 token 消耗 */
     @Query("""
-        SELECT t.modelName, t.modelType,
+        SELECT t.agentName, t.modelName, t.modelType, t.username,
                COUNT(t), SUM(t.totalTokens), SUM(t.promptTokens), SUM(t.completionTokens)
         FROM TokenUsageRecord t
         WHERE t.createdAt BETWEEN :start AND :end
-        GROUP BY t.modelName, t.modelType
+        GROUP BY t.agentName, t.modelName, t.modelType, t.username
         ORDER BY COUNT(t) DESC
         """)
     List<Object[]> sumByModelBetween(

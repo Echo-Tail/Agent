@@ -716,10 +716,13 @@
     "detailRecords": "Detail Records",
     "columns": {
       "agentName": "Agent Name",
+      "modelName": "Model Name",
+      "username": "Username",
       "inputTokens": "Input Tokens",
       "outputTokens": "Output Tokens",
       "totalTokens": "Total Tokens",
       "cost": "Cost",
+      "cnyCost": "Cost (CNY)",
       "date": "Date"
     },
     "statCards": {
