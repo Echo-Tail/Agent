@@ -138,7 +138,11 @@ async function handleFileUpload(event: Event) {
     for (const file of Array.from(files)) {
       const gf = await uploadGroupFileApi(groupId.value, file)
       const link = `[${file.name}](/v1/groups/${groupId.value}/files/${gf.id}/download)`
-      await sendGroupMessageApi(groupId.value, `上传了文件: ${link}`)
+      const msg = await sendGroupMessageApi(groupId.value, `上传了文件: ${link}`)
+      // 本地追加消息，避免等 SSE（可能连不上）
+      if (!messages.value.find(m => m.id === msg.id)) {
+        messages.value.push(msg)
+      }
     }
     toast.success(`已上传 ${files.length} 个文件`)
   } catch {
