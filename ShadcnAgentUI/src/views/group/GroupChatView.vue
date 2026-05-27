@@ -155,7 +155,10 @@ async function sendMessage() {
   inputText.value = ''
   try {
     const msg = await sendGroupMessageApi(groupId.value, content)
-    messages.value.push(msg)
+    // 去重：SSE 可能已先于 REST 响应到达，避免重复添加
+    if (!messages.value.find(m => m.id === msg.id)) {
+      messages.value.push(msg)
+    }
   } catch {
     toast.error('发送失败')
   } finally {
