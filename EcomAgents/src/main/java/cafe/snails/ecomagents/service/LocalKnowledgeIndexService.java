@@ -36,6 +36,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 本地知识索引服务，管理每个知识库（KB）的 SimpleKnowledge 实例（Ollama 嵌入 + InMemoryStore）。
+ * <p>职责：</p>
+ * <ul>
+ *   <li>构建和重建向量索引（文档 → 知识单元 → embedding → InMemoryStore）</li>
+ *   <li>提供稠密向量检索（searchSimilarDetailed）</li>
+ *   <li>支持父子块机制：索引子块内容，检索时返回父块</li>
+ *   <li>在应用启动时异步重建所有索引</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class LocalKnowledgeIndexService {
@@ -71,6 +81,16 @@ public class LocalKnowledgeIndexService {
         return searchSimilarDetailed(kbIds, queryText, limit, threshold).chunks();
     }
 
+    /**
+     * 对指定知识库执行稠密向量检索（余弦相似度）。
+     * 检索子块内容，命中后若有父块（parentContent payload）则返回父块。
+     *
+     * @param kbIds     知识库 ID 列表
+     * @param queryText 用户查询文本
+     * @param limit     返回上限
+     * @param threshold 相似度阈值
+     * @return 检索结果（含 chunks、scores、来源标记、状态信息）
+     */
     public KnowledgeSearchResult searchSimilarDetailed(List<Long> kbIds, String queryText, int limit, double threshold) {
         long startedAt = System.nanoTime();
         if (kbIds == null || kbIds.isEmpty() || queryText == null || queryText.isBlank()) {
@@ -107,7 +127,10 @@ public class LocalKnowledgeIndexService {
                     if (content == null || content.isBlank()) {
                         continue;
                     }
-                    chunks.add(new ScoredChunk(content, result.getScore() == null ? 0.0 : result.getScore()));
+                    // Use parent content if available (Parent-Child chunking)
+                    String parentContent = (String) result.getMetadata().getPayloadValue("parentContent");
+                    String chunkContent = (parentContent != null && !parentContent.isBlank()) ? parentContent : content;
+                    chunks.add(new ScoredChunk(chunkContent, result.getScore() == null ? 0.0 : result.getScore()));
                 }
             } catch (RuntimeException e) {
                 degraded = true;
@@ -116,16 +139,18 @@ public class LocalKnowledgeIndexService {
             }
         }
 
-        List<String> sortedChunks = chunks.stream()
+        var sorted = chunks.stream()
                 .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(Math.max(1, limit))
-                .map(ScoredChunk::content)
                 .toList();
+        List<String> sortedChunks = sorted.stream().map(ScoredChunk::content).toList();
+        List<Double> sortedScores = sorted.stream().map(ScoredChunk::score).toList();
+        List<String> sortedSources = sorted.stream().map(sc -> "vector").toList();
         long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
         int returnedChars = sortedChunks.stream().mapToInt(String::length).sum();
         log.info("Knowledge vector retrieval completed: kbCount={}, chunks={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
                 searchedKbCount, sortedChunks.size(), degraded, timedOut, elapsedMillis, returnedChars);
-        return new KnowledgeSearchResult(sortedChunks, degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
+        return new KnowledgeSearchResult(sortedChunks, sortedSources, sortedScores, degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
     }
 
     public void rebuildAsync(Long kbId) {
@@ -220,6 +245,23 @@ public class LocalKnowledgeIndexService {
                     knowledge.addDocuments(List.of(document)).block();
                     indexedUnits++;
                 } catch (RuntimeException e) {
+                    // Extract Ollama-specific response body for diagnostics
+                    Throwable cause = e.getCause();
+                    if (cause != null) {
+                        String causeName = cause.getClass().getName();
+                        if (causeName.contains("OllamaHttpException") || causeName.contains("OllamaHttpClient$OllamaHttpException")) {
+                            try {
+                                var method = cause.getClass().getMethod("getResponseBody");
+                                String body = (String) method.invoke(cause);
+                                if (body != null && !body.isBlank()) {
+                                    log.warn("Ollama embedding failed for unit {} of doc {} (KB {}): status=400, response={}",
+                                            i, doc.getId(), kbId, body.length() > 200 ? body.substring(0, 200) + "..." : body);
+                                }
+                            } catch (Exception ignored) {
+                                // reflection failed, fall through to generic log
+                            }
+                        }
+                    }
                     log.warn("Skipped embedding unit {} of document {} in KB {}: {}", i, doc.getId(), kbId, e.getMessage());
                 }
             }
@@ -278,6 +320,8 @@ public class LocalKnowledgeIndexService {
                 .addPayload("fileType", unit.fileType())
                 .addPayload("unitType", unit.unitType())
                 .addPayload("sourceLocation", unit.sourceLocation())
+                .addPayload("parentContent", unit.parentContent() != null ? unit.parentContent() : "")
+                .addPayload("parentSourceLocation", unit.parentSourceLocation() != null ? unit.parentSourceLocation() : "")
                 .build();
         Document document = new Document(metadata);
         document.setVectorName("kb-" + unit.knowledgeBaseId());
@@ -329,11 +373,31 @@ public class LocalKnowledgeIndexService {
 
     public record KnowledgeSearchResult(
             List<String> chunks,
+            List<String> sources,
+            List<Double> scores,
             boolean degraded,
             boolean timedOut,
             int searchedKbCount,
             long elapsedMillis,
             int returnedChars) {
+
+        public KnowledgeSearchResult(List<String> chunks, boolean degraded, boolean timedOut,
+                                     int searchedKbCount, long elapsedMillis, int returnedChars) {
+            this(chunks, List.of(), List.of(), degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
+        }
+
+        public KnowledgeSearchResult(List<String> chunks, List<String> sources, List<Double> scores,
+                                     boolean degraded, boolean timedOut,
+                                     int searchedKbCount, long elapsedMillis, int returnedChars) {
+            this.chunks = chunks;
+            this.sources = sources;
+            this.scores = scores;
+            this.degraded = degraded;
+            this.timedOut = timedOut;
+            this.searchedKbCount = searchedKbCount;
+            this.elapsedMillis = elapsedMillis;
+            this.returnedChars = returnedChars;
+        }
     }
 
     private record KnowledgeIndex(SimpleKnowledge knowledge, int indexedChunks) {

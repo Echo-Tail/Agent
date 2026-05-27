@@ -123,6 +123,13 @@ public class WorkspaceInitService {
                 + "The text outside the `<file>` tags will be displayed normally as your response."
                 + "\n\nIMPORTANT: Do NOT create markdown links to workspace paths or local file paths in your response. "
                 + "Those paths are not accessible to the user. Just describe the filename in plain text."
+                + "\n\n[Knowledge Base Rules]\n"
+                + "This agent has knowledge bases bound to it. When the user asks about information in those knowledge bases:\n"
+                + "1. ALWAYS use the retrieve_knowledge tool to search for relevant content\n"
+                + "2. If results are incomplete, try different search keywords\n"
+                + "3. NEVER use file tools (list_files, read_file, execute, etc.) to directly access workspace files\n"
+                + "4. Knowledge base files are stored in the workspace directory but are NOT directly accessible\n"
+                + "5. If multiple searches still cannot find complete information, honestly report what was found"
                 + "\n\nSupported file types: .md, .txt, .json, .csv, .xml, .html, .pdf"
                 + "\n\n<!-- Agent ID: " + agentId + " -->\n";
     }

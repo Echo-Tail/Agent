@@ -22,6 +22,17 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -197,65 +208,135 @@ public class KnowledgeBaseService {
 
     // ========== Chat Integration ==========
 
-    public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
+                public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
         long startedAt = System.nanoTime();
-        LocalKnowledgeIndexService.KnowledgeSearchResult vectorResult = localKnowledgeIndexService.searchSimilarDetailed(
-                kbIds,
-                userQuery,
-                llmConfig.getRagSearchLimit(),
-                llmConfig.getRagSimilarityThreshold()
-        );
-        List<String> chunks = vectorResult == null ? List.of() : vectorResult.chunks();
-        if (chunks != null && !chunks.isEmpty()) {
-            StringBuilder context = new StringBuilder("\n\nKnowledge retrieval status: ")
-                    .append(vectorResult.degraded() ? "degraded_vector_search" : "vector_search")
-                    .append(vectorResult.timedOut() ? " (timeout fallback available)" : "")
-                    .append("\n\nUse the knowledge context below to answer. Do not call web_search or local file tools unless the user explicitly asks for realtime, external, or workspace file information.\n\n");
-            for (int i = 0; i < chunks.size(); i++) {
-                context.append("--- chunk ").append(i + 1).append(" ---\n")
-                        .append(truncate(chunks.get(i), 3000))
-                        .append("\n\n");
-            }
-            String limited = limitContext(context.toString());
-            log.info("Knowledge context built from vector search: kbCount={}, chunks={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
-                    kbIds.size(), chunks.size(), vectorResult.degraded(), vectorResult.timedOut(),
-                    elapsedMillis(startedAt), limited.length());
-            return limited;
-        }
+        int searchLimit = llmConfig.getRagSearchLimit();
 
-        List<KnowledgeUnit> units = findRelevantUnits(kbIds, userQuery);
-        if (units.isEmpty()) {
-            log.info("Knowledge context empty: kbCount={}, degraded={}, timedOut={}, elapsedMs={}",
-                    kbIds.size(), vectorResult != null && vectorResult.degraded(),
-                    vectorResult != null && vectorResult.timedOut(), elapsedMillis(startedAt));
+        // Dense vector search
+        LocalKnowledgeIndexService.KnowledgeSearchResult vectorResult = localKnowledgeIndexService.searchSimilarDetailed(
+                kbIds, userQuery, searchLimit, llmConfig.getRagSimilarityThreshold());
+
+        // Sparse keyword search
+        List<ScoredUnit> sparseResults = findRelevantUnitsScored(kbIds, userQuery);
+
+        // RRF fusion
+        boolean hasVector = vectorResult != null && !vectorResult.chunks().isEmpty();
+        boolean hasSparse = !sparseResults.isEmpty();
+
+        if (!hasVector && !hasSparse) {
+            log.info("Knowledge context empty: kbCount={}, elapsedMs={}",
+                    kbIds.size(), elapsedMillis(startedAt));
             if (vectorResult != null && vectorResult.timedOut()) {
                 return "Knowledge retrieval status: vector_timeout_no_fallback\n\nNo relevant knowledge context is available.";
             }
             return "";
         }
 
-        String status = vectorResult != null && vectorResult.timedOut()
-                ? "text_search_fallback_after_vector_timeout"
-                : "text_search_fallback";
-        StringBuilder context = new StringBuilder("\n\nKnowledge retrieval status: ")
-                .append(status)
-                .append("\n\nUse the knowledge context below to answer. Do not call web_search or local file tools unless the user explicitly asks for realtime, external, or workspace file information.\n\n");
-        for (int i = 0; i < Math.min(units.size(), llmConfig.getRagSearchLimit()); i++) {
-            KnowledgeUnit unit = units.get(i);
-            context.append("--- ").append(unit.fileName());
-            if (unit.sourceLocation() != null && !unit.sourceLocation().isBlank()) {
-                context.append(" @ ").append(unit.sourceLocation());
+        int K = 60;
+        java.util.Map<String, Double> rrfScores = new java.util.HashMap<>();
+        java.util.Map<String, String> chunkTexts = new java.util.HashMap<>();
+
+        if (hasVector) {
+            for (int i = 0; i < vectorResult.chunks().size(); i++) {
+                String key = "dense_" + i;
+                rrfScores.put(key, 1.0 / (K + i + 1));
+                chunkTexts.put(key, vectorResult.chunks().get(i));
             }
-            context.append(" ---\n")
-                    .append(buildRelevantSnippet(unit, userQuery, 1800)).append("\n\n");
         }
+
+        int sparseRank = 0;
+        for (ScoredUnit su : sparseResults) {
+            String key = "sparse_" + sparseRank;
+            double score = 1.0 / (K + sparseRank + 1);
+            rrfScores.merge(key, score, Double::sum);
+            KnowledgeUnit unit = su.unit();
+            StringBuilder sb = new StringBuilder();
+            sb.append("[keyword] ").append(unit.fileName());
+            if (unit.sourceLocation() != null && !unit.sourceLocation().isBlank()) {
+                sb.append(" @ ").append(unit.sourceLocation());
+            }
+            sb.append("\n").append(buildRelevantSnippet(unit, userQuery, 1800));
+            chunkTexts.put(key, sb.toString());
+            sparseRank++;
+        }
+
+        List<String> fusedChunks = rrfScores.entrySet().stream()
+                .sorted(java.util.Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(searchLimit)
+                .map(e -> chunkTexts.get(e.getKey()))
+                .toList();
+
+        // Re-rank fused results by keyword match
+        fusedChunks = rerankByKeywords(fusedChunks, userQuery);
+
+        String statusLabel;
+        if (hasVector && hasSparse) {
+            statusLabel = "hybrid_vector_sparse";
+        } else if (hasVector) {
+            statusLabel = vectorResult.degraded() ? "degraded_vector_search" : "vector_search";
+        } else {
+            statusLabel = "text_search_fallback";
+        }
+
+        StringBuilder context = new StringBuilder("\n\nKnowledge retrieval status: ")
+                .append(statusLabel);
+        if (vectorResult != null && vectorResult.timedOut()) {
+            context.append(" (partial)");
+        }
+        context.append("\n\nUse the knowledge context below to answer. Do NOT call web_search or local file tools unless the user explicitly asks for realtime, external, or workspace file information. Do NOT attempt to read knowledge base files directly from the workspace directory - they are only accessible through this knowledge context.\n\n");
+
+        for (int i = 0; i < fusedChunks.size(); i++) {
+            context.append("--- chunk ").append(i + 1).append(" ---\n")
+                    .append(truncate(fusedChunks.get(i), 3000))
+                    .append("\n\n");
+        }
+
         String limited = limitContext(context.toString());
-        log.info("Knowledge context built from text fallback: kbCount={}, units={}, degraded={}, timedOut={}, elapsedMs={}, returnedChars={}",
-                kbIds.size(), units.size(), vectorResult != null && vectorResult.degraded(),
-                vectorResult != null && vectorResult.timedOut(), elapsedMillis(startedAt), limited.length());
+        log.info("Knowledge context built (hybrid): kbCount={}, fusedChunks={}, status={}, elapsedMs={}, returnedChars={}",
+                kbIds.size(), fusedChunks.size(), statusLabel, elapsedMillis(startedAt), limited.length());
         return limited;
+    }
+
+
+    /**
+     * 返回带有分数的稀疏检索结果，供混合检索（Hybrid RRF）使用。
+     */
+    private List<ScoredUnit> findRelevantUnitsScored(List<Long> kbIds, String userQuery) {
+        String keyword = userQuery == null ? "" : userQuery.trim();
+        List<KnowledgeDocument> docs = List.of();
+        if (!keyword.isBlank()) {
+            docs = docRepository.searchByKeywordAndKbIds(keyword, kbIds);
+        }
+        if (docs == null || docs.isEmpty()) {
+            docs = docRepository.findByKnowledgeBaseIdIn(kbIds);
+        }
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> terms = extractSearchTerms(keyword);
+        Set<String> identifiers = extractIdentifierTerms(keyword);
+        List<ScoredUnit> scoredUnits = docs.stream()
+                .flatMap(doc -> knowledgeUnitParserService.parse(doc).stream())
+                .map(unit -> new ScoredUnit(unit, scoreUnit(unit, terms, identifiers)))
+                .filter(scored -> scored.score() > 0 || terms.isEmpty())
+                .sorted(Comparator.comparingInt(ScoredUnit::score).reversed())
+                .toList();
+
+        if (scoredUnits.isEmpty()) {
+            return List.of();
+        }
+        int topScore = scoredUnits.get(0).score();
+        int minScore = topScore > 0 ? Math.max(1, (int) Math.ceil(topScore * 0.75)) : 0;
+        List<ScoredUnit> selected = scoredUnits.stream()
+                .filter(scored -> scored.score() >= minScore)
+                .limit(Math.max(1, llmConfig.getRagSearchLimit()))
+                .toList();
+        log.info("Sparse retrieval candidates: docs={}, units={}, selected={}, topScore={}",
+                docs.size(), scoredUnits.size(), selected.size(), topScore);
+        return selected;
     }
 
     private List<KnowledgeUnit> findRelevantUnits(List<Long> kbIds, String userQuery) {
@@ -501,6 +582,72 @@ public class KnowledgeBaseService {
     }
 
     private record ScoredUnit(KnowledgeUnit unit, int score) {
+    }
+
+    /**
+     * 关键词重排序：对 RRF 融合后的结果进行第二遍精排。
+     * 基于查询词覆盖度 + 精确短语匹配加分。
+     */
+    private List<String> rerankByKeywords(List<String> chunks, String userQuery) {
+        if (chunks == null || chunks.size() <= 1 || userQuery == null || userQuery.isBlank()) {
+            return chunks;
+        }
+
+        // Extract unique query terms
+        String[] queryTerms = userQuery.toLowerCase().split("[\\s,;.:]+");
+        java.util.Set<String> termSet = new java.util.HashSet<>();
+        for (String t : queryTerms) {
+            String trimmed = t.trim();
+            if (trimmed.length() >= 2) termSet.add(trimmed);
+        }
+        if (termSet.isEmpty()) return chunks;
+
+        // Also extract bigrams for CJK text
+        java.util.Set<String> cjkGrams = new java.util.HashSet<>();
+        for (String t : termSet) {
+            if (t.length() <= 3 && t.chars().anyMatch(c -> Character.isIdeographic(c))) {
+                for (int i = 0; i < t.length() - 1; i++) {
+                    cjkGrams.add(t.substring(i, i + 2));
+                }
+            }
+        }
+        termSet.addAll(cjkGrams);
+
+        // Score each chunk: keyword coverage + density
+        List<java.util.AbstractMap.SimpleEntry<String, Double>> scored = new ArrayList<>();
+        String exactPhrase = userQuery.toLowerCase().trim();
+
+        for (String chunk : chunks) {
+            if (chunk == null || chunk.isBlank()) continue;
+            String lower = chunk.toLowerCase();
+            int matchCount = 0;
+            for (String term : termSet) {
+                int idx = lower.indexOf(term);
+                while (idx >= 0) {
+                    matchCount++;
+                    idx = lower.indexOf(term, idx + 1);
+                }
+            }
+
+            // Coverage: how many unique terms matched
+            long uniqueMatches = termSet.stream().filter(t -> lower.contains(t)).count();
+            double coverage = (double) uniqueMatches / Math.max(1, termSet.size());
+
+            // Density: match count / chunk length
+            double density = (double) matchCount / Math.max(1, chunk.length());
+
+            // Exact phrase boost
+            double phraseBoost = lower.contains(exactPhrase) ? 0.3 : 0.0;
+
+            // Combined score: coverage weighted higher, density and phrase as bonuses
+            double score = coverage * 2.0 + density * 5.0 + phraseBoost;
+            scored.add(new java.util.AbstractMap.SimpleEntry<>(chunk, score));
+        }
+
+        return scored.stream()
+                .sorted(java.util.Map.Entry.<String, Double>comparingByValue().reversed())
+                .map(java.util.Map.Entry::getKey)
+                .toList();
     }
 
     private String limitContext(String context) {

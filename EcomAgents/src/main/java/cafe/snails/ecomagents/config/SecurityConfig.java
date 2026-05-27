@@ -20,6 +20,10 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 
+/**
+ * Spring Security 配置。定义 JWT 无状态认证、公开端点白名单、管理员端点隔离。
+ * <p>认证流程：JwtAuthenticationFilter → SecurityContextHolder → @CurrentUserId</p>
+ */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor

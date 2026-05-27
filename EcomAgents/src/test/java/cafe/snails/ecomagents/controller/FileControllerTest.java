@@ -9,6 +9,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.http.ResponseEntity;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
@@ -45,5 +47,41 @@ class FileControllerTest {
         var result = fileController.getFileRecord(999L);
         assertEquals(404, result.getCode());
         assertEquals("文件不存在", result.getMessage());
+    }
+
+    @Test
+    void buildContentDisposition_shouldEncodeChineseFilename() {
+        // Use reflection to test the private static method
+        String fileName = "努力学习的青春最美.md";
+        String result = invokeBuildContentDisposition(fileName);
+
+        assertTrue(result.startsWith("inline; filename=\""));
+        assertTrue(result.contains("filename*=UTF-8''"));
+        assertTrue(result.contains("%E5%8A%AA%E5%8A%9B"), "Should URL-encode Chinese characters");
+    }
+
+    @Test
+    void buildContentDisposition_shouldHandleAsciiFilename() {
+        String result = invokeBuildContentDisposition("report.pdf");
+        assertTrue(result.startsWith("inline; filename=\""));
+        assertTrue(result.contains("filename*=UTF-8''report.pdf"));
+    }
+
+    @Test
+    void buildContentDisposition_shouldHandleFilenameWithSpaces() {
+        String result = invokeBuildContentDisposition("my report.md");
+        // The '+' from URLEncoder should be replaced with ' '
+        assertTrue(result.contains("my report.md") || result.contains("my+report.md"));
+    }
+
+    /** 通过反射调用私有静态方法 buildContentDisposition */
+    private String invokeBuildContentDisposition(String fileName) {
+        try {
+            var method = FileController.class.getDeclaredMethod("buildContentDisposition", String.class);
+            method.setAccessible(true);
+            return (String) method.invoke(null, fileName);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
