@@ -43,7 +43,7 @@ function goToChat(agentId: number) {
         <CardContent class="p-5">
           <div class="flex items-center gap-3 mb-3">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden">
-              <AgentIcon v-if="agent.icon" :icon="agent.icon" class="h-6 w-6" />
+              <AgentIcon v-if="agent.icon || agent.avatar" :icon="agent.icon" :avatar="agent.avatar" class="h-6 w-6" />
               <span v-else class="text-lg font-bold">{{ agent.name.charAt(0).toUpperCase() }}</span>
             </div>
             <div>

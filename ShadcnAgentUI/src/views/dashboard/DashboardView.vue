@@ -140,7 +140,7 @@ async function handleDelete() {
           <div class="flex items-start justify-between mb-3 cursor-pointer" @click="goToChat(agent.id)">
             <div class="flex items-center gap-3">
               <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden">
-                <AgentIcon v-if="agent.icon" :icon="agent.icon" class="h-6 w-6" />
+                <AgentIcon v-if="agent.icon || agent.avatar" :icon="agent.icon" :avatar="agent.avatar" class="h-6 w-6" />
                 <span v-else class="text-lg font-bold">{{ agent.name.charAt(0).toUpperCase() }}</span>
               </div>
               <div>

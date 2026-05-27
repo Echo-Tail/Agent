@@ -8,6 +8,7 @@ import cafe.snails.ecomagents.service.AgentService;
 import cafe.snails.ecomagents.service.AgentToolAvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -72,5 +73,13 @@ public class AgentController {
     public ApiResponse<Agent> deleteAgent(@PathVariable("id") Long id,
                                           @CurrentUserId Long userId) {
         return agentService.deleteAgent(id, userId);
+    }
+
+    /** 上传 Agent 头像（仅创建者或管理员可操作） */
+    @PostMapping("/agents/{id}/avatar")
+    public ApiResponse<String> uploadAvatar(@PathVariable("id") Long id,
+                                            @RequestParam("file") MultipartFile file,
+                                            @CurrentUserId Long userId) {
+        return agentService.uploadAvatar(id, file, userId);
     }
 }

@@ -251,11 +251,15 @@ type: "done"       → 完整文本
 
 #### 核心概念
 
-- **群（Group）** — 聊天室的容器，包含成员列表、绑定的 Agent 列表、消息流。群名、头像由创建者管理。
+- **群（Group）** — 聊天室的容器，包含成员列表、绑定的 Agent 列表、消息流。群名、头像由创建者管理。头像图片存储于服务器 `./uploads/` 目录，`ChatGroup.avatar` 字段存其 URL。
+- **Agent 头像** — Agent 支持两种头像方式：`icon`（Bootstrap Icons 类名）和 `avatar`（自定义上传图片 URL）。两者并存，`avatar` 优先级高于 `icon`。前端渲染时优先显示 `avatar`，回退到 `icon`。
 - **成员角色**：
   - **创建者（CREATOR）** — 创建群的用户，拥有全部管理权限：解散群、踢人、修改群信息。
   - **普通成员（MEMBER）** — 可发送/接收消息、上传下载文件、发送表情包、邀请新用户入群、拉入自己创建的 Agent。
 - **群 Agent 绑定** — 成员将自己创建的 Agent 拉入群，群内任何用户都可 `@AgentName` 与该 Agent 一对一对话。Agent 与 Agent 之间暂不支持互艾特。
+- **成员信息** — 群成员列表返回的用户信息和 Agent 信息均从各自的实体表实时读取（昵称/名称、头像/图标），不额外存储群内副本。
+- **统一成员视图** — `group_members` 表（存用户）和 `group_agents` 表（存 Agent）各自保持独立不合并，查询时通过后端 UNION 合成统一的成员列表，每条记录带 `memberType`（USER / AGENT）区分来源。`GroupMember.role`（CREATOR / MEMBER）仅对用户有意义，Agent 统一视为 MEMBER。
+- **邀请逻辑** — 邀请入口显示"可邀请的用户"（系统内所有非群成员的用户）和"可邀请的 Agent"（当前用户创建且未入群的 Agent）。
 
 #### 权限矩阵
 
@@ -307,5 +311,8 @@ type: "done"       → 完整文本
 | 生产 | PostgreSQL | 需安装 pgvector 扩展 |
 
 ## 部署
-- **方式**：单体部署（Spring Boot jar）
-- **沙箱**：BoxLite（无需 Docker）
+- **方式**：单体部署（Spring Boot jar + Vite build），本地 Windows 运行
+- **沙箱**：暂不启用。AgentScope Java SDK 1.1.0-RC1 支持 DockerFilesystemSpec（每会话独立容器），但当前评估认为复杂度高于收益，推迟实现。
+  - Docker 环境：WSL2 Ubuntu 26.04 原生 docker-ce，IP 192.168.2.107
+  - 若无沙箱，Agent 的 `execute` 工具会在宿主 Windows 上直接运行脚本（风险接受）
+  - 未来如需启用，配置 `agentscope.sandbox.docker.host=tcp://192.168.2.107:2375` + HarnessAgent.Builder.filesystem(DockerFilesystemSpec)

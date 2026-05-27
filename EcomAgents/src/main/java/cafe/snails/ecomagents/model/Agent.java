@@ -31,6 +31,10 @@ public class Agent {
     @Builder.Default
     private String icon = "bi-robot";
 
+    /** 自定义头像图片 URL，优先级高于 icon */
+    @Column(length = 500)
+    private String avatar;
+
     /** 功能描述文本 */
     @Column(columnDefinition = "TEXT")
     private String description;

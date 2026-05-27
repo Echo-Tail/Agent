@@ -25,6 +25,16 @@ export interface GroupAgent {
   addedAt: string
 }
 
+export interface UnifiedMember {
+  id: number
+  memberType: 'USER' | 'AGENT'
+  refId: number
+  name: string
+  avatar?: string
+  icon?: string
+  role: 'CREATOR' | 'MEMBER'
+}
+
 export interface GroupMessage {
   id: number
   groupId: number
