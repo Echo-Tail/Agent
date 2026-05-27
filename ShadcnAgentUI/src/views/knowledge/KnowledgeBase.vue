@@ -156,12 +156,17 @@ function selectFiles() {
 
 async function handleFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+  const files = input.files
+  if (!files || files.length === 0) return
+  const fileList = Array.from(files)
   uploadLoading.value = true
   try {
-    const doc = await store.uploadDoc(kbId.value, file)
-    toast.success(t('knowledge.uploadSuccess', { name: doc.fileName }))
+    const docs = await store.uploadDocs(kbId.value, fileList)
+    if (docs.length === 1) {
+      toast.success(t('knowledge.uploadSuccess', { name: docs[0].fileName }))
+    } else {
+      toast.success(t('knowledge.uploadSuccessBatch', { count: docs.length }))
+    }
   } catch { /* interceptor handles toast */ } finally {
     uploadLoading.value = false
     input.value = ''
@@ -377,6 +382,7 @@ function formatDate(dateStr: string) {
           type="file"
           accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.json"
           class="hidden"
+          multiple
           @change="handleFileSelected"
         />
         <Upload class="mx-auto h-10 w-10 text-muted-foreground/60" />

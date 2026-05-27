@@ -452,6 +452,7 @@
     "uploadFormats": "支持 TXT、MD、PDF、DOCX、XLSX、CSV、JSON、XML 等格式",
     "docList": "文档列表 ({count})",
     "uploadSuccess": "「{name}」上传成功",
+    "uploadSuccessBatch": "成功上传 {count} 个文件",
     "kbNameRequired": "请输入知识库名称",
     "searchPlaceholder": "搜索文档内容...",
     "previewUnknownType": "未知",

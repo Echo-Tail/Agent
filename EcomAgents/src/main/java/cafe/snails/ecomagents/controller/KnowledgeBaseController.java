@@ -71,6 +71,16 @@ public class KnowledgeBaseController {
         return kbService.uploadDocument(kbId, file, userId, username, request);
     }
 
+    @PostMapping("/knowledge-bases/{kbId}/documents/batch")
+    public ApiResponse<List<KnowledgeDocument>> uploadDocuments(
+            @PathVariable("kbId") Long kbId,
+            @RequestParam("files") MultipartFile[] files,
+            @CurrentUserId Long userId,
+            HttpServletRequest request) {
+        String username = resolveUsername(userId);
+        return kbService.uploadDocuments(kbId, files, userId, username, request);
+    }
+
     @DeleteMapping("/knowledge-bases/{kbId}/documents/{docId}")
     public ApiResponse<Void> deleteDocument(
             @PathVariable("kbId") Long kbId,

@@ -452,6 +452,7 @@
     "uploadFormats": "Supports TXT, MD, PDF, DOCX, XLSX, CSV, JSON, XML and other formats",
     "docList": "Documents ({count})",
     "uploadSuccess": "「{name}」uploaded successfully",
+    "uploadSuccessBatch": "{count} files uploaded successfully",
     "kbNameRequired": "Please enter a knowledge base name",
     "searchPlaceholder": "Search document content...",
     "previewUnknownType": "Unknown",

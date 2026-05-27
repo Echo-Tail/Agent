@@ -8,6 +8,7 @@ import {
   deleteKnowledgeBaseApi,
   listDocumentsApi,
   uploadDocumentApi,
+  uploadDocumentsApi,
   deleteDocumentApi,
   searchDocumentsApi,
 } from '@/api/knowledge'
@@ -75,6 +76,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     return doc
   }
 
+  async function uploadDocs(kbId: number, files: File[]) {
+    const docs = await uploadDocumentsApi(kbId, files)
+    documents.value = (await listDocumentsApi(kbId)) ?? []
+    return docs
+  }
+
   async function removeDoc(kbId: number, docId: number) {
     await deleteDocumentApi(kbId, docId)
     documents.value = documents.value.filter((d) => d.id !== docId)
@@ -98,6 +105,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   return {
     kbs, currentKb, documents, loading, searchQuery, searchResults, isSearching,
     fetchKbs, loadKb, createKb, updateKb, removeKb,
-    uploadDoc, removeDoc, search, clearCurrent,
+    uploadDoc, uploadDocs, removeDoc, search, clearCurrent,
   }
 })
