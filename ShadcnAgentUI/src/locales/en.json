@@ -449,6 +449,7 @@
     "noDocs": "No documents yet. Please upload.",
     "noSearchResults": "No matching documents",
     "uploadArea": "Click or drag files here to upload",
+    "dropToUpload": "Release to upload",
     "uploadFormats": "Supports TXT, MD, PDF, DOCX, XLSX, CSV, JSON, XML and other formats",
     "docList": "Documents ({count})",
     "uploadSuccess": "「{name}」uploaded successfully",
