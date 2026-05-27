@@ -98,6 +98,8 @@ function handleKeydown(e: KeyboardEvent) {
       return
     }
   }
+  // 阻止冒泡：避免原生 keydown 事件冒泡到根元素再次触发父组件的 @keydown 监听
+  e.stopPropagation()
   emit('keydown', e)
 }
 
