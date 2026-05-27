@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { getUnifiedMembersApi } from '@/api/group'
 import AgentIcon from '@/components/AgentIcon.vue'
 
@@ -38,7 +38,18 @@ onMounted(async () => {
   } catch {
     mentionItems.value = []
   }
+  nextTick(autoResize)
 })
+
+// 输入内容变化时自动调整高度
+watch(() => props.modelValue, () => nextTick(autoResize))
+
+function autoResize() {
+  const ta = textareaRef.value
+  if (!ta) return
+  ta.style.height = 'auto'
+  ta.style.height = ta.scrollHeight + 'px'
+}
 
 // 检测光标前的 @ 文本
 function detectMention(text: string, cursorPos: number): { active: boolean; searchText: string } {
@@ -153,7 +164,8 @@ onUnmounted(() => {
     <textarea
       ref="textareaRef"
       :value="modelValue"
-      class="flex min-h-[37px] w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+      rows="1"
+      class="flex min-h-11 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
       :placeholder="'发送消息...'"
       @input="handleInput"
       @keydown="handleKeydown"

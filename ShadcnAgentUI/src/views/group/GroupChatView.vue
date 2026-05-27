@@ -50,11 +50,9 @@ const memberNames = computed(() => {
 })
 
 // 将 @[名称](type:id) 渲染为高亮标签，[text](url) 渲染为下载链接
-function renderContent(text: string, isOwn: boolean): string {
+function renderContent(text: string): string {
   // ☕ 极简商务风格：@提及高亮
-  const mentionClass = isOwn
-    ? 'bg-[#CED4DA] text-[#212529] rounded-sm px-1'    // 自己的气泡中
-    : 'bg-[#E9ECEF] text-[#495057] rounded-sm px-1'     // 他人的气泡中
+  const mentionClass = ''
   const linkClass = 'text-[#495057] underline hover:no-underline'
   // 先处理下载链接 [text](url)
   let result = text.replace(
@@ -241,9 +239,9 @@ async function onInvited() {
                 </span>
                 <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
               </div>
-              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#07C160] text-[#191919]' : 'bg-white text-[#191919] shadow-sm']">
+              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#E9ECEF] text-[#191919]' : 'bg-white text-[#191919] shadow-sm']">
                 <MarkdownRenderer v-if="msg.senderType === 'AGENT'" :content="msg.content" />
-                <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content, isMyMessage(msg))"></div>
+                <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content)"></div>
               </div>
             </div>
           </div>
