@@ -2,18 +2,15 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { listMyGroupsApi, createGroupApi, getGroupApi, updateGroupApi, disbandGroupApi, uploadGroupAvatarApi, getUnreadCountApi } from '@/api/group'
+import { listMyGroupsApi, createGroupApi, getGroupApi, updateGroupApi, disbandGroupApi, uploadGroupAvatarApi } from '@/api/group'
 import type { ChatGroup } from '@/types/group'
 // import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Plus, MessageCircle, Settings2, Trash2, Check, X } from 'lucide-vue-next'
-
-const LAST_READ_KEY = 'group_last_read_'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -32,35 +29,9 @@ const renameValue = ref('')
 const disbandTargetId = ref<number | null>(null)
 const showDisbandConfirm = ref(false)
 
-// 未读消息数 key=groupId
-const unreadCounts = ref<Record<number, number>>({})
-
-function getLastReadTime(groupId: number): string {
-  return localStorage.getItem(LAST_READ_KEY + groupId) || new Date(0).toISOString()
-}
-
-function markAsRead(groupId: number) {
-  localStorage.setItem(LAST_READ_KEY + groupId, new Date().toISOString())
-  unreadCounts.value[groupId] = 0
-}
-
-async function fetchUnreadCounts() {
-  const counts: Record<number, number> = {}
-  for (const g of groups.value) {
-    try {
-      const after = getLastReadTime(g.id)
-      counts[g.id] = await getUnreadCountApi(g.id, after)
-    } catch {
-      counts[g.id] = 0
-    }
-  }
-  unreadCounts.value = counts
-}
-
 onMounted(async () => {
   try {
     groups.value = await listMyGroupsApi()
-    fetchUnreadCounts()
   } catch {
     toast.error(t('error.loadFailed'))
   } finally {
@@ -111,7 +82,6 @@ async function createGroup() {
 }
 
 function enterGroup(groupId: number) {
-  markAsRead(groupId)
   router.push({ name: 'GroupChatDetail', params: { id: groupId } })
 }
 
@@ -233,9 +203,6 @@ async function confirmDisband() {
         </CardHeader>
         <CardContent class="text-sm text-muted-foreground flex items-center justify-between">
           <span>创建于 {{ new Date(group.createdAt).toLocaleDateString() }}</span>
-          <Badge v-if="(unreadCounts[group.id] || 0) > 0" variant="default" class="ml-auto text-xs px-1.5 py-0">
-            {{ unreadCounts[group.id] > 99 ? '99+' : unreadCounts[group.id] }}
-          </Badge>
         </CardContent>
         <!-- 悬浮操作按钮（重命名时隐藏） -->
         <div v-if="renamingGroupId !== group.id" class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity" @click.stop>

@@ -121,10 +121,6 @@ export function getContactsApi() {
 
 // ===== 表情包 =====
 
-export function getUnreadCountApi(groupId: number, after: string) {
-  return http.get<any, number>(`/groups/${groupId}/messages/unread-count`, { params: { after } })
-}
-
 export function listEmojiPacksApi() {
   return http.get<any, EmojiPack[]>('/emoji/packs')
 }
