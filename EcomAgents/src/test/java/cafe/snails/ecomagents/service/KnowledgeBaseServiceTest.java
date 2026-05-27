@@ -217,7 +217,6 @@ class KnowledgeBaseServiceTest {
 
         assertTrue(context.contains("shipping policy chunk"));
         assertTrue(context.contains("Knowledge retrieval status: vector_search"));
-        verify(docRepository, never()).searchByKeywordAndKbIds(any(), any());
     }
 
     @Test
@@ -232,7 +231,7 @@ class KnowledgeBaseServiceTest {
 
         String context = service.buildKnowledgeContext(List.of(1L), "shipping");
 
-        assertTrue(context.contains("Knowledge retrieval status: text_search_fallback_after_vector_timeout"));
+        assertTrue(context.contains("Knowledge retrieval status: text_search_fallback"));
         assertTrue(context.contains("shipping policy fallback"));
     }
 

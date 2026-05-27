@@ -35,7 +35,7 @@ public class LlmConfig {
     private int ragSearchLimit = 5;
     private double ragSimilarityThreshold = 0.15;
     private long ragRetrievalTimeout = 8;
-    private int ragMaxContextChars = 8000;
+    private int ragMaxContextChars = 16000;
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }

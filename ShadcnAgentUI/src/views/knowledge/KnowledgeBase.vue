@@ -375,7 +375,7 @@ function formatDate(dateStr: string) {
             name="knowledge-document-upload"
             ref="fileInputRef"
           type="file"
-          accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.json,.xml,.yaml,.yml,.properties,.log"
+          accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.json"
           class="hidden"
           @change="handleFileSelected"
         />
