@@ -220,7 +220,7 @@ async function onInvited() {
       </div>
 
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F3F3F3]">
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F3F3F3] dark:bg-[#1a1a2e]">
         <div v-if="loading" class="flex justify-center py-10">
           <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -243,7 +243,7 @@ async function onInvited() {
                 </span>
                 <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
               </div>
-              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#E9ECEF] text-[#191919]' : 'bg-white text-[#191919] shadow-sm']">
+              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#E9ECEF] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100' : 'bg-white text-[#191919] shadow-sm dark:bg-[#2d2d44] dark:text-gray-100']">
                 <MarkdownRenderer v-if="msg.senderType === 'AGENT'" :content="msg.content" />
                 <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content)"></div>
               </div>
