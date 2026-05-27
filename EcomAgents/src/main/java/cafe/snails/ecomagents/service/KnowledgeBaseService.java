@@ -168,6 +168,68 @@ public class KnowledgeBaseService {
         return ApiResponse.success("文档上传成功", saved);
     }
 
+    /**
+     * 批量上传文档。每个文件独立处理，单个文件失败不影响其他文件。
+     * 索引重建和 workspace 同步在所有文件处理完成后一次性触发。
+     */
+    public ApiResponse<List<KnowledgeDocument>> uploadDocuments(Long kbId, MultipartFile[] files, Long userId,
+                                                                String username, HttpServletRequest request) {
+        if (!kbRepository.existsById(kbId)) {
+            return ApiResponse.error(404, "知识库不存在");
+        }
+
+        List<KnowledgeDocument> savedDocs = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            try {
+                String fileName = file.getOriginalFilename();
+                if (fileName == null || fileName.isBlank()) {
+                    errors.add("空文件名跳过");
+                    continue;
+                }
+
+                String ext = getExtension(fileName).toLowerCase();
+                String content = extractText(file, ext);
+
+                KnowledgeDocument doc = KnowledgeDocument.builder()
+                        .knowledgeBaseId(kbId)
+                        .fileName(fileName)
+                        .fileType(ext)
+                        .content(content)
+                        .charCount(content.length())
+                        .uploadedAt(LocalDateTime.now())
+                        .uploadedBy(userId)
+                        .build();
+
+                KnowledgeDocument saved = docRepository.save(doc);
+                savedDocs.add(saved);
+
+                // Audit log per file
+                writeAuditLog(kbId, userId, username, "UPLOAD", fileName, request);
+            } catch (Exception e) {
+                String name = file.getOriginalFilename();
+                log.error("Failed to upload file {}: {}", name, e.getMessage());
+                errors.add((name != null ? name : "unknown") + ": " + e.getMessage());
+            }
+        }
+
+        if (!savedDocs.isEmpty()) {
+            localKnowledgeIndexService.rebuildAsync(kbId);
+            syncKnowledgeBaseToAgents(kbId);
+        }
+
+        String message = "成功上传 " + savedDocs.size() + " 个文件";
+        if (!errors.isEmpty()) {
+            message += "，" + errors.size() + " 个文件失败";
+        }
+
+        return ApiResponse.success(message, savedDocs);
+    }
+
     @Transactional
     public ApiResponse<Void> deleteDocument(Long kbId, Long docId, Long userId,
                                             String username, HttpServletRequest request) {

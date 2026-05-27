@@ -51,6 +51,7 @@ const showPreview = ref(false)
 
 const uploadLoading = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const isDragOver = ref(false)
 
 const showDeleteKbDialog = ref(false)
 const deleteKbTarget = ref<number | null>(null)
@@ -156,15 +157,62 @@ function selectFiles() {
 
 async function handleFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+  const files = input.files
+  if (!files || files.length === 0) return
+  const fileList = Array.from(files)
   uploadLoading.value = true
   try {
-    const doc = await store.uploadDoc(kbId.value, file)
-    toast.success(t('knowledge.uploadSuccess', { name: doc.fileName }))
+    const docs = await store.uploadDocs(kbId.value, fileList)
+    if (docs.length === 1) {
+      toast.success(t('knowledge.uploadSuccess', { name: docs[0].fileName }))
+    } else {
+      toast.success(t('knowledge.uploadSuccessBatch', { count: docs.length }))
+    }
   } catch { /* interceptor handles toast */ } finally {
     uploadLoading.value = false
     input.value = ''
+  }
+}
+
+function handleDragEnter(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer?.types.includes('Files')) {
+    isDragOver.value = true
+  }
+}
+
+function handleDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer?.types.includes('Files')) {
+    isDragOver.value = true
+  }
+}
+
+function handleDragLeave(event: DragEvent) {
+  event.preventDefault()
+  // Only set false if leaving the drop zone (not entering a child)
+  const current = event.currentTarget as HTMLElement | null
+  if (!current || event.target === current || !current.contains(event.relatedTarget as Node)) {
+    isDragOver.value = false
+  }
+}
+
+async function handleDrop(event: DragEvent) {
+  event.preventDefault()
+  isDragOver.value = false
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) return
+  const fileList = Array.from(files)
+  uploadLoading.value = true
+  try {
+    const docs = await store.uploadDocs(kbId.value, fileList)
+    if (docs.length === 1) {
+      toast.success(t('knowledge.uploadSuccess', { name: docs[0].fileName }))
+    } else {
+      toast.success(t('knowledge.uploadSuccessBatch', { count: docs.length }))
+    }
+  } catch { /* interceptor handles toast */ } finally {
+    uploadLoading.value = false
   }
 }
 
@@ -367,8 +415,15 @@ function formatDate(dateStr: string) {
     <template v-else-if="store.currentKb">
       <!-- Upload -->
       <div
-        class="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+        class="border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer"
+        :class="isDragOver
+          ? 'border-primary bg-primary/5'
+          : 'border-border hover:border-primary/50'"
         @click="selectFiles"
+        @dragenter="handleDragEnter"
+        @dragover="handleDragOver"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop"
       >
           <input
             id="knowledge-document-upload"
@@ -377,10 +432,11 @@ function formatDate(dateStr: string) {
           type="file"
           accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.json"
           class="hidden"
+          multiple
           @change="handleFileSelected"
         />
         <Upload class="mx-auto h-10 w-10 text-muted-foreground/60" />
-        <p class="mt-3 text-sm font-medium">{{ $t('knowledge.uploadArea') }}</p>
+        <p class="mt-3 text-sm font-medium">{{ isDragOver ? $t('knowledge.dropToUpload') : $t('knowledge.uploadArea') }}</p>
         <p class="text-xs text-muted-foreground mt-1">{{ $t('knowledge.uploadFormats') }}</p>
       </div>
 

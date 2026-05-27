@@ -33,6 +33,14 @@ export function uploadDocumentApi(kbId: number, file: File) {
   })
 }
 
+export function uploadDocumentsApi(kbId: number, files: File[]) {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  return http.post<any, KnowledgeDocument[]>(`/knowledge-bases/${kbId}/documents/batch`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 export function deleteDocumentApi(kbId: number, docId: number) {
   return http.delete<any, void>(`/knowledge-bases/${kbId}/documents/${docId}`)
 }
