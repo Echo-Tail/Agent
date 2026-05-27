@@ -74,7 +74,7 @@ function goBack() {
     </div>
 
     <!-- Messages -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-[#121212]">
       <div v-if="loading" class="flex justify-center py-10">
         <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
@@ -85,18 +85,21 @@ function goBack() {
         <div
           v-for="msg in messages"
           :key="msg.id"
-          :class="['flex gap-3', msg.senderId === auth.currentUser?.id ? 'justify-end' : '']"
+          :class="['flex gap-3', msg.senderId === auth.currentUser?.id ? 'flex-row-reverse' : '']"
         >
-          <div
-            :class="[
-              'max-w-[70%] rounded-lg p-3 text-sm',
+          <div class="min-w-0">
+            <div :class="['flex items-center gap-2 mb-1', msg.senderId === auth.currentUser?.id ? 'flex-row-reverse' : '']">
+              <span class="text-xs text-[#888888]">{{ otherUsername }}</span>
+              <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
+            </div>
+            <div :class="[
+              'rounded-lg p-3 text-sm w-fit max-w-full',
               msg.senderId === auth.currentUser?.id
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted'
-            ]"
-          >
-            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
-            <p class="text-xs opacity-70 mt-1">{{ new Date(msg.createdAt).toLocaleTimeString() }}</p>
+                ? 'bg-[#E9ECEF] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100'
+                : 'bg-[#F0F2F5] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100'
+            ]">
+              <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+            </div>
           </div>
         </div>
       </template>
