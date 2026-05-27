@@ -7,6 +7,8 @@ const props = defineProps<{
   groupId: number
   modelValue: string
   currentUserId?: number
+  /** 递增此值触发成员列表刷新 */
+  refreshKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -30,15 +32,24 @@ interface MentionItem {
 const mentionItems = ref<MentionItem[]>([])
 const filteredItems = ref<MentionItem[]>([])
 
-// 加载群内统一成员列表（组件挂载时预加载），排除自己
-onMounted(async () => {
+async function loadItems() {
   try {
     const list = await getUnifiedMembersApi(props.groupId)
     mentionItems.value = list.filter(m => !(m.memberType === 'USER' && m.refId === props.currentUserId))
   } catch {
     mentionItems.value = []
   }
+}
+
+// 加载群内统一成员列表（组件挂载时预加载），排除自己
+onMounted(async () => {
+  await loadItems()
   nextTick(autoResize)
+})
+
+// 成员刷新标记变化时重新加载
+watch(() => props.refreshKey, () => {
+  loadItems()
 })
 
 // 输入内容变化时自动调整高度

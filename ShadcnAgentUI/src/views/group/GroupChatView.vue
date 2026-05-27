@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { STORAGE_KEY_TOKEN } from '@/constants'
@@ -33,6 +33,7 @@ const inputText = ref('')
 const showMembers = ref(false)
 const showFileDialog = ref(false)
 const showInviteDialog = ref(false)
+const mentionRefreshKey = ref(0)
 const sending = ref(false)
 const fileUploading = ref(false)
 
@@ -75,6 +76,12 @@ function senderName(msg: GroupMessage): string {
 function isMyMessage(msg: GroupMessage) {
   return msg.senderType === 'USER' && msg.senderId === currentUserId.value
 }
+
+// 自动滚动到最新消息
+const messagesEnd = ref<HTMLDivElement | null>(null)
+watch(() => messages.value.length, () => {
+  nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
+})
 
 // SSE 连接
 let eventSource: EventSource | null = null
@@ -192,11 +199,12 @@ const memberList = computed(() =>
 // 邀请成功后刷新
 async function onInvited() {
   members.value = await getUnifiedMembersApi(groupId.value)
+  mentionRefreshKey.value++
 }
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-8rem)] -m-6">
+  <div class="flex h-[calc(100vh-7rem)] -m-6">
     <!-- Main chat area -->
     <div class="flex-1 flex flex-col">
       <!-- Header -->
@@ -220,7 +228,7 @@ async function onInvited() {
       </div>
 
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F3F3F3] dark:bg-[#1a1a2e]">
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-[#121212]">
         <div v-if="loading" class="flex justify-center py-10">
           <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -243,22 +251,24 @@ async function onInvited() {
                 </span>
                 <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
               </div>
-              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#E9ECEF] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100' : 'bg-white text-[#191919] shadow-sm dark:bg-[#2d2d44] dark:text-gray-100']">
+              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#E9ECEF] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100' : 'bg-[#F0F2F5] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100']">
                 <MarkdownRenderer v-if="msg.senderType === 'AGENT'" :content="msg.content" />
                 <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content)"></div>
               </div>
             </div>
           </div>
+          <div ref="messagesEnd" />
         </template>
       </div>
 
       <!-- Input -->
-      <div class="px-4 py-3 border-t">
+      <div class="px-4 pt-3 pb-0 border-t">
         <div class="flex gap-2">
           <MentionInput
             :groupId="groupId"
             :model-value="inputText"
             :current-user-id="currentUserId"
+            :refresh-key="mentionRefreshKey"
             @update:model-value="inputText = $event"
             @keydown="handleKeydown"
           />
