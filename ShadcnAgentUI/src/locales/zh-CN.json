@@ -702,7 +702,13 @@
       "repoRoot": "仓库根链接 — https://github.com/{owner}/{repo}（全量扫描所有 SKILL.md）",
       "subtree": "子树链接 — https://github.com/{owner}/{repo}/tree/main/skills/{name}（导入单个技能）"
     },
-    "confirmDelete": "确定要删除此技能吗？"
+    "confirmDelete": "确定要删除此技能吗？",
+    "uploadResult": "导入结果",
+    "uploadResultHint": "成功 {success} 个，失败 {failed} 个",
+    "importedSkills": "已导入的技能",
+    "failedSkills": "导入失败的技能",
+    "uploadAllSuccess": "成功导入 {count} 个技能",
+    "uploadPartialSuccess": "成功导入 {success} 个技能，{failed} 个失败"
   },
   "tokenUsage": {
     "title": "Token 用量",
