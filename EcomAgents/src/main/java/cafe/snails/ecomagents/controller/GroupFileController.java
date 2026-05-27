@@ -74,7 +74,12 @@ public class GroupFileController {
 
     /** 下载群文件 */
     @GetMapping("/{fileId}/download")
-    public ResponseEntity<Resource> downloadFile(@PathVariable Long fileId) {
+    public ResponseEntity<Resource> downloadFile(@PathVariable Long groupId,
+                                                  @PathVariable Long fileId,
+                                                  @CurrentUserId Long userId) {
+        if (!groupService.isMember(groupId, userId)) {
+            return ResponseEntity.status(403).build();
+        }
         var opt = groupFileRepository.findById(fileId);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
         GroupFile gf = opt.get();

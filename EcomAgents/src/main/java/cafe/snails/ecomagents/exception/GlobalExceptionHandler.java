@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.exception;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -49,6 +50,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ApiResponse<Void> handleConstraintViolation(ConstraintViolationException e) {
         return ApiResponse.error(400, e.getMessage());
+    }
+
+    /**
+     * 处理 SSE 客户端断开连接的异常，无需告警。
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException e) {
+        log.debug("SSE client disconnected: {}", e.getMessage());
     }
 
     /**

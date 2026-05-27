@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { listGroupFilesApi } from '@/api/group'
-import { uploadGroupFileApi } from '@/api/group'
+import { listGroupFilesApi, uploadGroupFileApi, downloadGroupFileApi } from '@/api/group'
 import type { GroupFile } from '@/types/group'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,8 +67,18 @@ function toggleSort(field: 'uploadedAt' | 'fileSize') {
   }
 }
 
-function downloadFile(file: GroupFile) {
-  window.open(`/v1/groups/${props.groupId}/files/${file.id}/download`, '_blank')
+async function downloadFile(file: GroupFile) {
+  try {
+    const blob = await downloadGroupFileApi(props.groupId, file.id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.originalName
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    toast.error('下载失败')
+  }
 }
 
 async function handleUpload(e: Event) {

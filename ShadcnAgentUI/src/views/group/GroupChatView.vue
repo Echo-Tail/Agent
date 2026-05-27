@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { STORAGE_KEY_TOKEN } from '@/constants'
 
-import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi } from '@/api/group'
+import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi, uploadGroupFileApi } from '@/api/group'
 
 import type { ChatGroup, UnifiedMember, GroupMessage, GroupFile } from '@/types/group'
 import GroupFileDialog from '@/components/GroupFileDialog.vue'
@@ -17,7 +17,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import MentionInput from '@/components/MentionInput.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import { toast } from 'sonner'
-import { Send, ArrowLeft, Users, Bot, Loader2, FileIcon, UserPlus } from 'lucide-vue-next'
+import { Send, ArrowLeft, Users, Bot, Loader2, FileIcon, UserPlus, Paperclip } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +34,7 @@ const showMembers = ref(false)
 const showFileDialog = ref(false)
 const showInviteDialog = ref(false)
 const sending = ref(false)
+const fileUploading = ref(false)
 
 const existingMemberIds = computed(() => members.value.filter(m => m.memberType === 'USER').map(m => m.refId))
 
@@ -47,6 +48,23 @@ const memberNames = computed(() => {
   }
   return map
 })
+
+// 将 @[名称](type:id) 渲染为高亮标签，[text](url) 渲染为下载链接
+function renderContent(text: string, isOwn: boolean): string {
+  const mentionClass = isOwn ? 'text-[#8B4513] font-medium' : 'text-[#1F2329] font-medium'
+  const linkClass = isOwn ? 'text-[#8B4513] underline hover:no-underline' : 'text-[#1F2329] underline hover:no-underline'
+  // 先处理下载链接 [text](url)
+  let result = text.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g,
+    `<a href="$2" target="_blank" class="${linkClass}" download>$1</a>`
+  )
+  // 再处理 @提及
+  result = result.replace(
+    /@\[([^\]]+)\]\((user|agent):(\d+)\)/g,
+    `<span class="${mentionClass}">@$1</span>`
+  )
+  return result
+}
 
 function senderName(msg: GroupMessage): string {
   const key = `${msg.senderType}-${msg.senderId}`
@@ -63,7 +81,11 @@ let eventSource: EventSource | null = null
 function connectSse() {
   if (eventSource) eventSource.close()
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
-  const url = token ? `/v1/groups/${groupId.value}/sse?token=${encodeURIComponent(token)}` : `/v1/groups/${groupId.value}/sse`
+  // SSE 直连后端 8888 端口（Vite 代理不支持 SSE 长连接）
+  const baseUrl = `${window.location.protocol}//${window.location.hostname}:8888`
+  const url = token
+    ? `${baseUrl}/v1/groups/${groupId.value}/sse?token=${encodeURIComponent(token)}`
+    : `${baseUrl}/v1/groups/${groupId.value}/sse`
   eventSource = new EventSource(url)
 
   eventSource.addEventListener('message', (e) => {
@@ -105,6 +127,26 @@ onMounted(async () => {
 onUnmounted(() => {
   eventSource?.close()
 })
+
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files || files.length === 0) return
+  fileUploading.value = true
+  try {
+    for (const file of Array.from(files)) {
+      const gf = await uploadGroupFileApi(groupId.value, file)
+      const link = `[${file.name}](/v1/groups/${groupId.value}/files/${gf.id}/download)`
+      await sendGroupMessageApi(groupId.value, `上传了文件: ${link}`)
+    }
+    toast.success(`已上传 ${files.length} 个文件`)
+  } catch {
+    toast.error('文件上传失败')
+  } finally {
+    fileUploading.value = false
+    input.value = ''
+  }
+}
 
 async function sendMessage() {
   const content = inputText.value.trim()
@@ -193,9 +235,9 @@ async function onInvited() {
                 </span>
                 <span class="text-xs text-muted-foreground">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
               </div>
-              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-primary text-primary-foreground' : 'bg-muted']">
+              <div :class="['rounded-lg p-3 text-sm w-fit max-w-full', isMyMessage(msg) ? 'bg-[#EAE0CF] text-foreground dark:bg-primary/20 dark:text-foreground' : 'bg-[#F0F2F5] dark:bg-muted']">
                 <MarkdownRenderer v-if="msg.senderType === 'AGENT'" :content="msg.content" />
-                <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
+                <div v-else class="whitespace-pre-wrap" v-html="renderContent(msg.content, isMyMessage(msg))"></div>
               </div>
             </div>
           </div>
@@ -208,10 +250,15 @@ async function onInvited() {
           <MentionInput
             :groupId="groupId"
             :model-value="inputText"
+            :current-user-id="currentUserId"
             @update:model-value="inputText = $event"
             @keydown="handleKeydown"
           />
-          <EmojiPicker @select="(url: string) => { inputText += '![emoji](' + url + ') ' }" />
+          <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
+          <Button size="icon" variant="outline" class="h-[44px] w-[44px] shrink-0 relative" :disabled="fileUploading" :title="$t('common.upload')">
+            <input ref="fileInputRef" type="file" multiple class="absolute inset-0 opacity-0 cursor-pointer" @change="handleFileUpload" />
+            <Paperclip class="h-4 w-4" />
+          </Button>
           <Button size="icon" class="h-[44px] w-[44px] shrink-0" :disabled="!inputText.trim() || sending" @click="sendMessage">
             <Send class="h-4 w-4" />
           </Button>
