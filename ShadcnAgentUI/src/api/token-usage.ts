@@ -1,12 +1,15 @@
 import http from './request'
 
 export interface TokenUsageSummary {
+  agentName: string
   modelName: string
   modelType: string
+  username: string
   callCount: number
   totalTokens: number
   promptTokens: number
   completionTokens: number
+  cnyCost: number
 }
 
 export interface TokenUsageRecord {
@@ -16,9 +19,12 @@ export interface TokenUsageRecord {
   modelType: string
   userId: number
   agentId: number
+  agentName: string
+  username: string
   promptTokens: number
   completionTokens: number
   totalTokens: number
+  cnyCost: number
   success: boolean
   errorMessage: string | null
   createdAt: string

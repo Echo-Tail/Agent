@@ -54,6 +54,7 @@ async function fetchData() {
 const totalCalls = () => summaryData.value.reduce((s, r) => s + r.callCount, 0)
 const totalTokens = () => summaryData.value.reduce((s, r) => s + r.totalTokens, 0)
 const totalPrompt = () => summaryData.value.reduce((s, r) => s + r.promptTokens, 0)
+const totalCost = () => summaryData.value.reduce((s, r) => s + (r.cnyCost ?? 0), 0)
 
 function formatTime(t: string) {
   return new Date(t).toLocaleString('zh-CN')
@@ -83,7 +84,7 @@ onMounted(fetchData)
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid gap-4 md:grid-cols-4">
+    <div class="grid gap-4 md:grid-cols-5">
       <Card>
         <CardHeader class="flex flex-row items-center justify-between pb-2">
           <CardTitle class="text-sm font-medium">{{ $t('tokenUsage.statCards.requestCount') }}</CardTitle>
@@ -120,6 +121,15 @@ onMounted(fetchData)
           <div class="text-2xl font-bold">{{ imageModelCalls }}</div>
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader class="flex flex-row items-center justify-between pb-2">
+          <CardTitle class="text-sm font-medium">{{ $t('tokenUsage.statCards.totalCost') }}</CardTitle>
+          <BarChart3 class="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div class="text-2xl font-bold">¥{{ totalCost().toFixed(2) }}</div>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Summary Table -->
@@ -135,16 +145,21 @@ onMounted(fetchData)
         <thead>
           <tr class="bg-muted/30 border-b border-border">
             <th class="text-left px-4 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.agentName') }}</th>
+            <th class="text-left px-4 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.modelName') }}</th>
+            <th class="text-left px-4 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.username') }}</th>
             <th class="text-left px-4 py-2 font-medium text-muted-foreground w-16">{{ $t('common.type') }}</th>
             <th class="text-right px-4 py-2 font-medium text-muted-foreground w-24">{{ $t('tokenUsage.callCount') }}</th>
             <th class="text-right px-4 py-2 font-medium text-muted-foreground w-28">{{ $t('tokenUsage.statCards.inputTokens') }}</th>
             <th class="text-right px-4 py-2 font-medium text-muted-foreground w-28">{{ $t('tokenUsage.statCards.outputTokens') }}</th>
             <th class="text-right px-4 py-2 font-medium text-muted-foreground w-24">{{ $t('tokenUsage.statCards.totalTokens') }}</th>
+            <th class="text-right px-4 py-2 font-medium text-muted-foreground w-28">{{ $t('tokenUsage.columns.cnyCost') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          <tr v-for="row in summaryData" :key="row.modelName" class="hover:bg-muted/30">
-            <td class="px-4 py-2.5 font-medium">{{ row.modelName }}</td>
+          <tr v-for="(row, idx) in summaryData" :key="row.modelName + '-' + (row.agentName || '') + '-' + idx" class="hover:bg-muted/30">
+            <td class="px-4 py-2.5 font-medium">{{ row.agentName || '-' }}</td>
+            <td class="px-4 py-2.5">{{ row.modelName }}</td>
+            <td class="px-4 py-2.5 text-sm">{{ row.username || '-' }}</td>
             <td class="px-4 py-2.5">
               <Badge v-if="row.modelType === 'IMAGE'" variant="secondary" class="text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
               <span v-else class="text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
@@ -153,6 +168,7 @@ onMounted(fetchData)
             <td class="px-4 py-2.5 text-right tabular-nums">{{ row.promptTokens.toLocaleString() }}</td>
             <td class="px-4 py-2.5 text-right tabular-nums">{{ row.completionTokens.toLocaleString() }}</td>
             <td class="px-4 py-2.5 text-right tabular-nums font-medium">{{ row.totalTokens.toLocaleString() }}</td>
+            <td class="px-4 py-2.5 text-right tabular-nums font-medium">¥{{ (row.cnyCost ?? 0).toFixed(2) }}</td>
           </tr>
         </tbody>
       </table>
@@ -171,10 +187,13 @@ onMounted(fetchData)
             <tr class="bg-muted/30 border-b border-border">
               <th class="text-left px-3 py-2 font-medium text-muted-foreground">{{ $t('common.time') }}</th>
               <th class="text-left px-3 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.agentName') }}</th>
+              <th class="text-left px-3 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.modelName') }}</th>
+              <th class="text-left px-3 py-2 font-medium text-muted-foreground">{{ $t('tokenUsage.columns.username') }}</th>
               <th class="text-left px-3 py-2 font-medium text-muted-foreground w-14">{{ $t('common.type') }}</th>
               <th class="text-right px-3 py-2 font-medium text-muted-foreground w-20">{{ $t('tokenUsage.statCards.inputTokens') }}</th>
               <th class="text-right px-3 py-2 font-medium text-muted-foreground w-24">{{ $t('tokenUsage.statCards.outputTokens') }}</th>
               <th class="text-right px-3 py-2 font-medium text-muted-foreground w-20">{{ $t('common.total') }}</th>
+              <th class="text-right px-3 py-2 font-medium text-muted-foreground w-28">{{ $t('tokenUsage.columns.cnyCost') }}</th>
               <th class="text-left px-3 py-2 font-medium text-muted-foreground w-16">{{ $t('common.status') }}</th>
               <th class="text-left px-3 py-2 font-medium text-muted-foreground">{{ $t('common.error') }}</th>
             </tr>
@@ -182,7 +201,9 @@ onMounted(fetchData)
           <tbody class="divide-y divide-border">
             <tr v-for="row in detailData" :key="row.id" class="hover:bg-muted/30">
               <td class="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{{ formatTime(row.createdAt) }}</td>
+              <td class="px-3 py-2 text-xs">{{ row.agentName || '-' }}</td>
               <td class="px-3 py-2 text-xs">{{ row.modelName }}</td>
+              <td class="px-3 py-2 text-xs">{{ row.username || '-' }}</td>
               <td class="px-3 py-2">
                 <Badge v-if="row.modelType === 'IMAGE'" variant="secondary" class="text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
                 <span v-else class="text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
@@ -190,6 +211,7 @@ onMounted(fetchData)
               <td class="px-3 py-2 text-right tabular-nums text-xs">{{ row.promptTokens.toLocaleString() }}</td>
               <td class="px-3 py-2 text-right tabular-nums text-xs">{{ row.completionTokens.toLocaleString() }}</td>
               <td class="px-3 py-2 text-right tabular-nums text-xs font-medium">{{ row.totalTokens.toLocaleString() }}</td>
+              <td class="px-3 py-2 text-right tabular-nums text-xs font-medium">¥{{ (row.cnyCost ?? 0).toFixed(2) }}</td>
               <td class="px-3 py-2">
                 <span class="text-xs" :class="row.success ? 'text-green-600' : 'text-destructive'">
                   {{ row.success ? $t('common.success') : $t('common.fail') }}
