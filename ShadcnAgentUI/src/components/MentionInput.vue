@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, nextTick, onUnmounted } from 'vue'
-import { listGroupAgentsApi } from '@/api/group'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { getUnifiedMembersApi } from '@/api/group'
+import AgentIcon from '@/components/AgentIcon.vue'
 
 const props = defineProps<{
   groupId: number
   modelValue: string
+  currentUserId?: number
 }>()
 
 const emit = defineEmits<{
@@ -17,22 +18,27 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const showMentions = ref(false)
 const mentionSearch = ref('')
 const mentionIndex = ref(0)
-const agents = ref<Array<{ agentId: number; agentName: string }>>([])
-const filteredAgents = ref<Array<{ agentId: number; agentName: string }>>([])
 
-// 加载群内 Agent 列表
-let agentsLoaded = false
-async function ensureAgentsLoaded() {
-  if (agentsLoaded) return
-  try {
-    // 由于 API 只返回 GroupAgent（有 agentId），这里先简单显示
-    const list = await listGroupAgentsApi(props.groupId)
-    agents.value = list.map(a => ({ agentId: a.agentId, agentName: `Agent #${a.agentId}` }))
-    agentsLoaded = true
-  } catch {
-    agents.value = []
-  }
+interface MentionItem {
+  memberType: 'USER' | 'AGENT'
+  refId: number
+  name: string
+  avatar?: string
+  icon?: string
 }
+
+const mentionItems = ref<MentionItem[]>([])
+const filteredItems = ref<MentionItem[]>([])
+
+// 加载群内统一成员列表（组件挂载时预加载），排除自己
+onMounted(async () => {
+  try {
+    const list = await getUnifiedMembersApi(props.groupId)
+    mentionItems.value = list.filter(m => !(m.memberType === 'USER' && m.refId === props.currentUserId))
+  } catch {
+    mentionItems.value = []
+  }
+})
 
 // 检测光标前的 @ 文本
 function detectMention(text: string, cursorPos: number): { active: boolean; searchText: string } {
@@ -55,13 +61,12 @@ function handleInput() {
 
   const mention = detectMention(text, cursorPos)
   if (mention.active) {
-    ensureAgentsLoaded()
     mentionSearch.value = mention.searchText
-    filteredAgents.value = agents.value.filter(a =>
-      a.agentName.toLowerCase().includes(mention.searchText.toLowerCase())
+    filteredItems.value = mentionItems.value.filter(m =>
+      m.name.toLowerCase().includes(mention.searchText.toLowerCase())
     )
     mentionIndex.value = 0
-    showMentions.value = filteredAgents.value.length > 0
+    showMentions.value = filteredItems.value.length > 0
   } else {
     showMentions.value = false
   }
@@ -73,18 +78,18 @@ function handleKeydown(e: KeyboardEvent) {
   if (showMentions.value) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      mentionIndex.value = (mentionIndex.value + 1) % filteredAgents.value.length
+      mentionIndex.value = (mentionIndex.value + 1) % filteredItems.value.length
       return
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      mentionIndex.value = (mentionIndex.value - 1 + filteredAgents.value.length) % filteredAgents.value.length
+      mentionIndex.value = (mentionIndex.value - 1 + filteredItems.value.length) % filteredItems.value.length
       return
     }
     if (e.key === 'Enter' || e.key === 'Tab') {
-      if (filteredAgents.value.length > 0) {
+      if (filteredItems.value.length > 0) {
         e.preventDefault()
-        selectAgent(filteredAgents.value[mentionIndex.value])
+        selectMention(filteredItems.value[mentionIndex.value])
         return
       }
     }
@@ -96,7 +101,7 @@ function handleKeydown(e: KeyboardEvent) {
   emit('keydown', e)
 }
 
-function selectAgent(agent: { agentId: number; agentName: string }) {
+function selectMention(item: MentionItem) {
   const textarea = textareaRef.value
   if (!textarea) return
 
@@ -106,8 +111,9 @@ function selectAgent(agent: { agentId: number; agentName: string }) {
   const atIndex = beforeCursor.lastIndexOf('@')
   const afterCursor = text.slice(cursorPos)
 
-  // 替换 @text 为 @[Agent名称](agent:id)
-  const mentionText = `@[${agent.agentName}](agent:${agent.agentId}) `
+  // 替换 @text 为 @[名称](type:refId)
+  const type = item.memberType === 'AGENT' ? 'agent' : 'user'
+  const mentionText = `@[${item.name}](${type}:${item.refId}) `
   const newText = beforeCursor.slice(0, atIndex) + mentionText + afterCursor
   emit('update:modelValue', newText)
 
@@ -145,34 +151,38 @@ onUnmounted(() => {
     <textarea
       ref="textareaRef"
       :value="modelValue"
-      class="flex min-h-[44px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none max-h-[120px]"
+      class="flex min-h-[37px] w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
       :placeholder="'发送消息...'"
       @input="handleInput"
       @keydown="handleKeydown"
       @blur="handleBlur"
     />
 
-    <!-- @Agent 下拉 -->
+    <!-- @提及 下拉 -->
     <div
-      v-if="showMentions && filteredAgents.length > 0"
-      class="absolute bottom-full left-0 mb-1 w-64 max-h-48 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md z-50"
+      v-if="showMentions && filteredItems.length > 0"
+      class="absolute bottom-full left-0 mb-1 w-72 max-h-48 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md z-50"
       @mousedown.prevent
     >
       <div class="p-1">
-        <div class="px-2 py-1.5 text-xs text-muted-foreground">选择 Agent</div>
+        <div class="px-2 py-1.5 text-xs text-muted-foreground">选择成员或 Agent</div>
         <button
-          v-for="(agent, idx) in filteredAgents"
-          :key="agent.agentId"
+          v-for="(item, idx) in filteredItems"
+          :key="item.memberType + '-' + item.refId"
           :class="['flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer', idx === mentionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50']"
-          @click="selectAgent(agent)"
+          @click="selectMention(item)"
           @mouseenter="mentionIndex = idx"
         >
-          <Avatar class="h-6 w-6">
-            <AvatarFallback class="bg-primary text-primary-foreground text-xs">
-              {{ agent.agentName.charAt(0) }}
-            </AvatarFallback>
-          </Avatar>
-          <span>{{ agent.agentName }}</span>
+          <div v-if="item.memberType === 'AGENT'" class="h-6 w-6 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">
+            <AgentIcon :icon="item.icon" :avatar="item.avatar" class="h-4 w-4" />
+          </div>
+          <div v-else class="h-6 w-6 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0">
+            <span class="text-xs font-medium">{{ item.name.charAt(0) }}</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <span class="truncate">{{ item.name }}</span>
+          </div>
+          <span class="text-xs text-muted-foreground shrink-0">{{ item.memberType === 'AGENT' ? 'Agent' : '成员' }}</span>
         </button>
       </div>
     </div>

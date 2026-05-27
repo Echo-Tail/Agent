@@ -24,6 +24,15 @@ export function disbandGroupApi(groupId: number) {
   return http.delete<any, void>(`/groups/${groupId}`)
 }
 
+export async function downloadGroupFileApi(groupId: number, fileId: number): Promise<Blob> {
+  const token = localStorage.getItem('ecomagents_token')
+  const response = await fetch(`/v1/groups/${groupId}/files/${fileId}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) throw new Error('下载失败')
+  return response.blob()
+}
+
 export function uploadGroupAvatarApi(groupId: number, file: File) {
   const formData = new FormData()
   formData.append('file', file)

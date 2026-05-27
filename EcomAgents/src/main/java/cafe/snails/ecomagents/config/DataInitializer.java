@@ -1,7 +1,9 @@
 package cafe.snails.ecomagents.config;
 
+import cafe.snails.ecomagents.model.EmojiPack;
 import cafe.snails.ecomagents.model.ToolConfig;
 import cafe.snails.ecomagents.model.User;
+import cafe.snails.ecomagents.repository.EmojiPackRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
 import cafe.snails.ecomagents.service.SessionService;
@@ -26,6 +28,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final ToolConfigRepository toolConfigRepository;
+    private final EmojiPackRepository emojiPackRepository;
     private final PasswordEncoder passwordEncoder;
     private final SessionService sessionService;
 
@@ -48,7 +51,60 @@ public class DataInitializer implements CommandLineRunner {
 
         log.info("数据初始化完成");
         initTools();
+        initEmojis();
         cleanupEmptySessions();
+    }
+
+    /**
+     * 初始化内置 Emoji 种子数据。
+     */
+    @Transactional
+    protected void initEmojis() {
+        if (emojiPackRepository.count() > 0) {
+            log.info("Emoji 数据已存在，跳过初始化");
+            return;
+        }
+
+        log.info("初始化内置 Emoji...");
+        List<EmojiPack> emojis = List.of(
+                // 笑脸与情感
+                pack("😀", "smileys"), pack("😃", "smileys"), pack("😄", "smileys"),
+                pack("😁", "smileys"), pack("😅", "smileys"), pack("😂", "smileys"),
+                pack("🤣", "smileys"), pack("😊", "smileys"), pack("😇", "smileys"),
+                pack("🙂", "smileys"), pack("😉", "smileys"), pack("😌", "smileys"),
+                pack("😍", "smileys"), pack("🥰", "smileys"), pack("😘", "smileys"),
+                pack("😗", "smileys"), pack("😋", "smileys"), pack("😛", "smileys"),
+                pack("😜", "smileys"), pack("🤪", "smileys"), pack("😝", "smileys"),
+                pack("🤑", "smileys"),
+                // 手势与动作
+                pack("👍", "gestures"), pack("👎", "gestures"), pack("👌", "gestures"),
+                pack("✌", "gestures"), pack("🤞", "gestures"), pack("🤟", "gestures"),
+                pack("🤙", "gestures"), pack("👋", "gestures"), pack("🤚", "gestures"),
+                pack("✋", "gestures"), pack("👏", "gestures"), pack("🙌", "gestures"),
+                pack("🤲", "gestures"), pack("🙏", "gestures"), pack("💪", "gestures"),
+                // 爱心与符号
+                pack("❤", "hearts"), pack("💛", "hearts"), pack("💚", "hearts"),
+                pack("💙", "hearts"), pack("💜", "hearts"), pack("🖤", "hearts"),
+                pack("💔", "hearts"), pack("💕", "hearts"), pack("💖", "hearts"),
+                pack("💗", "hearts"), pack("💘", "hearts"), pack("💝", "hearts"),
+                pack("💞", "hearts"), pack("💓", "hearts"), pack("❣", "hearts"),
+                // 常用物品
+                pack("🔥", "objects"), pack("⭐", "objects"), pack("🌟", "objects"),
+                pack("✨", "objects"), pack("💫", "objects"), pack("🎉", "objects"),
+                pack("🎊", "objects"), pack("🎈", "objects"), pack("🎁", "objects"),
+                pack("🎂", "objects"), pack("🎄", "objects"), pack("🎃", "objects"),
+                pack("🎀", "objects"), pack("🎗", "objects"), pack("🎫", "objects")
+        );
+        emojiPackRepository.saveAll(emojis);
+        log.info("已初始化 {} 个 Emoji", emojis.size());
+    }
+
+    private static EmojiPack pack(String emoji, String category) {
+        return EmojiPack.builder()
+                .name(emoji)
+                .imageUrl(emoji)
+                .category(category)
+                .build();
     }
 
     /**

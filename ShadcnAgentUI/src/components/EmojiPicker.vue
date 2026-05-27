@@ -14,15 +14,26 @@ const showPanel = ref(false)
 const categories = ref<string[]>([])
 const activeCategory = ref('')
 
+// 硬编码回退 Emoji（API 无数据时使用）
+const fallbackEmojis: EmojiPack[] = [
+  ...'😀😃😄😁😅😂🤣😊😇🙂😉😌😍🥰😘😗😋😛😜🤪😝🤑'.split('').map((c, i) => ({ id: i, name: c, imageUrl: c, category: 'smileys', createdAt: '' })),
+  ...'👍👎👌✌🤞🤟🤙👋🤚✋👏🙌🤲🙏💪'.split('').map((c, i) => ({ id: 100 + i, name: c, imageUrl: c, category: 'gestures', createdAt: '' })),
+  ...'❤💛💚💙💜🖤💔💕💖💗💘💝💞💓❣'.split('').map((c, i) => ({ id: 200 + i, name: c, imageUrl: c, category: 'hearts', createdAt: '' })),
+  ...'🔥⭐🌟✨💫🎉🎊🎈🎁🎂🎄🎃🎀🎗🎫'.split('').map((c, i) => ({ id: 300 + i, name: c, imageUrl: c, category: 'objects', createdAt: '' })),
+]
+
 onMounted(async () => {
   try {
     emojiPacks.value = await listEmojiPacksApi()
-    const cats = new Set(emojiPacks.value.map(e => e.category).filter(Boolean))
-    categories.value = Array.from(cats) as string[]
-    if (categories.value.length > 0) activeCategory.value = categories.value[0]
   } catch {
     // 静默处理
   }
+  if (emojiPacks.value.length === 0) {
+    emojiPacks.value = fallbackEmojis
+  }
+  const cats = new Set(emojiPacks.value.map(e => e.category).filter(Boolean))
+  categories.value = Array.from(cats) as string[]
+  if (categories.value.length > 0) activeCategory.value = categories.value[0]
 })
 
 const filteredEmojis = ref<EmojiPack[]>([])
@@ -87,7 +98,8 @@ onMounted(() => {
               :title="emoji.name"
               @click="selectEmoji(emoji)"
             >
-              <img :src="emoji.imageUrl" :alt="emoji.name" class="h-7 w-7 object-contain" />
+              <span v-if="emoji.imageUrl.length <= 2" class="text-xl leading-none">{{ emoji.imageUrl }}</span>
+              <img v-else :src="emoji.imageUrl" :alt="emoji.name" class="h-7 w-7 object-contain" />
             </button>
           </div>
 
