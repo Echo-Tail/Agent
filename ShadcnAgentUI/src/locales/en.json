@@ -702,7 +702,13 @@
       "repoRoot": "Repository root — https://github.com/{owner}/{repo} (scans all SKILL.md files)",
       "subtree": "Subtree path — https://github.com/{owner}/{repo}/tree/main/skills/{name} (imports a single skill)"
     },
-    "confirmDelete": "Are you sure you want to delete this skill?"
+    "confirmDelete": "Are you sure you want to delete this skill?",
+    "uploadResult": "Upload Result",
+    "uploadResultHint": "{success} succeeded, {failed} failed",
+    "importedSkills": "Imported Skills",
+    "failedSkills": "Failed Skills",
+    "uploadAllSuccess": "Successfully imported {count} skills",
+    "uploadPartialSuccess": "Imported {success} skills, {failed} failed"
   },
   "tokenUsage": {
     "title": "Token Usage",

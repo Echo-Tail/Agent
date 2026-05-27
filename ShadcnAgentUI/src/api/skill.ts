@@ -1,6 +1,18 @@
 import http from './request'
 import type { SkillDefinition } from '@/types/api'
 
+export interface SkillUploadFailedItem {
+  name: string
+  reason: string
+}
+
+export interface SkillUploadResult {
+  successCount: number
+  totalCount: number
+  imported: string[]
+  failed: SkillUploadFailedItem[]
+}
+
 export function listSkillsApi() {
   return http.get<any, SkillDefinition[]>('/skills')
 }
@@ -14,7 +26,7 @@ export function importFromUrlApi(url: string) {
 export function uploadSkillZipApi(file: File) {
   const formData = new FormData()
   formData.append('file', file)
-  return http.post<any, void>('/skills/upload', formData, {
+  return http.post<any, SkillUploadResult>('/skills/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

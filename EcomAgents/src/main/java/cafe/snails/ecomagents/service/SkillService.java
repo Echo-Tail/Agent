@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.service;
 import cafe.snails.ecomagents.config.SkillConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.dto.SkillUploadResult;
 import cafe.snails.ecomagents.model.AgentSkill;
 import cafe.snails.ecomagents.model.Skills;
 import cafe.snails.ecomagents.repository.AgentSkillRepository;
@@ -297,7 +298,7 @@ public class SkillService {
     /**
      * 从上传的 ZIP 文件导入技能。
      */
-    public ApiResponse<Void> uploadSkillZip(MultipartFile file) {
+    public ApiResponse<SkillUploadResult> uploadSkillZip(MultipartFile file) {
         if (file.isEmpty()) {
             return ApiResponse.error(400, "上传文件为空");
         }
@@ -313,81 +314,95 @@ public class SkillService {
 
             Path stagingDir = Files.createTempDirectory("skill-staging-");
             try {
-                extractZip(tempFile, stagingDir);
+                // 安全解压（含 magic byte、Zip-Slip、ZIP 炸弹校验）
+                try {
+                    extractZip(tempFile, stagingDir);
+                } catch (ZipBombException e) {
+                    return ApiResponse.error(400, e.getMessage());
+                } catch (SecurityException e) {
+                    return ApiResponse.error(400, e.getMessage());
+                }
 
-                List<Path> invalidDirs = new ArrayList<>();
-                List<String> formatErrors = new ArrayList<>();
+                List<String> importedNames = new ArrayList<>();
+                List<SkillUploadResult.FailedItem> failedItems = new ArrayList<>();
+
                 try (var dirs = Files.list(stagingDir)) {
                     dirs.filter(Files::isDirectory).forEach(dir -> {
+                        String dirName = dir.getFileName().toString();
                         Path skillMd = findSkillMdInDir(dir);
+
+                        // 校验：必须有 SKILL.md
                         if (skillMd == null) {
-                            invalidDirs.add(dir);
-                        } else {
-                            try {
-                                String content = Files.readString(skillMd);
-                                String name = extractFrontmatterField(content, "name");
-                                String description = extractFrontmatterField(content, "description");
-                                String err = validateSkillFormat(name, description);
-                                if (err != null) {
-                                    formatErrors.add(dir.getFileName() + ": " + err);
-                                }
-                            } catch (IOException e) {
-                                formatErrors.add(dir.getFileName() + ": " + e.getMessage());
-                            }
+                            failedItems.add(new SkillUploadResult.FailedItem(dirName, "缺少 SKILL.md"));
+                            return;
                         }
-                    });
-                }
 
-                if (!invalidDirs.isEmpty()) {
-                    StringBuilder sb = new StringBuilder("以下技能目录缺少 SKILL.md：");
-                    for (Path d : invalidDirs) {
-                        sb.append(d.getFileName().toString()).append(" ");
-                    }
-                    return ApiResponse.error(400, sb.toString().trim());
-                }
+                        // 校验：frontmatter 中的 name、description
+                        String content;
+                        try {
+                            content = Files.readString(skillMd);
+                        } catch (IOException e) {
+                            failedItems.add(new SkillUploadResult.FailedItem(dirName, "读取 SKILL.md 失败: " + e.getMessage()));
+                            return;
+                        }
+                        String name = extractFrontmatterField(content, "name");
+                        String description = extractFrontmatterField(content, "description");
+                        String err = validateSkillFormat(name, description);
+                        if (err != null) {
+                            failedItems.add(new SkillUploadResult.FailedItem(dirName, err));
+                            return;
+                        }
 
-                if (!formatErrors.isEmpty()) {
-                    return ApiResponse.error(400,
-                            "以下技能目录 SKILL.md 格式有误（需要 name + description frontmatter）：\n"
-                                    + String.join("\n", formatErrors));
-                }
-
-                List<ImportedSkill> imported = new ArrayList<>();
-                try (var dirs = Files.list(stagingDir)) {
-                    dirs.filter(Files::isDirectory).forEach(dir -> {
-                        Path target = skillsDir.resolve(dir.getFileName());
+                        // 导入到 skills 目录
+                        Path target = skillsDir.resolve(dirName);
                         try {
                             if (Files.exists(target)) {
                                 deleteRecursively(target);
                             }
-                            Files.move(dir, target);
-                            String name = dir.getFileName().toString();
-                            Path skillMd = findSkillMdInDir(target);
-                            String description = "";
-                            String category = "other";
-                            if (skillMd != null) {
-                                String content = Files.readString(skillMd);
-                                String desc = extractFrontmatterField(content, "description");
-                                String cat = extractFrontmatterField(content, "category");
-                                if (desc != null) description = desc;
-                                if (cat != null) category = cat;
-                            }
-                            ImportedSkill is = new ImportedSkill();
-                            is.name = name;
-                            is.description = description;
-                            is.category = category;
-                            imported.add(is);
+                            copyDirectory(dir, target);
+                            deleteRecursively(dir);
                         } catch (IOException e) {
-                            log.warn("Failed to move skill {}: {}", dir.getFileName(), e.getMessage());
+                            failedItems.add(new SkillUploadResult.FailedItem(dirName, "移动目录失败: " + e.getMessage()));
+                            return;
                         }
+
+                        // 读取 metadata
+                        String category = "other";
+                        String cat = extractFrontmatterField(content, "category");
+                        if (cat != null) category = cat;
+
+                        ImportedSkill is = new ImportedSkill();
+                        is.name = dirName;
+                        is.description = description != null ? description : "";
+                        is.category = category;
+                        syncSingleSkillToDb(is);
+
+                        importedNames.add(dirName);
                     });
                 }
 
-                if (!imported.isEmpty()) {
-                    syncNewSkillsToDb(imported);
+                int totalCount = importedNames.size() + failedItems.size();
+                String message;
+                if (importedNames.isEmpty() && failedItems.isEmpty()) {
+                    message = "ZIP 文件中未找到有效的技能目录";
+                } else if (failedItems.isEmpty()) {
+                    message = "成功导入 " + importedNames.size() + " 个技能";
+                } else if (importedNames.isEmpty()) {
+                    message = failedItems.get(0).getReason();
+                } else {
+                    message = "成功导入 " + importedNames.size() + " 个技能，" + failedItems.size() + " 个失败";
                 }
-                log.info("Skills uploaded from ZIP: {}", file.getOriginalFilename());
-                return ApiResponse.success("技能上传成功", null);
+
+                SkillUploadResult result = SkillUploadResult.builder()
+                        .successCount(importedNames.size())
+                        .totalCount(totalCount)
+                        .imported(importedNames)
+                        .failed(failedItems)
+                        .build();
+
+                log.info("Skills uploaded from ZIP: {}, success={}, failed={}",
+                        file.getOriginalFilename(), importedNames.size(), failedItems.size());
+                return ApiResponse.success(message, result);
             } finally {
                 Files.deleteIfExists(tempFile);
                 deleteRecursively(stagingDir);
@@ -395,6 +410,32 @@ public class SkillService {
         } catch (IOException e) {
             log.error("Failed to upload skill ZIP: {}", e.getMessage());
             return ApiResponse.error(500, "技能上传失败: " + e.getMessage());
+        }
+    }
+
+    /** 将单个技能写入数据库 */
+    private void syncSingleSkillToDb(ImportedSkill s) {
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            Skills existing = skillsRepository.findByName(s.name).orElse(null);
+            if (existing != null) {
+                existing.setDescription(s.description);
+                existing.setCategory(s.category);
+                existing.setUpdatedAt(now);
+                skillsRepository.save(existing);
+            } else {
+                Skills skill = Skills.builder()
+                        .name(s.name)
+                        .description(s.description)
+                        .category(s.category != null ? s.category : "other")
+                        .version("1.0")
+                        .createdAt(now)
+                        .updatedAt(now)
+                        .build();
+                skillsRepository.save(skill);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync skill {} to DB: {}", s.name, e.getMessage());
         }
     }
 
@@ -689,19 +730,111 @@ public class SkillService {
         }
     }
 
-    private void extractZip(Path zipFile, Path targetDir) throws IOException {
+    /**
+     * 安全解压 ZIP 文件，包含多层防护：
+     * <ul>
+     *   <li>Magic byte 校验（PK\x03\x04）</li>
+     *   <li>Zip-Slip / 目录遍历防护（normalize + startsWith）</li>
+     *   <li>ZIP 炸弹防护（总大小 100MB、单文件 10MB、条目数 1000、压缩比 100 倍）</li>
+     * </ul>
+     *
+     * @throws ZipBombException 当检测到 ZIP 炸弹或超出安全限制时抛出
+     * @throws SecurityException 当检测到目录遍历攻击时抛出
+     */
+    private void extractZip(Path zipFile, Path targetDir) throws IOException, ZipBombException {
+        // 1. Magic byte 校验
+        byte[] header = new byte[4];
+        try (var is = Files.newInputStream(zipFile)) {
+            int read = is.read(header);
+            if (read < 4 || header[0] != 0x50 || header[1] != 0x4B || header[2] != 0x03 || header[3] != 0x04) {
+                throw new SecurityException("文件格式不正确，不是有效的 ZIP 文件");
+            }
+        }
+
+        // 2. 安全解压
+        long totalUncompressed = 0;
+        long totalCompressed = 0;
+        int entryCount = 0;
+        long maxTotalUncompressed = 100L * 1024 * 1024; // 100 MB
+        long maxEntrySize = 10L * 1024 * 1024;          // 10 MB
+        int maxEntryCount = 1000;
+        int maxCompressionRatio = 100;
+
         try (var zis = new java.util.zip.ZipInputStream(Files.newInputStream(zipFile))) {
             java.util.zip.ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                Path resolved = targetDir.resolve(entry.getName());
+                entryCount++;
+                if (entryCount > maxEntryCount) {
+                    throw new ZipBombException("ZIP 文件条目数超过限制（最多 " + maxEntryCount + " 个条目）");
+                }
+
+                // Zip-Slip 防护
+                String entryName = entry.getName();
+                if (entryName == null || entryName.contains("..")) {
+                    log.warn("Zip-Slip detected and skipped: {}", entryName);
+                    zis.closeEntry();
+                    continue;
+                }
+                Path resolved = targetDir.resolve(entryName).normalize();
+                if (!resolved.startsWith(targetDir.normalize())) {
+                    log.warn("Zip-Slip detected and skipped: {} resolved to {}", entryName, resolved);
+                    zis.closeEntry();
+                    continue;
+                }
+
                 if (entry.isDirectory()) {
                     Files.createDirectories(resolved);
-                } else {
-                    Files.createDirectories(resolved.getParent());
-                    Files.copy(zis, resolved, StandardCopyOption.REPLACE_EXISTING);
+                    zis.closeEntry();
+                    continue;
                 }
+
+                byte[] buffer = new byte[8192];
+                long entryUncompressed = 0;
+
+                Files.createDirectories(resolved.getParent());
+                try (var os = Files.newOutputStream(resolved)) {
+                    int len;
+                    while ((len = zis.read(buffer)) > 0) {
+                        totalCompressed += len;   // ZipInputStream 返回解压后的数据
+                        entryUncompressed += len;
+                        totalUncompressed += len;
+
+                        // 单文件大小限制
+                        if (entryUncompressed > maxEntrySize) {
+                            Files.deleteIfExists(resolved);
+                            throw new ZipBombException("文件 '" + entryName + "' 解压后超过 " + (maxEntrySize / 1024 / 1024) + " MB 限制");
+                        }
+
+                        // 总大小限制
+                        if (totalUncompressed > maxTotalUncompressed) {
+                            throw new ZipBombException("ZIP 解压总大小超过 " + (maxTotalUncompressed / 1024 / 1024) + " MB 限制");
+                        }
+
+                        os.write(buffer, 0, len);
+                    }
+                }
+
+                // 压缩比检测（仅对非空条目）
+                long compressedSize = entry.getCompressedSize();
+                if (compressedSize > 0 && entryUncompressed > 0) {
+                    long ratio = entryUncompressed / compressedSize;
+                    if (ratio > maxCompressionRatio) {
+                        Files.deleteIfExists(resolved);
+                        throw new ZipBombException("ZIP 炸弹检测：文件 '" + entryName + "' 压缩比 " + ratio + " 倍超过限制");
+                    }
+                }
+
                 zis.closeEntry();
             }
+        }
+    }
+
+    /**
+     * ZIP 炸弹异常，由 extractZip 在检测到安全威胁时抛出。
+     */
+    private static class ZipBombException extends Exception {
+        public ZipBombException(String message) {
+            super(message);
         }
     }
 

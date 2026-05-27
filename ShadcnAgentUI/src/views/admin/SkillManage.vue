@@ -19,6 +19,7 @@ import {
   uploadSkillZipApi,
   deleteSkillApi,
 } from '@/api/skill'
+import type { SkillUploadResult } from '@/api/skill'
 import type { SkillDefinition } from '@/types/api'
 import {
   Upload,
@@ -46,6 +47,7 @@ const showUploadModal = ref(false)
 const uploadFile = ref<File | null>(null)
 const uploading = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploadResult = ref<SkillUploadResult | null>(null)
 
 // Delete
 const showDeleteDialog = ref(false)
@@ -196,14 +198,28 @@ async function handleUpload() {
     return
   }
   uploading.value = true
+  uploadResult.value = null
   try {
-    await uploadSkillZipApi(uploadFile.value)
-    toast.success(t('toast.uploadSuccess'))
-    showUploadModal.value = false
-    await fetchSkills()
+    const result = await uploadSkillZipApi(uploadFile.value)
+    uploadResult.value = result
+    if (result.failed.length === 0) {
+      toast.success(t('skillManage.uploadAllSuccess', { count: result.successCount }))
+      showUploadModal.value = false
+      await fetchSkills()
+    } else if (result.successCount === 0) {
+      toast.error(result.failed[0].reason)
+    } else {
+      toast.success(t('skillManage.uploadPartialSuccess', { success: result.successCount, failed: result.failed.length }))
+      await fetchSkills()
+    }
   } catch { /* interceptor handles toast */ } finally {
     uploading.value = false
   }
+}
+
+function resetUpload() {
+  uploadResult.value = null
+  uploadFile.value = null
 }
 
 function confirmDelete(skill: SkillDefinition) {
@@ -331,17 +347,20 @@ async function handleDelete() {
         <DialogHeader>
           <DialogTitle>{{ $t('skillManage.upload') }}</DialogTitle>
         </DialogHeader>
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <label for="skill-zip-file" class="text-sm font-medium">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></label>
-            <input id="skill-zip-file" name="skill-zip-file" ref="fileInputRef" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
-            <div class="flex items-center gap-2">
-              <Button variant="outline" size="sm" @click="fileInputRef?.click()">
-                <FileArchive class="mr-1 h-4 w-4" />{{ uploadFile ? uploadFile.name : $t('skillManage.selectFile') }}
-              </Button>
-              <span v-if="uploadFile" class="text-xs text-muted-foreground">{{ (uploadFile.size / 1024).toFixed(1) }} KB</span>
+
+        <!-- Upload Form -->
+        <template v-if="!uploadResult">
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <label for="skill-zip-file" class="text-sm font-medium">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></label>
+              <input id="skill-zip-file" name="skill-zip-file" ref="fileInputRef" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
+              <div class="flex items-center gap-2">
+                <Button variant="outline" size="sm" @click="fileInputRef?.click()">
+                  <FileArchive class="mr-1 h-4 w-4" />{{ uploadFile ? uploadFile.name : $t('skillManage.selectFile') }}
+                </Button>
+                <span v-if="uploadFile" class="text-xs text-muted-foreground">{{ (uploadFile.size / 1024).toFixed(1) }} KB</span>
+              </div>
             </div>
-          </div>
           <div class="text-xs text-muted-foreground space-y-1 bg-muted/30 rounded-lg p-3">
             <p>{{ $t('skillManage.zipFormat') }}</p>
             <pre class="mt-2 font-mono text-[11px] leading-relaxed">
@@ -353,11 +372,52 @@ my-skill/
 another-skill/
   └── SKILL.md          # {{ $t('skillManage.zipBatchHint') }}</pre>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="showUploadModal = false">{{ $t('common.cancel') }}</Button>
-          <Button :loading="uploading" @click="handleUpload">{{ $t('common.upload') }}</Button>
-        </DialogFooter>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" @click="showUploadModal = false">{{ $t('common.cancel') }}</Button>
+            <Button :loading="uploading" @click="handleUpload">{{ $t('common.upload') }}</Button>
+          </DialogFooter>
+        </template>
+
+        <!-- Upload Result -->
+        <template v-else>
+          <div class="space-y-4">
+            <!-- Summary -->
+            <div class="flex items-center gap-4 p-3 rounded-lg" :class="uploadResult.failed.length === 0 ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'">
+              <div class="text-2xl font-bold">{{ uploadResult.successCount }}/{{ uploadResult.totalCount }}</div>
+              <div class="text-sm">
+                <p class="font-medium">{{ $t('skillManage.uploadResult') }}</p>
+                <p class="text-xs opacity-80">{{ $t('skillManage.uploadResultHint', { success: uploadResult.successCount, failed: uploadResult.failed.length }) }}</p>
+              </div>
+            </div>
+
+            <!-- Imported Skills -->
+            <div v-if="uploadResult.imported.length > 0">
+              <p class="text-sm font-medium text-green-700 mb-2">{{ $t('skillManage.importedSkills') }}</p>
+              <div class="space-y-1">
+                <div v-for="name in uploadResult.imported" :key="name" class="flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                  <svg class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  {{ name }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Failed Skills -->
+            <div v-if="uploadResult.failed.length > 0">
+              <p class="text-sm font-medium text-red-700 mb-2">{{ $t('skillManage.failedSkills') }}</p>
+              <div class="space-y-1">
+                <div v-for="item in uploadResult.failed" :key="item.name" class="flex items-start gap-2 text-xs text-red-700 bg-red-50 rounded px-2 py-1">
+                  <svg class="h-3.5 w-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  <span><strong>{{ item.name }}</strong>: {{ item.reason }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" @click="showUploadModal = false">{{ $t('common.close') }}</Button>
+            <Button @click="resetUpload">{{ $t('common.retry') }}</Button>
+          </DialogFooter>
+        </template>
       </DialogContent>
     </Dialog>
 

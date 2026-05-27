@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.dto.SkillUploadResult;
 import cafe.snails.ecomagents.model.Skills;
 import cafe.snails.ecomagents.service.SkillService;
 import lombok.RequiredArgsConstructor;
@@ -42,9 +43,9 @@ public class SkillController {
         return skillService.importFromGithubUrl(url);
     }
 
-    /** 上传 ZIP 文件导入技能 */
+    /** 上传 ZIP 文件导入技能（支持部分成功） */
     @PostMapping("/skills/upload")
-    public ApiResponse<Void> uploadSkillZip(@RequestParam("file") MultipartFile file) {
+    public ApiResponse<SkillUploadResult> uploadSkillZip(@RequestParam("file") MultipartFile file) {
         return skillService.uploadSkillZip(file);
     }
 
