@@ -68,7 +68,13 @@ public class HarnessChatService {
     private final AgentToolAvailabilityService toolAvailabilityService;
 
     /**
-     * 同步聊天，返回 Agent 回复文本（无 SSE 流式，用于群聊 @Agent 回复）。
+     * 同步（非流式）聊天，返回 Agent 回复文本。
+     * <p>用于群聊中 @Agent 触发自动回复，不涉及 SSE 流式推送。
+     * 自动注入知识库上下文，超时由 {@link LlmConfig#getStreamTimeout()} 控制。</p>
+     *
+     * @param agentId Agent ID
+     * @param content 用户消息文本
+     * @return Agent 回复文本；失败或超时时返回 null
      */
     public String simpleChat(Long agentId, String content) {
         try {
@@ -93,7 +99,23 @@ public class HarnessChatService {
     }
 
     /**
-     * 启动 HarnessAgent 流式对话。
+     * 启动 HarnessAgent 流式对话，返回 SSE 连接。
+     * <p>在异步线程中执行 Agent 调用，通过 SSE 实时推送推理过程：
+     * <ul>
+     *   <li>开始思考 → {@code reasoning}</li>
+     *   <li>逐 token 输出 → {@code token}</li>
+     *   <li>工具调用 → {@code tool_call} / {@code tool_result}</li>
+     *   <li>错误 → {@code error}</li>
+     *   <li>完成 → {@code done}（含完整回复）</li>
+     * </ul>
+     * 同时处理：实时查询检测、知识库注入（GENERIC 模式）、历史对话注入、文件标记解析。
+     * </p>
+     *
+     * @param agentId   Agent ID
+     * @param sessionId 会话 ID（用于历史消息加载和持久化）
+     * @param content   用户消息文本
+     * @param userId    用户 ID
+     * @return SSE Emitter，调用方通过 HTTP 响应返回给客户端
      */
     public SseEmitter streamChat(Long agentId, String sessionId, String content, Long userId) {
         SseEmitter emitter = new SseEmitter(600_000L);
@@ -233,6 +255,15 @@ public class HarnessChatService {
      * 为消息注入历史对话上下文，使 Agent 能感知之前的对话内容。
      * 加载当前 session 的已有消息列表，格式化为对话历史追加在用户消息之前。
      */
+    /**
+     * 为消息注入历史对话上下文。
+     * <p>从 {@link SessionRepository} 加载当前会话的已有消息列表，
+     * 格式化为对话历史追加在用户消息之前，使 Agent 感知之前的对话内容。</p>
+     *
+     * @param harnessSessionId Harness 会话 ID
+     * @param content          当前用户消息
+     * @return 注入历史后的消息文本（历史 + 当前消息）
+     */
     private String enrichWithHistory(String harnessSessionId, String content) {
         try {
             Session session = sessionRepository.findByHarnessSessionIdWithMessages(harnessSessionId).orElse(null);
@@ -260,6 +291,15 @@ public class HarnessChatService {
      * 根据 Agent 的 RAG 模式，为消息注入知识库上下文。
      * GENERIC 模式：自动检索注入。AGENTIC 模式：不注入（Agent 通过工具自主检索）。
      */
+    /**
+     * 根据 Agent 的 RAG 模式为消息注入知识库上下文。
+     * <p>GENERIC 模式：自动检索知识库内容注入到用户消息前。
+     * AGENTIC 模式：不注入（Agent 通过 {@code retrieve_knowledge} 工具自主检索）。</p>
+     *
+     * @param agentId Agent ID
+     * @param content 当前用户消息
+     * @return 注入知识库上下文后的消息文本
+     */
     private String enrichWithKnowledge(Long agentId, String content) {
         Agent agent = agentRepository.findById(agentId).orElse(null);
         if (agent == null) return content;
@@ -277,6 +317,14 @@ public class HarnessChatService {
         return content + "\n\n" + knowledgeContext;
     }
 
+    /**
+     * 判断用户消息是否包含需要实时/外部信息的查询。
+     * <p>通过关键词匹配检测天气、新闻、股价、汇率等场景。
+     * 命中时后续会强制启用 web_search 工具并注入使用指令。</p>
+     *
+     * @param content 用户消息文本
+     * @return 需要实时查询时返回 true
+     */
     private boolean requiresRealtimeLookup(String content) {
         if (content == null || content.isBlank()) return false;
         String text = content.toLowerCase();
@@ -295,6 +343,12 @@ public class HarnessChatService {
                 || text.contains("price");
     }
 
+    /**
+     * 在消息末尾注入实时查询工具指令，引导 Agent 使用 web_search 而非本地工具。
+     *
+     * @param content 原消息内容
+     * @return 追加了系统指令后的消息
+     */
     private String addRealtimeToolInstruction(String content) {
         return content + "\n\n[系统工具指令]\n"
                 + "这个用户问题需要实时或外部最新信息。必须调用 web_search 工具获取结果后再回答。"
@@ -304,6 +358,13 @@ public class HarnessChatService {
 
     /**
      * 为消息注入文件发送能力说明，指导 Agent 使用 &lt;file name=&quot;...&quot;&gt; 标记提供可下载文件。
+     */
+    /**
+     * 在消息末尾注入文件生成能力指令，指导 Agent 使用 {@code <file>} XML 标签提供可下载文件。
+     * <p>同时注入知识库使用规范：优先使用 retrieve_knowledge 工具，禁止直接读取工作区文件。</p>
+     *
+     * @param content 原消息内容
+     * @return 追加了系统指令后的消息
      */
     private String addFileCapabilityInstruction(String content) {
         return content + "\n\n[系统指令]\n"
@@ -326,6 +387,15 @@ public class HarnessChatService {
 
     // ===== SSE helpers =====
 
+    /**
+     * 发送 SSE 事件数据（JSON 格式）。
+     * <p>使用 ObjectMapper 将 data 序列化为 JSON，通过 emitter 推送给客户端。
+     * 若 {@code completed} 已被标记则不发送（防止重复发送）。</p>
+     *
+     * @param emitter   SSE 发射器
+     * @param completed 完成标志（CAS 控制，防止重复）>
+     * @param data      事件数据（将被序列化为 JSON）
+     */
     private void sendSse(SseEmitter emitter, AtomicBoolean completed, Map<String, Object> data) {
         if (completed.get()) return;
         try {
@@ -335,6 +405,14 @@ public class HarnessChatService {
         }
     }
 
+    /**
+     * 发送错误 SSE 事件并结束连接。
+     * <p>发送 type=error 事件后通过 CAS 确保 emitter.complete() 只被调用一次。</p>
+     *
+     * @param emitter   SSE 发射器
+     * @param completed 完成标志
+     * @param message   错误消息文本
+     */
     private void sendSseAndError(SseEmitter emitter, AtomicBoolean completed, String message) {
         if (completed.get()) return;
         try {
@@ -348,12 +426,32 @@ public class HarnessChatService {
 
     // ===== Token usage =====
 
+    /**
+     * 根据 Agent ID 解析为其绑定的 AI 模型。
+     *
+     * @param agentId Agent ID
+     * @return AiModel 对象；Agent 不存在或未绑定模型时返回 null
+     */
     private AiModel resolveModel(Long agentId) {
         Agent agent = agentRepository.findById(agentId).orElse(null);
         if (agent == null || agent.getModelId() == null) return null;
         return aiModelRepository.findById(agent.getModelId()).orElse(null);
     }
 
+    /**
+     * 记录一次聊天的 Token 用量。
+     * <p>计算输入/输出的 token 数（通过 {@link TokenCounter}），
+     * 同时关联模型、用户、Agent 信息，写入 {@link TokenUsageService}。
+     * 记录失败不影响主流程（仅日志警告）。</p>
+     *
+     * @param model        使用的 AI 模型
+     * @param agentId      Agent ID
+     * @param userId       用户 ID
+     * @param inputText    输入文本（用于计算 prompt tokens）
+     * @param outputText   输出文本（用于计算 completion tokens，可为 null）
+     * @param success      是否成功完成
+     * @param errorMessage 错误消息（成功时为 null）
+     */
     private void recordTokenUsage(AiModel model, Long agentId, Long userId,
                                   String inputText, String outputText, boolean success, String errorMessage) {
         try {
@@ -388,6 +486,12 @@ public class HarnessChatService {
         }
     }
 
+    /**
+     * 根据 Agent ID 查询 Agent 名称。
+     *
+     * @param agentId Agent ID
+     * @return Agent 名称；Agent 不存在或 ID 为 null 时返回 null
+     */
     private String resolveAgentName(Long agentId) {
         if (agentId == null) return null;
         return agentRepository.findById(agentId)
@@ -395,6 +499,12 @@ public class HarnessChatService {
                 .orElse(null);
     }
 
+    /**
+     * 根据用户 ID 查询用户名。
+     *
+     * @param userId 用户 ID
+     * @return 用户名；用户不存在或 ID 为 null 时返回 null
+     */
     private String resolveUsername(Long userId) {
         if (userId == null) return null;
         return userRepository.findById(userId)
@@ -402,17 +512,39 @@ public class HarnessChatService {
                 .orElse(null);
     }
 
+    /**
+     * 截断字符串到指定长度。
+     *
+     * @param s      原字符串
+     * @param maxLen 最大长度
+     * @return 截断后的字符串；原字符串为 null 时返回 null
+     */
     private static String truncate(String s, int maxLen) {
         if (s == null) return null;
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
     }
 
+    /**
+     * 构建错误诊断字符串，用于 Token 用量记录中的错误详情。
+     * <p>格式：{@code stage=<阶段>; friendly=<消息>; type=<异常类型>; raw=<原始消息>}</p>
+     *
+     * @param e        原始异常
+     * @param friendly 用户友好的错误消息
+     * @return 诊断字符串
+     */
     private String buildErrorDiagnostic(Exception e, String friendly) {
         String raw = e.getMessage();
         String type = e.getClass().getSimpleName();
         return "stage=" + classifyTimeoutStage(e) + "; friendly=" + friendly + "; type=" + type + "; raw=" + (raw != null ? raw : "");
     }
 
+    /**
+     * 根据异常消息的关键词推断超时发生的阶段。
+     * <p>区分 RAG 超时、工具调用超时和模型本身超时，用于诊断。</p>
+     *
+     * @param e 原始异常
+     * @return 超时阶段标识：rag_timeout / tool_timeout / model_timeout / unknown
+     */
     private String classifyTimeoutStage(Exception e) {
         String message = e.getMessage();
         if (message == null) {
