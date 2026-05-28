@@ -6,14 +6,17 @@ import { listMyGroupsApi, createGroupApi, getGroupApi, updateGroupApi, disbandGr
 import type { ChatGroup } from '@/types/group'
 // import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Plus, MessageCircle, Settings2, Trash2, Check, X } from 'lucide-vue-next'
+import { useUnreadStore } from '@/stores/unread'
 
 const { t } = useI18n()
 const router = useRouter()
+const unread = useUnreadStore()
 const groups = ref<ChatGroup[]>([])
 const loading = ref(true)
 const showCreateDialog = ref(false)
@@ -32,6 +35,7 @@ const showDisbandConfirm = ref(false)
 onMounted(async () => {
   try {
     groups.value = await listMyGroupsApi()
+    unread.fetchAll()
   } catch {
     toast.error(t('error.loadFailed'))
   } finally {
@@ -182,11 +186,19 @@ async function confirmDisband() {
       >
         <CardHeader class="pb-2">
           <CardTitle class="flex items-center gap-2 text-base">
-            <div v-if="group.avatar" class="w-8 h-8 rounded-full overflow-hidden shrink-0">
-              <img :src="group.avatar" class="w-full h-full object-cover" />
-            </div>
-            <div v-else class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <MessageCircle class="h-4 w-4 text-primary" />
+            <div class="relative shrink-0">
+              <div v-if="group.avatar" class="w-8 h-8 rounded-full overflow-hidden">
+                <img :src="group.avatar" class="w-full h-full object-cover" />
+              </div>
+              <div v-else class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <MessageCircle class="h-4 w-4 text-primary" />
+              </div>
+              <Badge
+                v-if="unread.groupMessages[group.id] > 0"
+                class="absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full px-1 text-[10px] leading-none flex items-center justify-center"
+              >
+                {{ unread.groupMessages[group.id] > 99 ? '99+' : unread.groupMessages[group.id] }}
+              </Badge>
             </div>
             <!-- 重命名模式 -->
             <div v-if="renamingGroupId === group.id" class="flex-1 flex items-center gap-3" @click.stop>

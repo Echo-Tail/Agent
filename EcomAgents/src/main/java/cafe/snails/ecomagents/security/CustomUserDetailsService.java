@@ -11,6 +11,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 自定义用户认证服务，从数据库加载用户信息。
+ * <p>实现 Spring Security 的 {@link UserDetailsService} 接口：
+ * <ul>
+ *   <li>根据用户名查询 {@link User} 表</li>
+ *   <li>检查账号状态是否为 {@code active}</li>
+ *   <li>构建用户角色权限（{@code ROLE_USER} / {@code ROLE_ADMIN}）</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {

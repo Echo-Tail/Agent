@@ -24,6 +24,14 @@ export function disbandGroupApi(groupId: number) {
   return http.delete<any, void>(`/groups/${groupId}`)
 }
 
+export function markPrivateChatReadApi(otherUserId: number) {
+  return http.put<any, void>(`/messages/${otherUserId}/read`)
+}
+
+export function markGroupReadApi(groupId: number) {
+  return http.put<any, void>(`/groups/${groupId}/read`)
+}
+
 export async function downloadGroupFileApi(groupId: number, fileId: number): Promise<Blob> {
   const token = localStorage.getItem('ecomagents_token')
   const response = await fetch(`/v1/groups/${groupId}/files/${fileId}/download`, {

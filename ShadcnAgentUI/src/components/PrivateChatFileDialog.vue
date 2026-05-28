@@ -1,55 +1,65 @@
-<script setup lang="ts">
-/**
- * GroupFileDialog.vue — 群文件管理对话框
+<!--
+ * PrivateChatFileDialog.vue — 私聊文件管理对话框
  *
- * 在群聊中查看、上传、搜索、下载群文件。
- * 文件按 groupId 隔离，每个群只能看到自己的文件。
- */
+ * 功能：在私聊会话中查看、上传、搜索、下载文件。
+ * 文件按对话上下文隔离（contextType=PRIVATE + contextId=对方用户ID）。
+ *
+ * @component PrivateChatFileDialog
+-->
+
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { listGroupFilesApi, uploadGroupFileApi, downloadGroupFileApi } from '@/api/group'
-import type { GroupFile } from '@/types/group'
+import { listMyFilesApi, uploadFileApi, downloadFileApi } from '@/api/file'
+import type { FileRecord } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { Download, Search, ArrowUpDown, Upload, FileIcon, Loader2 } from 'lucide-vue-next'
 
+/** 组件属性 */
 const props = defineProps<{
-  /** 群 ID，用于隔离文件 */
-  groupId: number
+  /** 对话上下文类型，私聊固定为 'PRIVATE' */
+  contextType: string
+  /** 对话上下文 ID，即对方的用户 ID */
+  contextId: number
   /** 对话框是否打开 */
   open: boolean
 }>()
 
+/** 组件事件 */
 const emit = defineEmits<{
+  /** 对话框打开状态变化 */
   (e: 'update:open', val: boolean): void
 }>()
 
-/** 当前群的文件列表 */
-const files = ref<GroupFile[]>([])
-/** 是否正在加载 */
+/** 当前会话的文件列表 */
+const files = ref<FileRecord[]>([])
+/** 是否正在加载文件列表 */
 const loading = ref(true)
-/** 搜索文本 */
+/** 搜索框文本 */
 const searchText = ref('')
-/** 排序字段 */
+/** 排序字段：uploadedAt（上传时间） 或 fileSize（文件大小） */
 const sortField = ref<'uploadedAt' | 'fileSize'>('uploadedAt')
-/** 排序方向 */
+/** 排序方向：desc（降序） 或 asc（升序） */
 const sortOrder = ref<'desc' | 'asc'>('desc')
-/** 是否正在上传 */
+/** 是否正在上传文件 */
 const uploading = ref(false)
+/** 隐藏的文件选择 input 引用 */
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 onMounted(() => loadFiles())
 
-/** 对话框打开时刷新文件列表 */
+/** 对话框打开时重新加载文件列表 */
 watch(() => props.open, (val) => {
   if (val) loadFiles()
 })
 
-/** 从后端加载当前群的文件列表 */
+/** 从后端加载当前会话的文件列表 */
 async function loadFiles() {
   loading.value = true
   try {
-    files.value = await listGroupFilesApi(props.groupId)
+    files.value = await listMyFilesApi(props.contextType, props.contextId)
   } catch {
     toast.error('加载文件失败')
   } finally {
@@ -57,7 +67,7 @@ async function loadFiles() {
   }
 }
 
-/** 按搜索文本过滤 + 排序后的文件列表 */
+/** 按搜索文本过滤 + 按字段排序后的文件列表 */
 const filteredFiles = computed(() => {
   let list = files.value
   if (searchText.value.trim()) {
@@ -85,10 +95,10 @@ function toggleSort(field: 'uploadedAt' | 'fileSize') {
   }
 }
 
-/** 下载群文件 */
-async function downloadFile(file: GroupFile) {
+/** 下载文件（触发浏览器下载） */
+async function downloadFile(file: FileRecord) {
   try {
-    const blob = await downloadGroupFileApi(props.groupId, file.id)
+    const blob = await downloadFileApi(file.id)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -100,14 +110,19 @@ async function downloadFile(file: GroupFile) {
   }
 }
 
-/** 处理文件上传 */
+/** 触发隐藏的文件选择 input */
+function triggerFileSelect() {
+  fileInputRef.value?.click()
+}
+
+/** 处理文件选择上传 */
 async function handleUpload(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
   uploading.value = true
   try {
-    await uploadGroupFileApi(props.groupId, file)
+    await uploadFileApi(file, props.contextType, props.contextId)
     toast.success('上传成功')
     await loadFiles()
   } catch {
@@ -118,14 +133,14 @@ async function handleUpload(e: Event) {
   }
 }
 
-/** 格式化文件大小 */
+/** 格式化文件大小（B/KB/MB） */
 function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-/** 格式化日期 */
+/** 格式化日期为本地日期字符串 */
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString()
 }
@@ -140,7 +155,7 @@ function close() {
   <Dialog :open="open" @update:open="close">
     <DialogContent class="max-w-2xl">
       <DialogHeader>
-        <DialogTitle>群文件</DialogTitle>
+        <DialogTitle>私聊文件</DialogTitle>
       </DialogHeader>
 
       <!-- 工具栏：搜索 + 上传 -->
@@ -149,11 +164,11 @@ function close() {
           <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input v-model="searchText" placeholder="搜索文件名..." class="pl-8 h-9" />
         </div>
-        <Button variant="outline" size="sm" :disabled="uploading" class="relative">
+        <Button variant="outline" size="sm" :disabled="uploading" @click="triggerFileSelect">
           <Upload class="h-4 w-4 mr-1" />
           {{ uploading ? '上传中...' : '上传' }}
-          <input type="file" class="absolute inset-0 opacity-0 cursor-pointer" @change="handleUpload" />
         </Button>
+        <input ref="fileInputRef" type="file" class="hidden" @change="handleUpload" />
       </div>
 
       <!-- 排序按钮 -->

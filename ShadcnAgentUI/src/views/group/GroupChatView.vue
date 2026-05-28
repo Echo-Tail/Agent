@@ -1,16 +1,23 @@
 <script setup lang="ts">
+/**
+ * GroupChatView.vue — 群聊界面
+ *
+ * 群聊会话的主界面，支持多成员消息、@提及、文件共享、
+ * SSE 实时消息推送、未读标记清除等功能。
+ */
 import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUnreadStore } from '@/stores/unread'
 import { STORAGE_KEY_TOKEN } from '@/constants'
 
-import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi, uploadGroupFileApi, kickMemberApi } from '@/api/group'
+import { getGroupApi, getUnifiedMembersApi, listGroupMessagesApi, sendGroupMessageApi, listGroupFilesApi, uploadGroupFileApi, kickMemberApi, markGroupReadApi } from '@/api/group'
 
 import type { ChatGroup, UnifiedMember, GroupMessage, GroupFile } from '@/types/group'
 import GroupFileDialog from '@/components/GroupFileDialog.vue'
 import InviteMemberDialog from '@/components/InviteMemberDialog.vue'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+
 import { Badge } from '@/components/ui/badge'
 import AgentIcon from '@/components/AgentIcon.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -22,6 +29,7 @@ import { Send, ArrowLeft, Users, Bot, Loader2, FileIcon, UserPlus, Paperclip, Ma
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const unread = useUnreadStore()
 
 const groupId = computed(() => Number(route.params.id))
 const group = ref<ChatGroup | null>(null)
@@ -46,6 +54,15 @@ const memberNames = computed(() => {
   const map = new Map<string, string>()
   for (const m of members.value) {
     map.set(`${m.memberType}-${m.refId}`, m.name)
+  }
+  return map
+})
+
+// 成员头像/图标映射表
+const memberAvatars = computed(() => {
+  const map = new Map<string, { avatar?: string; icon?: string; name: string }>()
+  for (const m of members.value) {
+    map.set(`${m.memberType}-${m.refId}`, { avatar: m.avatar, icon: m.icon, name: m.name })
   }
   return map
 })
@@ -96,7 +113,9 @@ function isMyMessage(msg: GroupMessage) {
 // 自动滚动到最新消息
 const messagesEnd = ref<HTMLDivElement | null>(null)
 watch(() => messages.value.length, () => {
-  nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
+  nextTick(() => {
+    requestAnimationFrame(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
+  })
 })
 
 // SSE 连接
@@ -122,6 +141,15 @@ function connectSse() {
     } catch { /* ignore parse errors */ }
   })
 
+  eventSource.addEventListener('unread_group', (e) => {
+    try {
+      const data = JSON.parse(e.data)
+      if (data.senderId !== auth.currentUser?.id) {
+        unread.incrementGroup(data.groupId)
+      }
+    } catch { /* ignore */ }
+  })
+
   eventSource.onerror = () => {
     // 断线后 3 秒重连
     setTimeout(() => connectSse(), 3000)
@@ -140,10 +168,16 @@ onMounted(async () => {
     members.value = unified
     messages.value = msgs.reverse() // 倒序变正序
     files.value = fs
+    // 标记群聊为已读
+    await markGroupReadApi(groupId.value)
+    unread.clearGroup(groupId.value)
   } catch {
     toast.error('加载失败')
   } finally {
     loading.value = false
+    nextTick(() => {
+      requestAnimationFrame(() => messagesEnd.value?.scrollIntoView())
+    })
   }
   connectSse()
 })
@@ -255,11 +289,18 @@ async function onInvited() {
         </div>
         <template v-else>
           <div v-for="msg in messages" :key="msg.id" :class="['flex gap-3', isMyMessage(msg) ? 'flex-row-reverse' : '']">
-            <Avatar class="h-8 w-8 mt-1 shrink-0">
-              <AvatarFallback :class="msg.senderType === 'AGENT' ? 'bg-primary text-primary-foreground text-xs' : 'bg-muted text-xs'">
-                {{ msg.senderType === 'AGENT' ? 'A' : 'U' }}
-              </AvatarFallback>
-            </Avatar>
+            <div class="h-8 w-8 mt-1 shrink-0 rounded-full overflow-hidden flex items-center justify-center"
+                 :class="msg.senderType === 'AGENT' ? 'bg-primary/10' : 'bg-muted'">
+              <img v-if="memberAvatars.get(`${msg.senderType}-${msg.senderId}`)?.avatar"
+                   :src="memberAvatars.get(`${msg.senderType}-${msg.senderId}`)!.avatar!"
+                   class="h-full w-full object-cover" />
+              <AgentIcon v-else-if="msg.senderType === 'AGENT'"
+                         :icon="memberAvatars.get(`AGENT-${msg.senderId}`)?.icon"
+                         class="h-5 w-5" />
+              <span v-else class="text-xs font-medium text-muted-foreground">
+                {{ memberAvatars.get(`USER-${msg.senderId}`)?.name?.charAt(0)?.toUpperCase() || '?' }}
+              </span>
+            </div>
             <div class="min-w-0">
               <div :class="['flex items-center gap-2 mb-1', isMyMessage(msg) ? 'flex-row-reverse' : '']">
                 <span :class="['text-xs', isMyMessage(msg) ? 'font-medium' : 'text-[#888888]']">

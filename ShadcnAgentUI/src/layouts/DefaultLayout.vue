@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { useUnreadStore } from '@/stores/unread'
 import { useI18n } from 'vue-i18n'
 import { setLocale, getCurrentLocale } from '@/locales'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const themeStore = useThemeStore()
+const unread = useUnreadStore()
 const { t } = useI18n()
 
 const sidebarCollapsed = ref(false)
@@ -129,6 +131,20 @@ function navigate(key: string) {
   mobileSidebarOpen.value = false
 }
 
+let unreadPollTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  unread.fetchAll()
+  unreadPollTimer = setInterval(() => unread.fetchAll(), 10000)
+})
+
+onUnmounted(() => {
+  if (unreadPollTimer) {
+    clearInterval(unreadPollTimer)
+    unreadPollTimer = null
+  }
+})
+
 function handleLogout() {
   auth.logout()
   router.push({ name: 'Login' })
@@ -185,6 +201,14 @@ const userAvatar = computed(() => {
         >
           <component :is="item.icon" class="h-4 w-4 shrink-0" />
           <span v-show="!sidebarCollapsed" class="truncate">{{ $t(item.translationKey) }}</span>
+          <span
+            v-if="item.key === 'Messages' && unread.totalPrivate() > 0"
+            class="absolute right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1"
+          >{{ unread.totalPrivate() > 99 ? '99+' : unread.totalPrivate() }}</span>
+          <span
+            v-else-if="item.key === 'GroupChat' && unread.totalGroup() > 0"
+            class="absolute right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1"
+          >{{ unread.totalGroup() > 99 ? '99+' : unread.totalGroup() }}</span>
         </button>
         </template>
       </nav>

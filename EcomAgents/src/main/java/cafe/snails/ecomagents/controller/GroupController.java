@@ -4,9 +4,11 @@ import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.UnifiedMemberDTO;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.ChatGroup;
+import cafe.snails.ecomagents.repository.GroupMessageRepository;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.GroupService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,6 +24,7 @@ import java.util.Map;
 public class GroupController {
 
     private final GroupService groupService;
+    private final GroupMessageRepository groupMessageRepository;
 
     /** 创建群 */
     @PostMapping
@@ -71,6 +74,26 @@ public class GroupController {
     @GetMapping("/{groupId}/unified-members")
     public ApiResponse<List<UnifiedMemberDTO>> getUnifiedMembers(@PathVariable Long groupId) {
         return groupService.getUnifiedMembers(groupId);
+    }
+
+    /** 获取所有群的未读消息数 */
+    @GetMapping("/unread-summary")
+    public ApiResponse<List<Map<String, Object>>> getGroupUnreadSummary(@CurrentUserId Long userId) {
+        // 获取用户加入的所有群
+        var groups = groupService.listMyGroups(userId).getData();
+        List<Map<String, Object>> result = groups.stream().map(g -> {
+            long count = groupMessageRepository.countUnreadByGroupId(g.getId(), userId);
+            return Map.<String, Object>of("groupId", g.getId(), "count", count);
+        }).filter(m -> (long) m.get("count") > 0).toList();
+        return ApiResponse.success(result);
+    }
+
+    /** 标记群聊为已读 */
+    @PutMapping("/{groupId}/read")
+    @Transactional
+    public ApiResponse<Void> markGroupAsRead(@PathVariable Long groupId, @CurrentUserId Long userId) {
+        groupMessageRepository.markGroupAsRead(groupId, userId);
+        return ApiResponse.success("已标记为已读", null);
     }
 
     /** 获取当前用户可邀请的 Agent（已创建且未入群的） */

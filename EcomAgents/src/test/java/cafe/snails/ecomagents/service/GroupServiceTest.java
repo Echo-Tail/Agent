@@ -34,6 +34,8 @@ class GroupServiceTest {
     private AgentService agentService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private AgentRepository agentRepository;
 
     private GroupService groupService;
 
@@ -45,7 +47,7 @@ class GroupServiceTest {
     @BeforeEach
     void setUp() {
         groupService = new GroupService(chatGroupRepository, groupMemberRepository,
-                groupAgentRepository, agentService, userRepository);
+                groupAgentRepository, agentService, agentRepository, userRepository);
     }
 
     // ===== 创建群 =====

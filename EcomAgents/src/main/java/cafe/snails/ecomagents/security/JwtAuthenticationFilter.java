@@ -15,6 +15,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JWT 认证过滤器，拦截每次请求并验证 JWT 令牌。
+ * <p>支持两种令牌传递方式：
+ * <ul>
+ *   <li>{@code Authorization: Bearer <token>} 请求头</li>
+ *   <li>{@code ?token=<token>} URL 查询参数（用于 SSE EventSource）</li>
+ * </ul>
+ * 验证通过后将 {@link JwtPrincipal} 设置到 SecurityContext 中，
+ * 供 {@link CurrentUserIdArgumentResolver} 提取用户 ID。
+ * </p>
+ */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
