@@ -22,17 +22,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -52,6 +41,8 @@ import java.util.regex.Pattern;
 public class KnowledgeBaseService {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseService.class);
+
+    /** 标识符正则：字母/数字开头，后续可含字母/数字/下划线/连字符，至少 4 位 */
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_-]{3,}");
 
     private final KnowledgeBaseRepository kbRepository;
@@ -65,16 +56,35 @@ public class KnowledgeBaseService {
 
     // ========== Knowledge Base CRUD ==========
 
+    /**
+     * 获取所有知识库列表。
+     *
+     * @return 知识库列表（仅元数据，不包含文档内容）
+     */
     public ApiResponse<List<KnowledgeBase>> listKnowledgeBases() {
         return ApiResponse.success(kbRepository.findAll());
     }
 
+    /**
+     * 根据 ID 获取单个知识库详情。
+     *
+     * @param id 知识库 ID
+     * @return 知识库信息；不存在时返回 404
+     */
     public ApiResponse<KnowledgeBase> getKnowledgeBase(Long id) {
         return kbRepository.findById(id)
                 .map(ApiResponse::success)
                 .orElse(ApiResponse.error(404, "知识库不存在"));
     }
 
+    /**
+     * 创建知识库。
+     * <p>自动设置创建日期为当天、创建者为当前用户，忽略请求中传入的 ID。</p>
+     *
+     * @param kb     知识库基本信息（名称、描述等）
+     * @param userId 创建者用户 ID
+     * @return 创建后的知识库记录
+     */
     public ApiResponse<KnowledgeBase> createKnowledgeBase(KnowledgeBase kb, Long userId) {
         kb.setId(null);
         kb.setCreatedAt(LocalDate.now());
@@ -82,6 +92,14 @@ public class KnowledgeBaseService {
         return ApiResponse.success("知识库创建成功", kbRepository.save(kb));
     }
 
+    /**
+     * 更新知识库资料。
+     * <p>部分更新——只修改传入的非 null 字段（name / description），其他字段保持不变。</p>
+     *
+     * @param id      知识库 ID
+     * @param updates 包含待更新字段的对象
+     * @return 更新后的知识库；不存在时返回 404
+     */
     public ApiResponse<KnowledgeBase> updateKnowledgeBase(Long id, KnowledgeBase updates) {
         return kbRepository.findById(id)
                 .map(kb -> {
@@ -92,6 +110,21 @@ public class KnowledgeBaseService {
                 .orElseGet(() -> ApiResponse.error(404, "知识库不存在"));
     }
 
+    /**
+     * 删除知识库及其所有文档。
+     * <p>级联操作：
+     * <ul>
+     *   <li>解除关联该知识库的所有 Agent 的引用</li>
+     *   <li>更新 Agent 工作空间的 KNOWLEDGE.md</li>
+     *   <li>清除本地向量索引缓存</li>
+     *   <li>删除数据库中的文档记录</li>
+     *   <li>删除知识库记录</li>
+     * </ul>
+     * </p>
+     *
+     * @param id 知识库 ID
+     * @return 操作结果；知识库不存在时返回 404
+     */
     @Transactional
     public ApiResponse<Void> deleteKnowledgeBase(Long id) {
         if (!kbRepository.existsById(id)) {
@@ -124,6 +157,18 @@ public class KnowledgeBaseService {
         return ApiResponse.success(docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId));
     }
 
+    /**
+     * 上传单个文档到知识库。
+     * <p>执行流程：检查知识库存在 → 校验文件名 → 提取文本内容 → 保存文档记录 →
+     * 触发异步向量索引重建 → 同步知识库到 Agent 工作空间 → 写入审计日志。</p>
+     *
+     * @param kbId     知识库 ID
+     * @param file     上传的文件（支持 txt/md/csv/json/xml/yaml/properties/log 等）
+     * @param userId   上传者用户 ID
+     * @param username 上传者用户名（用于审计日志）
+     * @param request  HTTP 请求（用于提取客户端 IP 写入审计日志）
+     * @return 保存后的文档记录
+     */
     @Transactional
     public ApiResponse<KnowledgeDocument> uploadDocument(Long kbId, MultipartFile file, Long userId,
                                                          String username, HttpServletRequest request) {
@@ -230,6 +275,17 @@ public class KnowledgeBaseService {
         return ApiResponse.success(message, savedDocs);
     }
 
+    /**
+     * 删除知识库中的单个文档。
+     * <p>级联操作：删除数据库记录 → 触发异步向量索引重建 → 同步 Agent 工作空间 → 写入审计日志。</p>
+     *
+     * @param kbId     知识库 ID
+     * @param docId    文档 ID
+     * @param userId   操作者用户 ID
+     * @param username 操作者用户名（用于审计日志）
+     * @param request  HTTP 请求（用于提取客户端 IP）
+     * @return 操作结果
+     */
     @Transactional
     public ApiResponse<Void> deleteDocument(Long kbId, Long docId, Long userId,
                                             String username, HttpServletRequest request) {
@@ -254,6 +310,13 @@ public class KnowledgeBaseService {
 
     // ========== Search ==========
 
+    /**
+     * 全局全文搜索——在所有知识库中搜索包含指定关键词的文档。
+     * <p>使用数据库 LIKE 查询，大小写不敏感。关键词为空时返回空列表。</p>
+     *
+     * @param keyword 搜索关键词
+     * @return 匹配的文档列表
+     */
     public ApiResponse<List<KnowledgeDocument>> search(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return ApiResponse.success(List.of());
@@ -261,6 +324,14 @@ public class KnowledgeBaseService {
         return ApiResponse.success(docRepository.searchByKeyword(keyword.trim()));
     }
 
+    /**
+     * 在指定知识库集合中搜索包含关键词的文档。
+     * <p>限定搜索范围到传入的 kbIds 列表，用于 Agent 绑定了多个知识库时的定向搜索。</p>
+     *
+     * @param keyword 搜索关键词
+     * @param kbIds   知识库 ID 列表（限定范围）；为空时返回空列表
+     * @return 匹配的文档列表
+     */
     public ApiResponse<List<KnowledgeDocument>> searchInKbs(String keyword, List<Long> kbIds) {
         if (keyword == null || keyword.isBlank() || kbIds == null || kbIds.isEmpty()) {
             return ApiResponse.success(List.of());
@@ -269,8 +340,7 @@ public class KnowledgeBaseService {
     }
 
     // ========== Chat Integration ==========
-
-                public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
+    public String buildKnowledgeContext(List<Long> kbIds, String userQuery) {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
         long startedAt = System.nanoTime();
@@ -401,6 +471,15 @@ public class KnowledgeBaseService {
         return selected;
     }
 
+    /**
+     * 查找与用户查询相关的知识单元（KnowledgeUnit），用于构建 RAG 上下文。
+     * <p>执行两步检索：先用关键词搜索匹配的文档，再将文档解析为知识单元并按相关性打分。
+     * 最终选取分数 >= topScore * 75% 的单元，上限由 ragSearchLimit 配置控制。</p>
+     *
+     * @param kbIds     知识库 ID 列表
+     * @param userQuery 用户查询文本
+     * @return 按相关性降序排列的知识单元列表
+     */
     private List<KnowledgeUnit> findRelevantUnits(List<Long> kbIds, String userQuery) {
         String keyword = userQuery == null ? "" : userQuery.trim();
         List<KnowledgeDocument> docs = List.of();
@@ -447,6 +526,15 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    /**
+     * 查找与用户查询相关的文档（整文档级别，不拆分为单元）。
+     * <p>先用关键词精确匹配搜索，若未命中则对所有文档按关键词评分排序，
+     * 取前 5 篇。用于不需要细粒度单元的场景。</p>
+     *
+     * @param kbIds     知识库 ID 列表
+     * @param userQuery 用户查询文本
+     * @return 按相关性降序排列的文档列表，最多 5 篇
+     */
     private List<KnowledgeDocument> findRelevantDocuments(List<Long> kbIds, String userQuery) {
         String keyword = userQuery == null ? "" : userQuery.trim();
         if (!keyword.isBlank()) {
@@ -475,6 +563,14 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    /**
+     * 从查询文本中提取搜索词（term）。
+     * <p>对英文按空格分词，过滤 <2 字符和 >80 字符的词；
+     * 对中/日/韩文生成 2~4 字的 n-gram 作为额外搜索词。</p>
+     *
+     * @param query 用户查询文本
+     * @return 去重的搜索词集合
+     */
     private Set<String> extractSearchTerms(String query) {
         Set<String> terms = new LinkedHashSet<>();
         if (query == null || query.isBlank()) {
@@ -495,6 +591,13 @@ public class KnowledgeBaseService {
         return terms;
     }
 
+    /**
+     * 从查询中提取标识符形式的搜索词（如变量名、方法名、类名）。
+     * <p>匹配正则 [a-zA-Z0-9][a-zA-Z0-9_-]{3,}，用于代码或配置文档的精确匹配。</p>
+     *
+     * @param query 用户查询文本
+     * @return 匹配的标识符集合
+     */
     private Set<String> extractIdentifierTerms(String query) {
         Set<String> identifiers = new LinkedHashSet<>();
         if (query == null || query.isBlank()) {
@@ -507,6 +610,14 @@ public class KnowledgeBaseService {
         return identifiers;
     }
 
+    /**
+     * 为 CJK（中日韩）文本生成 n-gram 搜索词，弥补基于空格的西文分词对东亚文字不适配的问题。
+     * <p>按 n=4 → 3 → 2 的顺序，生成长度为 2~4 的连续子串，
+     * 总上限 80 个 gram。</p>
+     *
+     * @param terms 搜索词集合（结果追加到此集合）
+     * @param text  输入文本
+     */
     private void addCjkNgrams(Set<String> terms, String text) {
         if (text == null || text.length() < 2 || !containsCjk(text)) {
             return;
@@ -525,6 +636,13 @@ public class KnowledgeBaseService {
         }
     }
 
+    /**
+     * 判断文本是否包含 CJK（中日韩越）统一表意文字。
+     * <p>检查字符的 Unicode Script 属性是否为 HAN / HIRAGANA / KATAKANA / HANGUL。</p>
+     *
+     * @param text 输入文本
+     * @return 包含 CJK 字符时返回 true
+     */
     private boolean containsCjk(String text) {
         for (int i = 0; i < text.length(); i++) {
             Character.UnicodeScript script = Character.UnicodeScript.of(text.charAt(i));
@@ -538,6 +656,14 @@ public class KnowledgeBaseService {
         return false;
     }
 
+    /**
+     * 计算文档与搜索词的匹配得分。
+     * <p>遍历搜索词，统计文档内容中包含每个词的次数 × 词长，累加作为总分。</p>
+     *
+     * @param doc   知识文档
+     * @param terms 搜索词集合
+     * @return 匹配得分（0 表示无匹配）
+     */
     private int scoreDocument(KnowledgeDocument doc, Set<String> terms) {
         if (doc.getContent() == null || doc.getContent().isBlank()) {
             return 0;
@@ -552,6 +678,16 @@ public class KnowledgeBaseService {
         return score;
     }
 
+    /**
+     * 计算知识单元与搜索词的匹配得分。
+     * <p>优先匹配标识符（identifier），命中标识符 +1000 分保底；
+     * 然后叠加普通搜索词匹配分；JSON 类型的单元额外 +10 分。</p>
+     *
+     * @param unit        知识单元
+     * @param terms       搜索词集合
+     * @param identifiers 标识符集合（用于代码/配置精确匹配）
+     * @return 匹配得分；0 表示无匹配
+     */
     private int scoreUnit(KnowledgeUnit unit, Set<String> terms, Set<String> identifiers) {
         if (unit == null || unit.content() == null || unit.content().isBlank()) {
             return 0;
@@ -591,6 +727,12 @@ public class KnowledgeBaseService {
         return score;
     }
 
+    /**
+     * 截断日志输出中的长字符串，防止日志被内容撑爆。
+     *
+     * @param value 原始字符串
+     * @return 不超过 80 字符的截断结果
+     */
     private String safeLog(String value) {
         if (value == null) {
             return "";
@@ -598,6 +740,13 @@ public class KnowledgeBaseService {
         return value.length() > 80 ? value.substring(0, 80) + "..." : value;
     }
 
+    /**
+     * 截断字符串到指定长度，超长部分替换为 "..."。
+     *
+     * @param text      原始文本
+     * @param maxLength 最大长度
+     * @return 截断后的文本
+     */
     private String truncate(String text, int maxLength) {
         if (text == null) {
             return "";
@@ -605,6 +754,16 @@ public class KnowledgeBaseService {
         return text.length() > maxLength ? text.substring(0, maxLength) + "..." : text;
     }
 
+    /**
+     * 从文档中提取与用户查询最相关的片段（snippet）。
+     * <p>找到查询词在文档中的首次命中位置，截取前后各 300 字符，
+     * 总长不超过 maxLength。用于构建 RAG 上下文中的引用块。</p>
+     *
+     * @param doc       知识文档
+     * @param userQuery 用户查询
+     * @param maxLength 片段最大字符数
+     * @return 相关片段文本（两端有 ... 表示被截断）
+     */
     private String buildRelevantSnippet(KnowledgeDocument doc, String userQuery, int maxLength) {
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
@@ -630,6 +789,16 @@ public class KnowledgeBaseService {
         return prefix + content.substring(start, end) + suffix;
     }
 
+    /**
+     * 从知识单元中提取与查询最相关的片段。
+     * <p>JSON 类型的单元直接返回完整内容（≤ 3×maxLength），
+     * 其余类型委托给基于文档的 {@link #buildRelevantSnippet(KnowledgeDocument, String, int)}。</p>
+     *
+     * @param unit      知识单元
+     * @param userQuery 用户查询
+     * @param maxLength 片段最大字符数
+     * @return 相关片段文本
+     */
     private String buildRelevantSnippet(KnowledgeUnit unit, String userQuery, int maxLength) {
         if (unit == null || unit.content() == null || unit.content().isBlank()) {
             return "";
@@ -791,11 +960,27 @@ public class KnowledgeBaseService {
 
     // ========== Helpers ==========
 
+    /**
+     * 获取文件名的扩展名（不含点号）。
+     *
+     * @param fileName 文件名
+     * @return 扩展名（小写），无扩展名时返回空字符串
+     */
     private String getExtension(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(dot + 1) : "";
     }
 
+    /**
+     * 根据文件扩展名提取文本内容。
+     * <p>支持的格式：txt / md / csv / json / xml / yaml / properties / log 直接读取 UTF-8 文本；
+     * 其他格式（如 PDF/DOCX）则读取原始文本并附加暂不支持提示。</p>
+     *
+     * @param file 上传的文件
+     * @param ext  文件扩展名
+     * @return 提取的文本内容
+     * @throws Exception 文件读取失败时抛出
+     */
     private String extractText(MultipartFile file, String ext) throws Exception {
         return switch (ext) {
             case "txt", "md", "csv" -> readTextFile(file);
@@ -804,6 +989,13 @@ public class KnowledgeBaseService {
         };
     }
 
+    /**
+     * 以 UTF-8 编码读取上传文件的全部文本内容。
+     *
+     * @param file 上传的 Multipart 文件
+     * @return 文件文本内容（已 trim）
+     * @throws Exception 读取失败时抛出
+     */
     private String readTextFile(MultipartFile file) throws Exception {
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
