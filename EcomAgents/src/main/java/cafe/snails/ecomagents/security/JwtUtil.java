@@ -10,6 +10,16 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+/**
+ * JWT 令牌工具类。
+ * <p>使用 HMAC-SHA256 算法签名，负责：
+ * <ul>
+ *   <li>生成带 userId / username / role 声明的令牌</li>
+ *   <li>解析和验证令牌签名与有效期</li>
+ *   <li>从令牌中提取用户 ID、用户名、角色</li>
+ * </ul>
+ * </p>
+ */
 @Component
 public class JwtUtil {
 

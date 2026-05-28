@@ -11,12 +11,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import cafe.snails.ecomagents.repository.FileRecordRepository;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 /**
  * 文件上传与访问控制器。
@@ -26,15 +28,42 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor
 public class FileController {
 
+    /** 文件存储服务，处理文件读写和元数据存储 */
     private final FileStorageService fileStorageService;
+    /** 文件记录仓库，用于查询和更新 file_records 表 */
+    private final FileRecordRepository fileRecordRepository;
 
     /**
      * 上传文件，支持 TXT / MD / PDF / PNG / JPG / JSON / CSV / XML 等格式。
+     *
+     * @param contextType 对话上下文类型（PRIVATE / AGENT），可选
+     * @param contextId   对话上下文 ID（对方用户 ID 或 Agent ID），可选
      */
     @PostMapping("/files/upload")
     public ApiResponse<FileRecord> uploadFile(@RequestParam("file") MultipartFile file,
+                                              @RequestParam(value = "contextType", required = false) String contextType,
+                                              @RequestParam(value = "contextId", required = false) Long contextId,
                                               @CurrentUserId Long userId) {
-        return fileStorageService.uploadFile(file, userId);
+        var result = fileStorageService.uploadFile(file, userId);
+        if (result.getCode() == 200 && result.getData() != null && contextType != null) {
+            FileRecord record = result.getData();
+            record.setContextType(contextType);
+            record.setContextId(contextId);
+            fileRecordRepository.save(record);
+        }
+        return result;
+    }
+
+    /**
+     * 获取指定对话上下文中当前用户上传的文件列表。
+     */
+    @GetMapping("/files")
+    public ApiResponse<List<FileRecord>> listMyFiles(@RequestParam("contextType") String contextType,
+                                                     @RequestParam("contextId") Long contextId,
+                                                     @CurrentUserId Long userId) {
+        return ApiResponse.success(
+                fileRecordRepository.findByUploadedByAndContextTypeAndContextIdOrderByUploadedAtDesc(
+                        userId, contextType, contextId));
     }
 
     /**

@@ -45,6 +45,14 @@ public class FileRecord {
     @Column(name = "uploaded_by", nullable = false)
     private Long uploadedBy;
 
+    /** 对话上下文类型：PRIVATE（私聊）/ AGENT（AI聊天） */
+    @Column(name = "context_type", length = 20)
+    private String contextType;
+
+    /** 对话上下文 ID：私聊为对方用户 ID，AI 聊天为 Agent ID */
+    @Column(name = "context_id")
+    private Long contextId;
+
     /** 文件在聊天中的可访问 URL（指向公开的下载端点，无需认证即可访问） */
     @Transient
     public String getUrl() {

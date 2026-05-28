@@ -8,6 +8,12 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+/**
+ * {@code @CurrentUserId} 注解的参数解析器。
+ * <p>从 Spring SecurityContext 中提取当前认证用户的 {@link JwtPrincipal}，
+ * 将其 userId 注入到 Controller 方法标注了 {@code @CurrentUserId} 的 Long 参数中。</p>
+ * <p>若请求未认证或 Principal 类型不匹配，抛出 {@link IllegalStateException}。</p>
+ */
 @Component
 public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResolver {
 

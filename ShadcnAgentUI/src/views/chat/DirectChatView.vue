@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * DirectChatView.vue — AI Agent 私聊界面
+ *
+ * 与 AI Agent 进行对话的主界面，支持文件上传、消息发送、
+ * 会话管理、Agent 切换等功能。使用 streamChat 流式响应。
+ */
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { STORAGE_KEY_TOKEN } from '@/constants'
 import { useRoute } from 'vue-router'
@@ -8,12 +14,12 @@ import { useAgentStore } from '@/stores/agent'
 import { getAgentApi, getWebSearchAvailabilityApi } from '@/api/agent'
 import type { Agent, ToolAvailability } from '@/types/agent'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import EmojiPicker from '@/components/EmojiPicker.vue'
 import {
   Send,
   Square,
@@ -205,12 +211,17 @@ onMounted(async () => {
     }
   } finally {
     initializing.value = false
+    nextTick(() => {
+      requestAnimationFrame(() => messagesEnd.value?.scrollIntoView())
+    })
   }
 })
 
-watch(() => chatStore.messages.length, () => {
-  nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
-})
+watch(() => chatStore.messages, () => {
+  nextTick(() => {
+    requestAnimationFrame(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
+  })
+}, { flush: 'post' })
 
 async function copyMessage(idx: number, content: string) {
   try {
@@ -277,6 +288,17 @@ function handleKeydown(e: KeyboardEvent) {
     handleSend()
   }
 }
+
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function autoResize() {
+  const ta = textareaRef.value
+  if (!ta) return
+  ta.style.height = 'auto'
+  ta.style.height = ta.scrollHeight + 'px'
+}
+
+watch(() => inputText.value, () => nextTick(autoResize))
 
 async function selectAgent(agentId: number) {
   const agent = agentStore.myAgents.find(a => a.id === agentId)
@@ -481,14 +503,17 @@ const availableAgents = computed(() => {
           class="hidden"
           @change="handleFileSelect"
         />
-        <Textarea
-        ref="textareaRef"
-        v-model="inputText"
-        :placeholder="$t('chat.inputPlaceholder')"
-        :disabled="chatStore.isStreaming || !selectedAgent"
-        class="min-h-[44px] max-h-[120px] resize-none"
-        @keydown="handleKeydown"
-      />
+        <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
+        <textarea
+          ref="textareaRef"
+          :value="inputText"
+          @input="(e: Event) => { const ta = e.target as HTMLTextAreaElement; inputText = ta.value; autoResize() }"
+          :placeholder="$t('chat.inputPlaceholder')"
+          :disabled="chatStore.isStreaming || !selectedAgent"
+          rows="1"
+          class="flex min-h-[44px] w-full rounded-md border border-input bg-transparent px-2.5 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
+          @keydown="handleKeydown"
+        />
       <div class="flex flex-col gap-1">
         <Button
           v-if="!chatStore.isStreaming"
