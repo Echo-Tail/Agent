@@ -5,9 +5,13 @@ import cafe.snails.ecomagents.model.ChatPrivateMessage;
 import cafe.snails.ecomagents.repository.ChatPrivateMessageRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
 import cafe.snails.ecomagents.security.CurrentUserId;
+import cafe.snails.ecomagents.service.PrivateSseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +27,7 @@ public class PrivateMessageController {
 
     private final ChatPrivateMessageRepository privateMessageRepository;
     private final UserRepository userRepository;
+    private final PrivateSseService privateSseService;
 
     /** 发送私聊消息 */
     @PostMapping
@@ -39,6 +44,25 @@ public class PrivateMessageController {
                 .content(content.trim())
                 .build();
         msg = privateMessageRepository.save(msg);
+
+        // SSE 推送新消息给接收方
+        privateSseService.sendToUser(receiverId, "message", Map.of(
+                "id", msg.getId(),
+                "senderId", msg.getSenderId(),
+                "receiverId", msg.getReceiverId(),
+                "content", msg.getContent(),
+                "createdAt", msg.getCreatedAt().toString()
+        ));
+        // SSE 推送未读事件给接收方
+        long unreadCount = privateMessageRepository.countUnreadByReceiverId(receiverId).stream()
+                .filter(r -> ((Long)r[0]).equals(userId))
+                .mapToLong(r -> (Long) r[1])
+                .sum() + 1; // +1 因为刚发送的消息还未计入
+        privateSseService.sendToUser(receiverId, "unread_private", Map.of(
+                "userId", userId,
+                "count", unreadCount
+        ));
+
         return ApiResponse.success("消息已发送", msg);
     }
 
@@ -50,6 +74,32 @@ public class PrivateMessageController {
                                                                   @CurrentUserId Long userId) {
         var messages = privateMessageRepository.findConversation(userId, otherUserId, PageRequest.of(page, size));
         return ApiResponse.success(messages);
+    }
+
+    /** 获取私聊未读汇总 */
+    @GetMapping("/unread-summary")
+    public ApiResponse<List<Map<String, Object>>> getUnreadSummary(@CurrentUserId Long userId) {
+        List<Object[]> rows = privateMessageRepository.countUnreadByReceiverId(userId);
+        List<Map<String, Object>> result = rows.stream().map(row -> {
+            Long senderId = (Long) row[0];
+            Long count = (Long) row[1];
+            return Map.<String, Object>of("userId", senderId, "count", count);
+        }).toList();
+        return ApiResponse.success(result);
+    }
+
+    /** 标记私聊会话为已读 */
+    @PutMapping("/{otherUserId}/read")
+    @Transactional
+    public ApiResponse<Void> markAsRead(@PathVariable Long otherUserId, @CurrentUserId Long userId) {
+        privateMessageRepository.markConversationAsRead(userId, otherUserId);
+        return ApiResponse.success("已标记为已读", null);
+    }
+
+    /** 私聊 SSE 长连接 */
+    @GetMapping(value = "/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribe(@CurrentUserId Long userId) {
+        return privateSseService.createEmitter(userId);
     }
 
     /** 获取最近联系人列表 */

@@ -34,6 +34,11 @@ public class ChatPrivateMessage {
     @Column(name = "file_id")
     private Long fileId;
 
+    /** 是否已读 */
+    @Column(name = "is_read")
+    @Builder.Default
+    private Boolean read = false;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

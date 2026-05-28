@@ -64,6 +64,11 @@ public class GroupMessageService {
                 "content", finalMsg.getContent(),
                 "createdAt", finalMsg.getCreatedAt().toString()
         ));
+        // 广播群聊未读事件
+        groupSseService.broadcast(groupId, "unread_group", Map.of(
+                "groupId", groupId,
+                "senderId", senderId
+        ));
 
         // 检测 @Agent 并异步触发回复
         triggerAgentReplies(groupId, msg);

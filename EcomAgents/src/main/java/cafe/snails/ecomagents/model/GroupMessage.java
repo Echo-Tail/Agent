@@ -38,6 +38,11 @@ public class GroupMessage {
     @Column(name = "reply_to_msg_id")
     private Long replyToMsgId;
 
+    /** 是否已读 */
+    @Column(name = "is_read")
+    @Builder.Default
+    private Boolean read = false;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
