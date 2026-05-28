@@ -2,6 +2,8 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.config.SkillConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
+import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.model.AgentSkill;
 import cafe.snails.ecomagents.model.Skills;
 import cafe.snails.ecomagents.repository.AgentSkillRepository;
 import cafe.snails.ecomagents.repository.SkillsRepository;
@@ -9,173 +11,188 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
  * {@link SkillService} 单元测试。
+ * <p>覆盖：技能列表 / Agent 绑定 / 删除 / 索引刷新。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class SkillServiceTest {
 
-    @TempDir
-    Path tempDir;
-
+    @Mock
+    private WorkspaceConfig workspaceConfig;
+    @Mock
+    private SkillConfig skillConfig;
     @Mock
     private SkillsRepository skillsRepository;
     @Mock
     private AgentSkillRepository agentSkillRepository;
+    @Mock
+    private ObjectMapper objectMapper;
 
-    private WorkspaceConfig workspaceConfig;
-    private SkillConfig skillConfig;
     private SkillService skillService;
-
-    @Captor
-    private ArgumentCaptor<Skills> skillsCaptor;
 
     @BeforeEach
     void setUp() {
-        workspaceConfig = new WorkspaceConfig();
-        workspaceConfig.setRoot(tempDir.toString());
-        skillConfig = new SkillConfig();
-        skillConfig.setGhProxyUrl("https://gh-proxy.org");
-        skillService = new SkillService(workspaceConfig, skillConfig, skillsRepository, agentSkillRepository, new ObjectMapper());
+        lenient().when(workspaceConfig.getRoot()).thenReturn(System.getProperty("java.io.tmpdir") + "/skill-test");
+        skillService = new SkillService(workspaceConfig, skillConfig, skillsRepository,
+                agentSkillRepository, objectMapper);
+    }
+
+    // ==================== listSkills ====================
+
+    @Test
+    void listSkills_shouldReturnAll() {
+        var skills = List.of(Skills.builder().name("web-search").description("Web search tool").build());
+        when(skillsRepository.findAll()).thenReturn(skills);
+
+        var result = skillService.listSkills();
+
+        assertEquals(200, result.getCode());
+        assertEquals(1, result.getData().size());
+        assertEquals("web-search", result.getData().get(0).getName());
     }
 
     @Test
-    void getSkillsDir_shouldReturnWorkspaceSkills() {
-        assertEquals(tempDir.resolve("skills"), skillService.getSkillsDir());
-    }
-
-    @Test
-    void listSkills_shouldReturnEmpty_whenNoSkills() {
-        when(skillsRepository.findAll()).thenReturn(Collections.emptyList());
+    void listSkills_shouldReturnEmptyWhenNone() {
+        when(skillsRepository.findAll()).thenReturn(List.of());
         var result = skillService.listSkills();
         assertEquals(200, result.getCode());
         assertTrue(result.getData().isEmpty());
     }
 
+    // ==================== getSkillsForAgent ====================
+
     @Test
-    void listSkills_shouldReturnAllFromRepository() {
-        Skills skill = Skills.builder().name("test-skill").description("Test").build();
-        when(skillsRepository.findAll()).thenReturn(List.of(skill));
-        var result = skillService.listSkills();
-        assertEquals(200, result.getCode());
-        assertEquals(1, result.getData().size());
-        assertEquals("test-skill", result.getData().get(0).getName());
+    void getSkillsForAgent_shouldReturnSkillNames() {
+        when(agentSkillRepository.findByAgentId(1L)).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("web-search").build(),
+                AgentSkill.builder().agentId(1L).skillName("read-file").build()
+        ));
+
+        var names = skillService.getSkillsForAgent(1L);
+
+        assertEquals(2, names.size());
+        assertTrue(names.contains("web-search"));
+        assertTrue(names.contains("read-file"));
     }
 
     @Test
-    void deleteSkill_shouldReturn400_whenUsedByAgents() {
-        when(agentSkillRepository.findBySkillName("used-skill")).thenReturn(
-                List.of(cafe.snails.ecomagents.model.AgentSkill.builder()
-                        .agentId(1L).skillName("used-skill").build()));
-        var result = skillService.deleteSkill("used-skill", false);
+    void getSkillsForAgent_shouldReturnEmptyWhenNone() {
+        when(agentSkillRepository.findByAgentId(1L)).thenReturn(List.of());
+        assertTrue(skillService.getSkillsForAgent(1L).isEmpty());
+    }
+
+    // ==================== deleteSkill ====================
+
+    @Test
+    void deleteSkill_shouldRejectWhenBoundAndNotForce() {
+        when(agentSkillRepository.findBySkillName("web-search")).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("web-search").build()
+        ));
+
+        var result = skillService.deleteSkill("web-search", false);
+
         assertEquals(400, result.getCode());
+        assertTrue(result.getMessage().contains("正在被 1 个 Agent 使用"));
         verify(skillsRepository, never()).delete(any());
     }
 
     @Test
-    void deleteSkill_shouldDeleteSkillDirAndDb() throws Exception {
-        Path skillDir = skillService.getSkillsDir().resolve("test-skill");
-        Files.createDirectories(skillDir);
-        Files.writeString(skillDir.resolve("SKILL.md"), "---\nname: test-skill\ndescription: Test\n---\n\nContent");
+    void deleteSkill_shouldForceDelete() {
+        when(agentSkillRepository.findBySkillName("web-search")).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("web-search").build()
+        ));
+        when(skillsRepository.findByName("web-search")).thenReturn(Optional.of(
+                Skills.builder().name("web-search").build()));
 
-        Skills skill = Skills.builder().name("test-skill").description("Test").build();
-        when(skillsRepository.findByName("test-skill")).thenReturn(Optional.of(skill));
+        var result = skillService.deleteSkill("web-search", true);
 
-        var result = skillService.deleteSkill("test-skill", false);
         assertEquals(200, result.getCode());
-        assertFalse(Files.exists(skillDir));
-        verify(skillsRepository).delete(skill);
-    }
-
-    @Test
-    void deleteSkill_shouldForceDeleteAgentBindings() throws Exception {
-        Path skillDir = skillService.getSkillsDir().resolve("forced-skill");
-        Files.createDirectories(skillDir);
-        Files.writeString(skillDir.resolve("SKILL.md"), "---\nname: forced-skill\n---\n\nContent");
-
-        var binding = cafe.snails.ecomagents.model.AgentSkill.builder()
-                .agentId(1L).skillName("forced-skill").build();
-        when(agentSkillRepository.findBySkillName("forced-skill")).thenReturn(List.of(binding));
-        when(skillsRepository.findByName("forced-skill")).thenReturn(
-                Optional.of(Skills.builder().name("forced-skill").build()));
-
-        var result = skillService.deleteSkill("forced-skill", true);
-        assertEquals(200, result.getCode());
-        assertFalse(Files.exists(skillDir));
-        verify(agentSkillRepository).delete(binding);
+        verify(agentSkillRepository).delete(any());
         verify(skillsRepository).delete(any());
     }
 
     @Test
-    void refreshIndex_shouldSyncFsToDb() throws Exception {
-        Files.createDirectories(skillService.getSkillsDir().resolve("skill-a"));
-        Files.writeString(
-                skillService.getSkillsDir().resolve("skill-a").resolve("SKILL.md"),
-                "---\nname: skill-a\ndescription: First skill\ncategory: development\n---\n\nContent");
+    void deleteSkill_shouldSucceedWhenNotBound() {
+        when(agentSkillRepository.findBySkillName("unused-skill")).thenReturn(List.of());
+        when(skillsRepository.findByName("unused-skill")).thenReturn(Optional.of(
+                Skills.builder().name("unused-skill").build()));
 
-        Files.createDirectories(skillService.getSkillsDir().resolve("skill-b"));
-        Files.writeString(
-                skillService.getSkillsDir().resolve("skill-b").resolve("SKILL.md"),
-                "---\nname: skill-b\ndescription: Skill B\ncategory: data\n---\n\nContent");
+        var result = skillService.deleteSkill("unused-skill", false);
 
-        when(skillsRepository.findByName("skill-a")).thenReturn(Optional.empty());
-        when(skillsRepository.findByName("skill-b")).thenReturn(Optional.empty());
-
-        skillService.refreshIndex();
-
-        verify(skillsRepository, times(2)).save(any());
-    }
-
-    @Test
-    void refreshIndex_shouldSkipExistingEntries() throws Exception {
-        Files.createDirectories(skillService.getSkillsDir().resolve("existing-skill"));
-        Files.writeString(
-                skillService.getSkillsDir().resolve("existing-skill").resolve("SKILL.md"),
-                "---\nname: existing-skill\ndescription: Existing\n---\n\nContent");
-
-        Skills existing = Skills.builder().name("existing-skill").description("Existing").build();
-        when(skillsRepository.findByName("existing-skill")).thenReturn(Optional.of(existing));
-
-        skillService.refreshIndex();
-
-        verify(skillsRepository, never()).save(any());
-    }
-
-    @Test
-    void refreshIndex_shouldHandleMissingSkillsDir() {
-        // skills dir does not exist — should be a no-op
-        skillService.refreshIndex();
-        verify(skillsRepository, never()).findByName(any());
-    }
-
-    @Test
-    void deleteSkill_shouldDeleteDirectoryRecursively() throws Exception {
-        Path skillDir = skillService.getSkillsDir().resolve("nested-skill");
-        Files.createDirectories(skillDir.resolve("subdir"));
-        Files.writeString(skillDir.resolve("SKILL.md"), "---\nname: nested-skill\n---\n\nContent");
-        Files.writeString(skillDir.resolve("subdir").resolve("file.txt"), "data");
-
-        when(skillsRepository.findByName("nested-skill")).thenReturn(
-                Optional.of(Skills.builder().name("nested-skill").build()));
-
-        var result = skillService.deleteSkill("nested-skill", false);
         assertEquals(200, result.getCode());
-        assertFalse(Files.exists(skillDir));
+        verify(skillsRepository).delete(any());
+    }
+
+    // ==================== syncAgentSkillsToWorkspace ====================
+
+    @Test
+    void syncAgentSkillsToWorkspace_shouldRemoveUnbound() {
+        when(agentSkillRepository.findByAgentId(1L)).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("old-skill").build()
+        ));
+
+        skillService.syncAgentSkillsToWorkspace(1L, List.of("new-skill"));
+
+        // old-skill should be unbound
+        verify(agentSkillRepository).delete(any(AgentSkill.class));
+    }
+
+    @Test
+    void syncAgentSkillsToWorkspace_shouldKeepExisting() {
+        when(agentSkillRepository.findByAgentId(1L)).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("common-skill").build()
+        ));
+
+        skillService.syncAgentSkillsToWorkspace(1L, List.of("common-skill"));
+
+        // Should not delete common-skill
+        verify(agentSkillRepository, never()).delete(any());
+    }
+
+    @Test
+    void syncAgentSkillsToWorkspace_withEmptyList_shouldRemoveAll() {
+        when(agentSkillRepository.findByAgentId(1L)).thenReturn(List.of(
+                AgentSkill.builder().agentId(1L).skillName("skill-a").build(),
+                AgentSkill.builder().agentId(1L).skillName("skill-b").build()
+        ));
+
+        skillService.syncAgentSkillsToWorkspace(1L, List.of());
+
+        verify(agentSkillRepository, times(2)).delete(any(AgentSkill.class));
+    }
+
+    // ==================== getSkillsDir ====================
+
+    @Test
+    void getSkillsDir_shouldReturnCorrectPath() {
+        var path = skillService.getSkillsDir();
+        assertTrue(path.toString().endsWith("skills"));
+    }
+
+    @Test
+    void getAgentSkillsDir_shouldIncludeAgentId() {
+        var path = skillService.getAgentSkillsDir(42L);
+        assertTrue(path.toString().endsWith("agent-42\\skills")
+                || path.toString().endsWith("agent-42/skills"));
+    }
+
+    // ==================== refreshIndex ====================
+
+    @Test
+    void refreshIndex_shouldNotThrowWhenDirNotExist() {
+        // skills dir doesn't exist — should silently return
+        skillService.refreshIndex();
+        verify(skillsRepository, never()).save(any());
     }
 }

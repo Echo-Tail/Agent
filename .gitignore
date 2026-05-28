@@ -58,6 +58,7 @@ io
 .codegraph
 */uploads
 *.vscode
+.reasonix
 
 # Local env files
 .env

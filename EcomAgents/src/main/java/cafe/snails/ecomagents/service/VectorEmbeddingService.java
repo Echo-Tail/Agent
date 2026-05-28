@@ -26,12 +26,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
+/**
+ * 向量嵌入（Vector Embedding）服务，基于 pgvector 扩展。
+ * <p>提供知识库文档的向量化索引与语义搜索：
+ * <ul>
+ *   <li>文本分块 → 调用 Embedding API → 存入 pgvector 索引</li>
+ *   <li>支持余弦相似度搜索（{@code <=>} 算子）与 HNSW 索引加速</li>
+ *   <li>自动初始化 vector 扩展和 knowledge_embeddings 表</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class VectorEmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(VectorEmbeddingService.class);
+
+    /** 文本分块大小（字符数） */
     private static final int CHUNK_SIZE = 1200;
+    /** 相邻分块之间的重叠字符数，保持上下文连续性 */
     private static final int CHUNK_OVERLAP = 200;
 
     private final LlmConfig llmConfig;
@@ -41,6 +54,23 @@ public class VectorEmbeddingService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * 为文档重新构建向量索引。
+     * <p>执行流程：
+     * <ol>
+     *   <li>若内容为空则删除已有索引并返回</li>
+     *   <li>检查 Embedding API 和数据库表是否可用</li>
+     *   <li>删除该文档的旧索引</li>
+     *   <li>将文本分块并逐块调用 Embedding API</li>
+     *   <li>检查向量维度是否与配置一致</li>
+     *   <li>逐条写入 knowledge_embeddings 表</li>
+     * </ol>
+     * </p>
+     *
+     * @param kbId    知识库 ID
+     * @param docId   文档 ID
+     * @param content 文档全文内容（可为空，空时仅删除索引）
+     */
     @Transactional
     public void reindexDocument(Long kbId, Long docId, String content) {
         if (content == null || content.isBlank()) {
@@ -85,6 +115,12 @@ public class VectorEmbeddingService {
         log.info("Indexed {} embedding chunks for document {}", indexed, docId);
     }
 
+    /**
+     * 删除指定文档的所有向量索引。
+     *
+     * @param docId 文档 ID
+     * @throws IllegalStateException 数据库异常时抛出（非表不存在的情况）
+     */
     @Transactional
     public void deleteEmbeddings(Long docId) {
         try (Connection connection = dataSource.getConnection();
@@ -104,6 +140,17 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 在指定知识库中执行语义相似度搜索。
+     * <p>将查询文本向量化，使用 pgvector 的余弦距离（{@code <=>}）计算相似度，
+     * 返回超过阈值的块文本，按相似度降序排列。</p>
+     *
+     * @param kbIds      知识库 ID 列表
+     * @param queryText  查询文本
+     * @param limit      最大返回结果数
+     * @param threshold  相似度阈值（0~1，仅返回 >= 此值的结果）
+     * @return 匹配的文本块列表；API/表不可用时返回空列表
+     */
     @SuppressWarnings("unchecked")
     public List<String> searchSimilar(List<Long> kbIds, String queryText, int limit, double threshold) {
         if (kbIds == null || kbIds.isEmpty() || queryText == null || queryText.isBlank()) {
@@ -145,6 +192,11 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 删除指定知识库的所有向量索引。
+     *
+     * @param kbId 知识库 ID
+     */
     @Transactional
     public void deleteByKbId(Long kbId) {
         try (Connection connection = dataSource.getConnection();
@@ -162,6 +214,12 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 确保 pgvector 扩展和 knowledge_embeddings 表已创建。
+     * <p>自动执行：CREATE EXTENSION vector → CREATE TABLE IF NOT EXISTS → 创建 HNSW 索引。</p>
+     *
+     * @return 表可用时返回 true；SQL 异常时返回 false
+     */
     private boolean ensureEmbeddingsTable() {
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
@@ -193,6 +251,13 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 将文档全文分割为固定大小的文本块。
+     * <p>每块 {@value #CHUNK_SIZE} 字符，相邻块重叠 {@value #CHUNK_OVERLAP} 字符。</p>
+     *
+     * @param content 文档全文
+     * @return 文本块列表
+     */
     private List<String> chunkText(String content) {
         String normalized = content.replace("\r\n", "\n").trim();
         List<String> chunks = new ArrayList<>();
@@ -208,6 +273,14 @@ public class VectorEmbeddingService {
         return chunks;
     }
 
+    /**
+     * 调用 Embedding API 将文本向量化。
+     * <p>使用 WebClient 发送 POST 请求到配置的 Embedding API URL，
+     * 返回 float 向量。请求超时由 {@link LlmConfig#getReadTimeout()} 控制。</p>
+     *
+     * @param input 输入文本
+     * @return 向量（浮点数列表）；API 不可用或失败时返回空列表
+     */
     @SuppressWarnings("unchecked")
     private List<Double> embed(String input) {
         try {
@@ -254,6 +327,12 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 解析 Embedding API 的完整 URL。
+     * <p>优先级：显式配置的 embeddingApiUrl > 从 chat API URL 推导 > OpenAI 默认。</p>
+     *
+     * @return Embedding API URL
+     */
     private String resolveEmbeddingApiUrl() {
         String configured = llmConfig.getEmbeddingApiUrl();
         if (configured != null && !configured.isBlank()) {
@@ -279,6 +358,12 @@ public class VectorEmbeddingService {
         }
     }
 
+    /**
+     * 解析 Embedding API 密钥。
+     * <p>优先级：显式配置的 embeddingApiKey > chat API key。</p>
+     *
+     * @return API 密钥
+     */
     private String resolveEmbeddingApiKey() {
         String embeddingApiKey = llmConfig.getEmbeddingApiKey();
         if (embeddingApiKey != null && !embeddingApiKey.isBlank()) {
@@ -287,11 +372,13 @@ public class VectorEmbeddingService {
         return llmConfig.getApiKey();
     }
 
+    /** 检查 Embedding API 是否已配置（密钥非空且非占位符） */
     private boolean hasEmbeddingConfig() {
         String apiKey = resolveEmbeddingApiKey();
         return apiKey != null && !apiKey.isBlank() && !"sk-placeholder".equals(apiKey);
     }
 
+    /** 将浮点数列表转换为 PostgreSQL vector 字面量（如 "[0.1,0.2,0.3]"） */
     private String toVectorLiteral(List<Double> embedding) {
         StringJoiner joiner = new StringJoiner(",", "[", "]");
         for (Double value : embedding) {
@@ -300,10 +387,18 @@ public class VectorEmbeddingService {
         return joiner.toString();
     }
 
+    /** 返回配置的向量维度 */
     private int embeddingDimension() {
         return Math.max(1, llmConfig.getEmbeddingDimension());
     }
 
+    /**
+     * 检查向量维度是否与配置一致。
+     *
+     * @param embedding 向量
+     * @param docId     文档 ID（用于日志；为 null 时表示搜索场景）
+     * @return 维度匹配时返回 true
+     */
     private boolean hasExpectedDimension(List<Double> embedding, Long docId) {
         int expected = embeddingDimension();
         if (embedding.size() == expected) {
@@ -318,6 +413,13 @@ public class VectorEmbeddingService {
         return false;
     }
 
+    /**
+     * 判断异常是否为 knowledge_embeddings 表不存在的错误。
+     * <p>支持 PostgreSQL 的错误码（42P01）和中英文错误消息匹配。</p>
+     *
+     * @param e 异常
+     * @return 表不存在时返回 true
+     */
     private boolean isMissingEmbeddingsTable(Throwable e) {
         Throwable current = e;
         while (current != null) {

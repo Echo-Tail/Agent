@@ -24,7 +24,14 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * LLM 交互服务，封装 AgentScope SDK 的流式对话调用。
- * <p>支持 SSE 实时推送 token、超时控制、客户端断连检测、以及按请求覆盖模型参数。</p>
+ * <p>核心能力：
+ * <ul>
+ *   <li>流式对话（SSE 逐 token 推送）— {@link #streamChat}</li>
+ *   <li>同步对话（非流式）— {@link #syncChat}</li>
+ *   <li>按请求覆盖模型参数（per-request Model）</li>
+ *   <li>超时控制、客户端断连检测、API Key 脱敏日志</li>
+ * </ul>
+ * </p>
  */
 @Service
 public class LlmService {
@@ -45,18 +52,35 @@ public class LlmService {
     }
 
     /**
-     * 流式对话，将 token 逐块推送到 SseEmitter，返回完整文本。
+     * 流式对话，将 token 逐块推送到 SseEmitter。
+     * <p>使用 AgentScope SDK 的 {@link Model#stream} 方法发起流式请求，
+     * 通过 SSE 逐 token 推送，支持超时控制和客户端断连检测。</p>
+     *
+     * @param systemPrompt 系统提示词
+     * @param history      历史消息列表（每项含 role + content）
+     * @param emitter      SSE 发射器（接收 token 事件推送）
+     * @return 完整回复文本
      */
     public String streamChat(String systemPrompt, List<Map<String, String>> history, SseEmitter emitter) {
         return streamChat(systemPrompt, history, emitter, null);
     }
 
     /**
-     * 流式对话，支持按请求覆盖 GenerateOptions（用于按 Agent 使用不同模型）。
+     * 流式对话，支持按请求覆盖 GenerateOptions。
+     * <p>当 optionsOverride 提供了 API Key 和 Base URL 时，会创建独立的
+     * {@link OpenAIChatModel} 实例（per-request Model），用于按 Agent 使用不同模型配置。
+     * 否则使用全局注入的 Model。</p>
+     *
+     * @param systemPrompt    系统提示词
+     * @param history         历史消息列表
+     * @param emitter         SSE 发射器
+     * @param optionsOverride 可选的模型参数覆盖（API Key / Model Name / Base URL 等）
+     * @return 完整回复文本
+     * @throws IllegalStateException API Key 未配置时抛出
+     * @throws RuntimeException      LLM 流式调用失败时抛出
      */
     public String streamChat(String systemPrompt, List<Map<String, String>> history,
                              SseEmitter emitter, GenerateOptions optionsOverride) {
-        // Resolve effective API key: per-model config takes priority over global
         boolean hasPerModelKey = optionsOverride != null
                 && optionsOverride.getApiKey() != null
                 && !optionsOverride.getApiKey().isBlank();
@@ -82,7 +106,6 @@ public class LlmService {
                 ? maskApiKey(hasPerModelKey ? optionsOverride.getApiKey() : llmConfig.getApiKey())
                 : "none";
 
-        // Create per-request Model when options contain per-model config
         Model effectiveModel = model;
         if (hasPerModelKey && optionsOverride.getBaseUrl() != null) {
             String modelNameOverride = optionsOverride.getModelName() != null
@@ -124,7 +147,6 @@ public class LlmService {
                         }
                 );
 
-        // 注册客户端断连和超时回调，及时释放订阅资源
         emitter.onCompletion(() -> {
             if (!emitterDead.getAndSet(true)) {
                 disposable.dispose();
@@ -165,14 +187,26 @@ public class LlmService {
     }
 
     /**
-     * 同步非流式对话，返回完整文本。用于标题生成等不需要流式的场景。
+     * 同步（非流式）对话，返回完整文本。
+     * <p>适用于标题生成、简单问答等不需要 SSE 流式推送的场景。
+     * 默认 maxTokens=256，超时 30s。</p>
+     *
+     * @param systemPrompt 系统提示词
+     * @param history      历史消息列表
+     * @return 回复文本；模型返回空时返回 null
      */
     public String syncChat(String systemPrompt, List<Map<String, String>> history) {
         return syncChat(systemPrompt, history, null);
     }
 
     /**
-     * 同步非流式对话，支持按请求覆盖模型参数。
+     * 同步（非流式）对话，支持按请求覆盖模型参数。
+     * <p>当 optionsOverride 提供 API Key 和 Base URL 时创建 per-request Model。</p>
+     *
+     * @param systemPrompt    系统提示词
+     * @param history         历史消息列表
+     * @param optionsOverride 可选的模型参数覆盖
+     * @return 回复文本；模型返回空时返回 null
      */
     public String syncChat(String systemPrompt, List<Map<String, String>> history,
                             GenerateOptions optionsOverride) {
@@ -209,14 +243,26 @@ public class LlmService {
         return result.isEmpty() ? null : result;
     }
 
-    /** 脱敏 API Key（只显示前8位） */
+    /**
+     * 脱敏 API Key（仅显示前 8 位），用于安全日志记录。
+     *
+     * @param key 原始 API Key
+     * @return 脱敏后的 Key（如 "sk-abc123****"）
+     */
     private static String maskApiKey(String key) {
         if (key == null) return "null";
         if (key.length() <= 8) return key.substring(0, Math.min(key.length(), 4)) + "****";
         return key.substring(0, 8) + "****";
     }
 
-    /** 构建 AgentScope 消息列表（system prompt + 历史消息） */
+    /**
+     * 构建 AgentScope 消息列表。
+     * <p>按顺序：system prompt（如有）→ 历史消息（user/assistant 交替）。空内容的消息会被跳过。</p>
+     *
+     * @param systemPrompt 系统提示词（可为 null）
+     * @param history      历史消息列表（每项含 role + content）
+     * @return AgentScope Msg 列表
+     */
     private List<Msg> buildMessages(String systemPrompt, List<Map<String, String>> history) {
         List<Msg> messages = new ArrayList<>();
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
@@ -238,7 +284,15 @@ public class LlmService {
         return messages;
     }
 
-    /** 将 AgentScope ChatResponse 转为 SSE token 事件推送 */
+    /**
+     * 将 AgentScope {@link ChatResponse} 转为 SSE token 事件并推送到 emitter。
+     * <p>提取文本内容后追加到 fullText 缓冲区，同时通过 SSE 推送 {@code type=token} 事件。</p>
+     *
+     * @param response     AgentScope 响应块
+     * @param fullText     完整文本缓冲区
+     * @param emitter      SSE 发射器
+     * @param emitterDead  客户端断连标志（CAS 控制）
+     */
     private void emitToken(ChatResponse response, StringBuilder fullText,
                            SseEmitter emitter, AtomicBoolean emitterDead) {
         if (emitterDead.get()) return;
@@ -260,7 +314,13 @@ public class LlmService {
         }
     }
 
-    /** 从 ChatResponse 中提取文本内容 */
+    /**
+     * 从 AgentScope {@link ChatResponse} 中提取文本内容。
+     * <p>仅提取第一个 ContentBlock，且要求为 TextBlock 类型。</p>
+     *
+     * @param response AgentScope 响应
+     * @return 文本内容；无文本时返回 null
+     */
     private String extractText(ChatResponse response) {
         List<ContentBlock> blocks = response.getContent();
         if (blocks == null || blocks.isEmpty()) return null;

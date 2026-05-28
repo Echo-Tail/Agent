@@ -54,21 +54,31 @@ public class SkillService {
             Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+?)/tree/[^/]+/(skills/.+)$");
 
     /**
-     * 获取全局技能目录路径。
+     * 获取全局技能池目录路径（workspace/skills/）。
+     * <p>所有已导入的技能以子目录形式存放于此。</p>
+     *
+     * @return 技能池目录的 Path
      */
     public Path getSkillsDir() {
         return Path.of(workspaceConfig.getRoot(), "skills");
     }
 
     /**
-     * 获取 Agent 的技能目录路径。
+     * 获取指定 Agent 的技能目录路径（workspace/agent-{id}/skills/）。
+     * <p>Agent 绑定的技能会被复制到此目录，与全局技能池隔离。</p>
+     *
+     * @param agentId Agent ID
+     * @return Agent 技能目录的 Path
      */
     public Path getAgentSkillsDir(Long agentId) {
         return Path.of(workspaceConfig.getRoot(), "agent-" + agentId, "skills");
     }
 
     /**
-     * 列出所有技能（从 Skills 表读取，索引表作为过渡）。
+     * 列出全局技能池中的所有技能元数据。
+     * <p>从 Skills 表读取，作为技能目录文件系统的索引。</p>
+     *
+     * @return 技能元数据列表
      */
     public ApiResponse<List<Skills>> listSkills() {
         return ApiResponse.success(skillsRepository.findAll());
@@ -76,6 +86,10 @@ public class SkillService {
 
     /**
      * 获取指定 Agent 已绑定的技能名称列表。
+     * <p>从 AgentSkill 关联表查询。</p>
+     *
+     * @param agentId Agent ID
+     * @return 技能名称列表
      */
     public List<String> getSkillsForAgent(Long agentId) {
         return agentSkillRepository.findByAgentId(agentId)
@@ -85,8 +99,16 @@ public class SkillService {
     }
 
     /**
-     * 同步 Agent 技能绑定到 workspace。
-     * <p>对比新旧技能列表，移除解绑技能，复制新增技能到 Agent workspace。</p>
+     * 同步 Agent 技能绑定到工作区目录。
+     * <p>对比新旧技能列表：
+     * <ul>
+     *   <li>移除已解绑的技能目录并删除 AgentSkill 记录</li>
+     *   <li>从全局技能池复制新增技能到 Agent workspace/agent-{id}/skills/</li>
+     * </ul>
+     * </p>
+     *
+     * @param agentId    Agent ID
+     * @param skillNames 新的技能名称列表（全量替换）
      */
     @Transactional
     public void syncAgentSkillsToWorkspace(Long agentId, List<String> skillNames) {
@@ -132,7 +154,17 @@ public class SkillService {
     }
 
     /**
-     * 从 GitHub URL 导入技能。
+     * 从 GitHub 仓库 URL 导入技能。
+     * <p>支持两种 URL 格式：
+     * <ul>
+     *   <li>仓库根 URL（扫描仓库中所有 SKILL.md 并导入）</li>
+     *   <li>tree URL（仅导入指定路径下的技能）</li>
+     * </ul>
+     * 执行流程：git clone → 扫描 SKILL.md → 校验 frontmatter → 复制到全局技能池 →
+     * 更新 skills-lock.json → 写入 DB。已存在的同名技能会被跳过。</p>
+     *
+     * @param url GitHub 仓库 URL
+     * @return 导入结果（含成功/跳过/失败统计）
      */
     public ApiResponse<Void> importFromGithubUrl(String url) {
         String trimmed = url.trim();
@@ -297,6 +329,12 @@ public class SkillService {
 
     /**
      * 从上传的 ZIP 文件导入技能。
+     * <p>安全校验：magic byte、Zip-Slip 防护、ZIP 炸弹防护
+     * （100MB 总大小 / 10MB 单文件 / 1000 条目 / 100 倍压缩比）。</p>
+     * <p>每个子目录必须包含有效的 SKILL.md（含 name + description frontmatter）。</p>
+     *
+     * @param file 上传的 ZIP 文件
+     * @return 导入结果（成功数量/失败详情）
      */
     public ApiResponse<SkillUploadResult> uploadSkillZip(MultipartFile file) {
         if (file.isEmpty()) {
@@ -440,10 +478,13 @@ public class SkillService {
     }
 
     /**
-     * 删除技能。如有 Agent 引用，返回警告信息。
+     * 删除技能。
+     * <p>非强制模式：如有 Agent 引用则返回错误提示，不执行删除。
+     * 强制模式：清除所有 Agent 绑定 → 删除全局技能目录和 DB 记录 → 更新锁文件。</p>
      *
      * @param name  技能名称
-     * @param force 为 true 时强制删除（同时清理所有 Agent 引用）
+     * @param force 是否强制删除（同时清理所有 Agent 引用）
+     * @return 操作结果
      */
     @Transactional
     public ApiResponse<Void> deleteSkill(String name, boolean force) {
