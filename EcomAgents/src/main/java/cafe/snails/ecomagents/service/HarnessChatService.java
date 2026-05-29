@@ -241,6 +241,18 @@ public class HarnessChatService {
 
                 if (!completed.get()) {
                     String friendly = HarnessHooks.friendlyError(e.getMessage());
+                    // Clear session history on pending tool call errors to allow retry
+                    if (e.getMessage() != null && e.getMessage().contains("Pending tool calls")) {
+                        try {
+                            sessionRepository.findByHarnessSessionIdWithMessages(sessionId).ifPresent(s -> {
+                                s.getMessages().clear();
+                                sessionRepository.save(s);
+                            });
+                            log.info("Cleared session {} history due to pending tool call error", sessionId);
+                        } catch (Exception ex) {
+                            log.warn("Failed to clear session history: {}", ex.getMessage());
+                        }
+                    }
                     AiModel model = resolveModel(agentId);
                     recordTokenUsage(model, agentId, userId, content, partial, false, buildErrorDiagnostic(e, friendly));
                     sendSseAndError(emitter, completed, friendly);

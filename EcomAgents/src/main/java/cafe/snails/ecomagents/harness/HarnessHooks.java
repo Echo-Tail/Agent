@@ -135,6 +135,9 @@ public class HarnessHooks implements Hook {
         if (msg.contains("Retries exhausted")) {
             return "模型响应异常，请重试";
         }
+        if (msg.contains("Pending tool calls") || msg.contains("PendingToolRecoveryHook")) {
+            return "对话历史中存在未完成的工具调用，请开始新会话重试";
+        }
         // Fallback: truncate long raw messages
         if (msg.length() > 80) {
             return "对话服务异常，请稍后重试";
