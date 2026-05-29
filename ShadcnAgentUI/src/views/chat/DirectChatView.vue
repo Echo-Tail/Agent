@@ -12,7 +12,11 @@ import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
 import { useAgentStore } from '@/stores/agent'
 import { getAgentApi, getWebSearchAvailabilityApi } from '@/api/agent'
+import { getModelApi } from '@/api/model'
+import { listToolsApi } from '@/api/tool'
 import type { Agent, ToolAvailability } from '@/types/agent'
+import type { AiModel } from '@/types/api'
+import type { ToolDefinition } from '@/api/tool'
 import { Button } from '@/components/ui/button'
 
 import { Badge } from '@/components/ui/badge'
@@ -121,6 +125,8 @@ function removeFile(index: number) {
 }
 
 const selectedAgent = ref<Agent | null>(null)
+const agentModel = ref<AiModel | null>(null)
+const agentToolDefinitions = ref<ToolDefinition[]>([])
 const webSearchAvailability = ref<ToolAvailability | null>(null)
 
 function parseQueryNumber(value: unknown): number | null {
@@ -147,11 +153,37 @@ async function loadWebSearchAvailability(agentId: number) {
   }
 }
 
+async function resolveModel(modelId: number): Promise<AiModel | null> {
+  try {
+    return await getModelApi(modelId)
+  } catch {
+    return null
+  }
+}
+
+async function resolveToolNames(toolIds: string[]): Promise<ToolDefinition[]> {
+  if (!toolIds.length) return []
+  try {
+    const allTools = await listToolsApi()
+    return allTools.filter(t => toolIds.includes(t.id))
+  } catch {
+    return []
+  }
+}
+
 async function setSelectedAgent(agent: Agent | null) {
   selectedAgent.value = agent
+  agentModel.value = null
+  agentToolDefinitions.value = []
   webSearchAvailability.value = null
   if (agent) {
-    await loadWebSearchAvailability(agent.id)
+    const [model, tools, _] = await Promise.all([
+      resolveModel(agent.modelId),
+      resolveToolNames(agent.tools),
+      loadWebSearchAvailability(agent.id),
+    ])
+    agentModel.value = model
+    agentToolDefinitions.value = tools
   }
 }
 
@@ -342,6 +374,22 @@ const availableAgents = computed(() => {
       <div class="flex items-center gap-2">
         <span v-if="selectedAgent" class="font-medium">{{ selectedAgent.name }}</span>
         <span v-else class="text-muted-foreground">{{ $t('chat.directChat') }}</span>
+        <!-- Model name -->
+        <Badge
+          v-if="selectedAgent && agentModel"
+          variant="outline"
+          class="text-xs font-normal"
+        >
+          {{ agentModel.name }}
+        </Badge>
+        <!-- Agent tools -->
+        <template v-if="selectedAgent && agentToolDefinitions.length">
+          <template v-for="tool in agentToolDefinitions" :key="tool.id">
+            <span class="text-xs text-muted-foreground">·</span>
+            <span class="text-xs text-muted-foreground">{{ tool.name }}</span>
+          </template>
+        </template>
+        <!-- Web search availability -->
         <Badge
           v-if="selectedAgent && webSearchAvailability"
           :variant="webSearchAvailability.available ? 'secondary' : 'outline'"

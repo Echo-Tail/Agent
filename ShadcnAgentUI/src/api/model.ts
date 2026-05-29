@@ -5,6 +5,10 @@ export function listModelsApi() {
   return http.get<any, AiModel[]>('/models')
 }
 
+export function getModelApi(id: number) {
+  return http.get<any, AiModel>(`/models/${id}`)
+}
+
 export function getDefaultModelApi() {
   return http.get<any, AiModel>('/models/default')
 }

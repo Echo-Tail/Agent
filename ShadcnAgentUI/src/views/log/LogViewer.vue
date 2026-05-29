@@ -52,7 +52,7 @@ const pageSize = ref(20)
 const total = ref(0)
 
 const filterLevels = ref<string[]>([])
-const filterCategories = ref<string[]>([])
+
 const filterSearch = ref('')
 const filterStartDate = ref('')
 const filterEndDate = ref('')
@@ -78,8 +78,7 @@ const categoryKeys: Record<string, string> = {
 }
 
 const levelOptions = ['DEBUG', 'INFO', 'WARN', 'ERROR'].map(l => ({ label: levelKeys[l], value: l }))
-const categoryOptions = ['API', 'USER_ACTION', 'ROUTER', 'ERROR', 'PERFORMANCE', 'AUTH']
-  .map(c => ({ label: categoryKeys[c], value: c }))
+
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
@@ -93,7 +92,6 @@ async function load() {
         page: page.value - 1,
         size: pageSize.value,
         levels: filterLevels.value.length ? filterLevels.value : undefined,
-        categories: filterCategories.value.length ? filterCategories.value : undefined,
         search: filterSearch.value || undefined,
         startDate: filterStartDate.value ? new Date(filterStartDate.value).toISOString() : undefined,
         endDate: filterEndDate.value ? new Date(filterEndDate.value).toISOString() : undefined,
@@ -148,7 +146,6 @@ async function handleExport() {
       page: 0,
       size: 99999,
       levels: filterLevels.value.length ? filterLevels.value : undefined,
-      categories: filterCategories.value.length ? filterCategories.value : undefined,
       search: filterSearch.value || undefined,
       startDate: filterStartDate.value ? new Date(filterStartDate.value).toISOString() : undefined,
       endDate: filterEndDate.value ? new Date(filterEndDate.value).toISOString() : undefined,
@@ -255,15 +252,7 @@ onMounted(() => { load() })
           {{ $t(opt.label) }}
         </Button>
       </div>
-      <div class="w-px h-6 bg-border" />
-      <Select v-model="filterCategories" @update:model-value="onFilterChange">
-        <SelectTrigger class="w-[140px] h-8">
-          <SelectValue :placeholder="$t('log.filters.category')" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</SelectItem>
-        </SelectContent>
-      </Select>
+
       <Input id="log-start-date" name="log-start-date" v-model="filterStartDate" type="date" class="w-36 h-8" @change="onFilterChange" />
       <span class="text-xs text-muted-foreground">{{ $t('common.to') }}</span>
       <Input id="log-end-date" name="log-end-date" v-model="filterEndDate" type="date" class="w-36 h-8" @change="onFilterChange" />
