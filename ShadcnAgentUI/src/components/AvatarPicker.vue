@@ -65,48 +65,24 @@ function handleFileSelect(event: Event) {
 }
 
 async function confirmUpload() {
-  const img = new Image()
-  img.onload = async () => {
-    // Center-square crop then circle clip
-    const size = Math.min(img.width, img.height)
-    const sx = (img.width - size) / 2
-    const sy = (img.height - size) / 2
+  const dataUrl = previewUrl.value
+  if (!dataUrl) return
 
-    const outSize = 200
-    const canvas = document.createElement('canvas')
-    canvas.width = outSize
-    canvas.height = outSize
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.beginPath()
-    ctx.arc(outSize / 2, outSize / 2, outSize / 2, 0, Math.PI * 2)
-    ctx.closePath()
-    ctx.clip()
-    ctx.drawImage(img, sx, sy, size, size, 0, 0, outSize, outSize)
-
-    uploading.value = true
-    try {
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/png')
-      )
-      if (!blob) throw new Error('Canvas toBlob failed')
-
-      const file = new File([blob], 'avatar.png', { type: 'image/png' })
-      const record = await uploadFileApi(file)
-      const url = `/v1/files/${record.id}/download`
-      modelValue.value = url
-      uploadedUrl.value = url
-      previewUrl.value = null
-      toast.success(t('toast.uploadSuccess'))
-    } catch {
-      toast.error(t('error.uploadFailed'))
-    } finally {
-      uploading.value = false
-    }
-  }
-  if (previewUrl.value) {
-    img.src = previewUrl.value
+  uploading.value = true
+  try {
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+    const file = new File([blob], 'avatar.png', { type: blob.type || 'image/png' })
+    const record = await uploadFileApi(file)
+    const url = `/v1/files/${record.id}/download`
+    modelValue.value = url
+    uploadedUrl.value = url
+    previewUrl.value = null
+    toast.success(t('toast.uploadSuccess'))
+  } catch {
+    toast.error(t('error.uploadFailed'))
+  } finally {
+    uploading.value = false
   }
 }
 

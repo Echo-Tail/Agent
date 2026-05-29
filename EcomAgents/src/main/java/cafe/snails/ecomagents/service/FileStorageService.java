@@ -28,7 +28,8 @@ public class FileStorageService {
 
     private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "txt", "md", "pdf", "docx", "xlsx", "csv", "json"
+            "txt", "md", "pdf", "docx", "xlsx", "csv", "json",
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"
     );
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 

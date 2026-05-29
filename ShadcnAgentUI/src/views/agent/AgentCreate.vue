@@ -44,6 +44,7 @@ const kbs = ref<KnowledgeBase[]>([])
 const form = ref({
   name: '',
   icon: '',
+  avatar: '',
   description: '',
   systemPrompt: '',
   greeting: '',
@@ -80,6 +81,7 @@ onMounted(async () => {
         form.value = {
           name: a.name,
           icon: a.icon || '',
+          avatar: a.avatar || '',
           description: a.description || '',
           systemPrompt: a.systemPrompt || '',
           greeting: a.greeting || '',
@@ -156,6 +158,7 @@ async function handleSave() {
     const payload = {
       name: form.value.name.trim(),
       icon: form.value.icon || undefined,
+      avatar: form.value.avatar || undefined,
       description: form.value.description.trim() || undefined,
       systemPrompt: form.value.systemPrompt.trim() || undefined,
       greeting: form.value.greeting.trim() || undefined,
@@ -209,7 +212,18 @@ async function handleSave() {
             </div>
             <div class="space-y-2">
               <p class="text-sm font-medium">{{ $t('agent.icon') }}</p>
-              <AvatarPicker v-model="form.icon" />
+              <AvatarPicker
+                :model-value="form.icon || form.avatar"
+                @update:model-value="(val: string) => {
+                  if (val.startsWith('/')) {
+                    form.avatar = val
+                    form.icon = ''
+                  } else {
+                    form.icon = val
+                    form.avatar = ''
+                  }
+                }"
+              />
             </div>
           </div>
           <div class="space-y-2">
@@ -218,7 +232,7 @@ async function handleSave() {
           </div>
           <div class="space-y-2">
             <Label for="agent-greeting">{{ $t('agent.greeting') }}</Label>
-            <Input id="agent-greeting" name="agent-greeting" v-model="form.greeting" :placeholder="$t('agent.formGreetingPlaceholder')" maxlength="200" />
+            <Textarea id="agent-greeting" name="agent-greeting" v-model="form.greeting" :placeholder="$t('agent.formGreetingPlaceholder')" maxlength="500" class="min-h-[80px]" />
           </div>
         </CardContent>
       </Card>
