@@ -52,7 +52,7 @@ const pageSize = ref(20)
 const total = ref(0)
 
 const filterLevels = ref<string[]>([])
-const filterCategories = ref<string[]>([])
+const filterCategories = ref<string>('')
 const filterSearch = ref('')
 const filterStartDate = ref('')
 const filterEndDate = ref('')
@@ -93,7 +93,7 @@ async function load() {
         page: page.value - 1,
         size: pageSize.value,
         levels: filterLevels.value.length ? filterLevels.value : undefined,
-        categories: filterCategories.value.length ? filterCategories.value : undefined,
+        categories: filterCategories.value ? [filterCategories.value] : undefined,
         search: filterSearch.value || undefined,
         startDate: filterStartDate.value ? new Date(filterStartDate.value).toISOString() : undefined,
         endDate: filterEndDate.value ? new Date(filterEndDate.value).toISOString() : undefined,
@@ -148,7 +148,7 @@ async function handleExport() {
       page: 0,
       size: 99999,
       levels: filterLevels.value.length ? filterLevels.value : undefined,
-      categories: filterCategories.value.length ? filterCategories.value : undefined,
+      categories: filterCategories.value ? [filterCategories.value] : undefined,
       search: filterSearch.value || undefined,
       startDate: filterStartDate.value ? new Date(filterStartDate.value).toISOString() : undefined,
       endDate: filterEndDate.value ? new Date(filterEndDate.value).toISOString() : undefined,
