@@ -306,13 +306,18 @@ public class HarnessAgentManager {
         if (apiUrl == null) apiUrl = llmConfig.getApiUrl();
 
         String path = extractPath(apiUrl);
-        if (!path.isBlank()) return path;
+        if (!path.isBlank()) {
+            if (path.endsWith("/chat/completions") || path.endsWith("/messages")) {
+                return path;
+            }
+            return path + "/chat/completions";
+        }
 
         String version = aiModel != null ? aiModel.getApiVersion() : null;
         if (version != null && !version.isBlank()) {
             return version + "/chat/completions";
         }
-        return "/chat/completions";
+        return "/v1/chat/completions";
     }
 
     /** 根据 Agent 查找绑定的 AiModel（可能返回 null） */
