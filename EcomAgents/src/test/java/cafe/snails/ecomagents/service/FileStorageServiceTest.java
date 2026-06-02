@@ -50,7 +50,7 @@ class FileStorageServiceTest {
     @Test
     void saveContentAsFile_shouldReturnNullForUnsupportedExt() {
         assertNull(fileStorageService.saveContentAsFile("data", "test.exe", 1L));
-        assertNull(fileStorageService.saveContentAsFile("data", "test.png", 1L));
+        assertNull(fileStorageService.saveContentAsFile("data", "archive.zip", 1L));
     }
 
     @Test

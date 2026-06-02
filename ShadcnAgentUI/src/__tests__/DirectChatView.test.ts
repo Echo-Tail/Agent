@@ -5,7 +5,9 @@ import DirectChatView from '@/views/chat/DirectChatView.vue'
 import i18n from '@/locales'
 import { useChatStore } from '@/stores/chat'
 import { createSessionApi, getSessionApi } from '@/api/session'
-import { getAgentApi, listAgentsByScopeApi } from '@/api/agent'
+import { getAgentApi, getWebSearchAvailabilityApi, listAgentsByScopeApi } from '@/api/agent'
+import { getModelApi } from '@/api/model'
+import { listToolsApi } from '@/api/tool'
 
 const routeState = vi.hoisted(() => ({
   query: {} as Record<string, string>,
@@ -30,6 +32,15 @@ vi.mock('@/api/agent', () => ({
   listAgentsByScopeApi: vi.fn(),
   getAgentApi: vi.fn(),
   getSystemAgentApi: vi.fn(),
+  getWebSearchAvailabilityApi: vi.fn(),
+}))
+
+vi.mock('@/api/model', () => ({
+  getModelApi: vi.fn(),
+}))
+
+vi.mock('@/api/tool', () => ({
+  listToolsApi: vi.fn(),
 }))
 
 vi.mock('@/api/session', () => ({
@@ -99,6 +110,9 @@ describe('DirectChatView', () => {
     routeState.query = { agentId: '1', sessionId: '42' }
     vi.mocked(listAgentsByScopeApi).mockResolvedValue([agent] as any)
     vi.mocked(getAgentApi).mockResolvedValue(agent as any)
+    vi.mocked(getModelApi).mockResolvedValue({ id: 1, name: 'DeepSeek' } as any)
+    vi.mocked(listToolsApi).mockResolvedValue([])
+    vi.mocked(getWebSearchAvailabilityApi).mockResolvedValue({ available: true, message: 'ready' } as any)
     vi.mocked(getSessionApi).mockResolvedValue({
       id: 42,
       agentId: 1,
@@ -114,6 +128,7 @@ describe('DirectChatView', () => {
     const wrapper = createWrapper()
     await flushPromises()
     await wrapper.vm.$nextTick()
+    await flushPromises()
 
     const chatStore = useChatStore()
     expect(getSessionApi).toHaveBeenCalledWith(42)

@@ -16,7 +16,9 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.GrantedAuthority;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +32,7 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class TicketServiceTest {
+    private static final DateTimeFormatter NUMBER_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @Mock
     private TicketRepository ticketRepository;
@@ -74,7 +77,7 @@ class TicketServiceTest {
                 .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
                 .build();
 
-        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc("TK-20260528-"))
+        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc(todayTicketPrefix()))
                 .thenReturn(Optional.empty());
         when(ticketRepository.save(any())).thenReturn(savedTicket);
 
@@ -398,7 +401,7 @@ class TicketServiceTest {
 
     @Test
     void nextTicketNumber_shouldStartFrom1() {
-        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc("TK-20260528-"))
+        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc(todayTicketPrefix()))
                 .thenReturn(Optional.empty());
         when(ticketRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -409,8 +412,8 @@ class TicketServiceTest {
 
     @Test
     void nextTicketNumber_shouldIncrement() {
-        var existingTicket = Ticket.builder().ticketNumber("TK-20260528-0003").build();
-        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc("TK-20260528-"))
+        var existingTicket = Ticket.builder().ticketNumber(todayTicketPrefix() + "0003").build();
+        when(ticketRepository.findTopByTicketNumberStartingWithOrderByTicketNumberDesc(todayTicketPrefix()))
                 .thenReturn(Optional.of(existingTicket));
         when(ticketRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -429,5 +432,9 @@ class TicketServiceTest {
         req.setAffectedMenu(AffectedMenu.CHAT);
         req.setPriority(TicketPriority.MEDIUM);
         return req;
+    }
+
+    private String todayTicketPrefix() {
+        return "TK-" + LocalDate.now().format(NUMBER_DATE) + "-";
     }
 }

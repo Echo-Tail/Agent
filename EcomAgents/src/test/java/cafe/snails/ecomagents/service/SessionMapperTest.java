@@ -83,6 +83,78 @@ class SessionMapperTest {
     }
 
     @Test
+    void resolveHarnessSessionId_shouldBackfillHarnessIdForExistingSession() {
+        Session existing = Session.builder()
+                .id(10L)
+                .agentId(1L)
+                .userId(1L)
+                .build();
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(existing));
+
+        SessionMapper mapper = new SessionMapper(sessionRepository);
+        String result = mapper.resolveHarnessSessionId(10L, 1L, 1L);
+
+        assertNotNull(result);
+        assertEquals(result, existing.getHarnessSessionId());
+        verify(sessionRepository).save(existing);
+    }
+
+    @Test
+    void resolveHarnessSessionId_shouldCreateNewSessionWhenNoDbSessionId() {
+        SessionMapper mapper = new SessionMapper(sessionRepository);
+
+        String result = mapper.resolveHarnessSessionId(null, 1L, 1L);
+
+        assertNotNull(result);
+        verify(sessionRepository).save(sessionCaptor.capture());
+        Session saved = sessionCaptor.getValue();
+        assertEquals(1L, saved.getAgentId());
+        assertEquals(1L, saved.getUserId());
+        assertEquals(result, saved.getHarnessSessionId());
+        assertNotNull(saved.getCreatedAt());
+        assertNotNull(saved.getUpdatedAt());
+    }
+
+    @Test
+    void syncSessionMetadata_shouldUpdateTimestampAndGenerateTitleFromUserMessage() {
+        Session session = Session.builder()
+                .id(10L)
+                .title("新对话")
+                .harnessSessionId("sess-1-1-test")
+                .build();
+        when(sessionRepository.findByHarnessSessionId("sess-1-1-test")).thenReturn(Optional.of(session));
+
+        SessionMapper mapper = new SessionMapper(sessionRepository);
+        mapper.syncSessionMetadata(1L, "sess-1-1-test", 1L,
+                "this is a long user message that should be trimmed at thirty characters", "reply");
+
+        verify(sessionRepository).save(session);
+        assertNotNull(session.getUpdatedAt());
+        assertEquals(30, session.getTitle().length());
+    }
+
+    @Test
+    void syncSessionMetadata_shouldDoNothingWhenSessionMissing() {
+        when(sessionRepository.findByHarnessSessionId("missing")).thenReturn(Optional.empty());
+
+        SessionMapper mapper = new SessionMapper(sessionRepository);
+        mapper.syncSessionMetadata(1L, "missing", 1L, "hello", "reply");
+
+        verify(sessionRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteSession_shouldDeleteExistingSession() {
+        Session session = Session.builder().id(10L).build();
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
+
+        SessionMapper mapper = new SessionMapper(sessionRepository);
+        mapper.deleteSession(10L);
+
+        verify(sessionRepository).delete(session);
+    }
+
+    @Test
     void saveMessage_shouldSaveWithFileIdAndFileName() {
         Session session = Session.builder()
                 .id(10L)

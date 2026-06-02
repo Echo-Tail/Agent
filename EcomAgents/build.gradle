@@ -73,7 +73,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.37
+                minimum = 0.60
             }
         }
     }

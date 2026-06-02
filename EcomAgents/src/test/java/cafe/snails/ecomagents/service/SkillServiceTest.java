@@ -11,11 +11,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -39,11 +46,14 @@ class SkillServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @TempDir
+    Path tempDir;
+
     private SkillService skillService;
 
     @BeforeEach
     void setUp() {
-        lenient().when(workspaceConfig.getRoot()).thenReturn(System.getProperty("java.io.tmpdir") + "/skill-test");
+        lenient().when(workspaceConfig.getRoot()).thenReturn(tempDir.toString());
         skillService = new SkillService(workspaceConfig, skillConfig, skillsRepository,
                 agentSkillRepository, objectMapper);
     }

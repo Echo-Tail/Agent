@@ -8,6 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "@types/dompurify": "^3.2.0",
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
+    "@vitest/coverage-v8": "4.1.7",
     "@vue/test-utils": "^2.4.10",
     "@vue/tsconfig": "^0.9.1",
     "happy-dom": "^20.9.0",
