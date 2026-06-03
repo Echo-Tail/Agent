@@ -2,11 +2,8 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.ToolDefinition;
-import cafe.snails.ecomagents.model.AiModel;
 import cafe.snails.ecomagents.model.ToolConfig;
-import cafe.snails.ecomagents.repository.AiModelRepository;
 import cafe.snails.ecomagents.repository.ToolConfigRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +14,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,19 +30,14 @@ class ToolServiceTest {
     @Mock
     private ToolConfigRepository repository;
 
-    @Mock
-    private AiModelRepository aiModelRepository;
-
     private ToolService service;
-    private ObjectMapper objectMapper;
 
     private ToolConfig sampleConfig;
     private ToolConfig disabledConfig;
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
-        service = new ToolService(repository, aiModelRepository, objectMapper);
+        service = new ToolService(repository);
         // Default: admin role so configJson is returned; override in specific tests for non-admin
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("admin", null,
@@ -181,87 +172,9 @@ class ToolServiceTest {
         assertEquals(404, result.getCode());
     }
 
-    @Test
-    void saveToolConfig_imageGeneration_withValidModelId_shouldSucceed() {
-        ToolConfig imgConfig = ToolConfig.builder()
-                .id("image_generation").name("图片生成")
-                .description("根据文字描述生成图片")
-                .category("media").enabled(true).configJson("").build();
-        when(repository.findById("image_generation")).thenReturn(Optional.of(imgConfig));
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        AiModel model = AiModel.builder().id(1L).name("DALL-E 3")
-                .provider("openai").modelName("dall-e-3")
-                .enabled(true).createdAt(LocalDate.now()).createdBy(1L).build();
-        when(aiModelRepository.findById(1L)).thenReturn(Optional.of(model));
 
-        String config = "{\"apiKey\":\"sk-xxx\",\"modelId\":1}";
-        ApiResponse<ToolDefinition> result = service.saveToolConfig("image_generation", config);
-        assertEquals(200, result.getCode());
-        assertTrue(result.getData().getConfigJson().contains("modelId"));
-    }
 
-    @Test
-    void saveToolConfig_imageGeneration_withInvalidModelId_shouldReturn400() {
-        ToolConfig imgConfig = ToolConfig.builder()
-                .id("image_generation").name("图片生成")
-                .description("根据文字描述生成图片")
-                .category("media").enabled(true).configJson("").build();
-        when(repository.findById("image_generation")).thenReturn(Optional.of(imgConfig));
-        when(aiModelRepository.findById(999L)).thenReturn(Optional.empty());
-
-        String config = "{\"apiKey\":\"sk-xxx\",\"modelId\":999}";
-        ApiResponse<ToolDefinition> result = service.saveToolConfig("image_generation", config);
-        assertEquals(400, result.getCode());
-        assertTrue(result.getMessage().contains("模型不存在"));
-    }
-
-    @Test
-    void saveToolConfig_imageGeneration_withDisabledModel_shouldReturn400() {
-        ToolConfig imgConfig = ToolConfig.builder()
-                .id("image_generation").name("图片生成")
-                .description("根据文字描述生成图片")
-                .category("media").enabled(true).configJson("").build();
-        when(repository.findById("image_generation")).thenReturn(Optional.of(imgConfig));
-
-        AiModel disabled = AiModel.builder().id(2L).name("DALL-E 2")
-                .provider("openai").modelName("dall-e-2")
-                .enabled(false).createdAt(LocalDate.now()).createdBy(1L).build();
-        when(aiModelRepository.findById(2L)).thenReturn(Optional.of(disabled));
-
-        String config = "{\"apiKey\":\"sk-xxx\",\"modelId\":2}";
-        ApiResponse<ToolDefinition> result = service.saveToolConfig("image_generation", config);
-        assertEquals(400, result.getCode());
-        assertTrue(result.getMessage().contains("已停用"));
-    }
-
-    @Test
-    void saveToolConfig_imageGeneration_withoutModelId_shouldBeBackwardCompatible() {
-        ToolConfig imgConfig = ToolConfig.builder()
-                .id("image_generation").name("图片生成")
-                .description("根据文字描述生成图片")
-                .category("media").enabled(true).configJson("").build();
-        when(repository.findById("image_generation")).thenReturn(Optional.of(imgConfig));
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        // No modelId in config — old-format config should still work
-        String config = "{\"apiKey\":\"sk-xxx\"}";
-        ApiResponse<ToolDefinition> result = service.saveToolConfig("image_generation", config);
-        assertEquals(200, result.getCode());
-    }
-
-    @Test
-    void saveToolConfig_nonImageTool_withModelId_shouldBeIgnored() {
-        // web_search with a modelId should pass validation since web_search has no modelId check
-        when(repository.findById("web_search")).thenReturn(Optional.of(sampleConfig));
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        String config = "{\"apiKey\":\"sk-xxx\",\"modelId\":999}";
-        ApiResponse<ToolDefinition> result = service.saveToolConfig("web_search", config);
-        assertEquals(200, result.getCode());
-        // Verify AiModelRepository was never called
-        verify(aiModelRepository, never()).findById(any());
-    }
 
     @Test
     void listTools_nonAdmin_shouldStripConfigJson() {

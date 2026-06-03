@@ -168,11 +168,47 @@ type: "done"       → 完整文本
 - **AGENTS.md** = Agent 的 systemPrompt，双向同步（修改 systemPrompt 时重写文件）
 - **MEMORY.md** = HarnessAgent 自动维护的跨会话记忆，**所有用户共享**（框架限制，详见多租户设计）
 
+### 图片生成（Image Generation）
+独立于 Agent 体系的图片生成功能，入口为侧边栏"Agent 广场"下方的"图像生成"菜单项（路由 `/agents/image`），所有用户可用。
+
+#### 调用架构
+```
+前端 (/agents/image) → POST /v1/images/generate → 后端 WebClient → PackyAPI
+                    → POST /v1/images/edit    → 后端 WebClient → PackyAPI
+```
+- **后端代理模式**：前端将 prompt 和参考图发到后端，后端调用 PackyAPI，下载生成的图片到本地，返回 URL
+- **模型来源**：从 `AiModel` 中查询 `modelType=IMAGE` 且 `enabled=true` 的模型，不通过 ToolConfig 配置
+- **认证**：使用 `AiModel.apiKey` 作为 Bearer Token 调用 PackyAPI
+- **超时**：由 `image.timeout-seconds` 配置（默认 300 秒），文生图和图生图共用
+
+#### 接口
+- **文生图**：`POST /v1/images/generate` — PackyAPI `/v1/images/generations`
+- **图生图**：`POST /v1/images/edit` — PackyAPI `/v1/images/edits`，最多 4 张参考图（multipart/form-data 多字段上传）
+
+#### 存储
+- 文生图结果：`uploads/generate/` 目录
+- 图生图结果：`uploads/edit/` 目录
+- 输出格式：`response_format=url`，后端下载后存本地文件，返回服务端 URL
+
+#### 历史记录
+- 存储表：`image_generation_records`（新建 JPA 实体）
+- 字段：id, userId, mode（GENERATE / EDIT）, prompt, revisedPrompt（API 返回的改写后提示词）, size, quality, resultPath（服务器端图片路径）, timeCostMs（API 调用耗时，毫秒）, createdAt
+- 用途：前端 `/agents/image` 页面展示历史生成记录列表
+
+#### 前端参数
+| 参数 | 来源 | 用户可见 |
+|------|------|---------|
+| prompt | 用户输入 | ✅ |
+| size | 下拉选择（1024x1024 / 1536x1024 / 1024x1536 / 3840x2160） | ✅ |
+| quality | 下拉选择（low / medium / high / auto） | ✅ |
+| output_format | 后端固定 `png` | ❌ |
+| 参考图（编辑模式） | 本地文件上传，最多 4 张 | ✅ |
+
 ### 外部工具
 - **第一阶段（已完成）**: 仅使用 HarnessAgent 内置工具，Agent 创建界面隐藏工具选择
 - **第二阶段（当前）**: 逐个实现外部工具的 Java `@Tool` 类，恢复工具选择 UI
   - `web_search` — 通过 Tavily API 实现网页搜索（Spring WebClient），LLM 可控参数：query（必选）、max_results（可选，默认5）
-  - `image_generation` — 待实现
+  - `image_generation` — 独立页面功能，非 Agent 工具。详见下方"图片生成"
   - `browser_automation` — 已移除，移至技能管理范畴，待定
   - `code_execution` — 已移除，移至技能管理范畴，待定
 - **第三阶段（本次重构）**: per-agent 工具绑定，Agent 创建/编辑时从启用的全局工具池中勾选

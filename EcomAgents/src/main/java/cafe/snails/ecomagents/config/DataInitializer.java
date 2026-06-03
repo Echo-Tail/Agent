@@ -131,9 +131,7 @@ public class DataInitializer implements CommandLineRunner {
 
         List<ToolConfig> tools = List.of(
                 ToolConfig.builder().id("web_search").name("网页搜索")
-                        .description("搜索互联网获取最新信息").category("web").build(),
-                ToolConfig.builder().id("image_generation").name("图片生成")
-                        .description("根据文字描述生成图片").category("media").build()
+                        .description("搜索互联网获取最新信息").category("web").build()
         );
 
         toolConfigRepository.saveAll(tools);

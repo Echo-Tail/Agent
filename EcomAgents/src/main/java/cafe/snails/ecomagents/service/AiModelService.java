@@ -39,6 +39,11 @@ public class AiModelService {
                 .filter(AiModel::getEnabled).toList());
     }
 
+    /** 获取已启用的图片生成模型（modelType=IMAGE） */
+    public ApiResponse<List<AiModel>> getEnabledImageModels() {
+        return ApiResponse.success(repository.findByModelTypeAndEnabled("IMAGE", true));
+    }
+
     /** 根据 ID 获取模型详情 */
     public ApiResponse<AiModel> getModel(Long id) {
         return repository.findById(id)
