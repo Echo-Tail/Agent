@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.repository;
 import cafe.snails.ecomagents.model.AiModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -14,4 +15,7 @@ public interface AiModelRepository extends JpaRepository<AiModel, Long> {
 
     /** 统计已启用的模型数量 */
     long countByEnabledTrue();
+
+    /** 按类型和启用状态查询模型 */
+    List<AiModel> findByModelTypeAndEnabled(String modelType, Boolean enabled);
 }

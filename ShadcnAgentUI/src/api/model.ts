@@ -13,6 +13,10 @@ export function getDefaultModelApi() {
   return http.get<any, AiModel>('/models/default')
 }
 
+export function getImageModelsApi() {
+  return http.get<any, AiModel[]>('/models/image')
+}
+
 export function createModelApi(data: Partial<AiModel>) {
   return http.post<any, AiModel>('/models', data)
 }

@@ -37,6 +37,12 @@ public class AiModelController {
         return aiModelService.getDefaultModel();
     }
 
+    /** 获取已启用的图片生成模型列表 */
+    @GetMapping("/models/image")
+    public ApiResponse<List<AiModel>> getImageModels() {
+        return aiModelService.getEnabledImageModels();
+    }
+
     /** 获取单个模型详情 */
     @GetMapping("/models/{id}")
     public ApiResponse<AiModel> getModel(@PathVariable("id") Long id) {

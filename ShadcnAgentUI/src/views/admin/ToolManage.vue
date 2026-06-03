@@ -6,13 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -25,12 +18,12 @@ import {
   toggleToolApi,
   saveToolConfigApi,
 } from '@/api/tool'
-import { listModelsApi } from '@/api/model'
+
 import { ToolCategoryKeys } from '@/types/enums'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import type { ToolDefinition } from '@/api/tool'
-import type { AiModel } from '@/types/api'
+
 import {
   Settings2,
 } from 'lucide-vue-next'
@@ -50,9 +43,6 @@ const editName = ref('')
 const editDescription = ref('')
 const configApiProvider = ref<'tavily' | 'firecrawl' | ''>('')
 const configApiKey = ref('')
-const configModelId = ref<number | null>(null)
-const models = ref<{ label: string; value: number }[]>([])
-const loadingModels = ref(false)
 const saving = ref(false)
 
 const categoryColors: Record<string, string> = {
@@ -66,7 +56,8 @@ const categoryColors: Record<string, string> = {
 async function fetchTools() {
   loading.value = true
   try {
-    tools.value = (await listToolsApi()) ?? []
+    const allTools = (await listToolsApi()) ?? []
+    tools.value = allTools.filter(t => t.id !== 'image_generation')
   } catch {
     toast.error(t('error.loadFailed', { entity: '' }))
   } finally {
@@ -103,35 +94,11 @@ async function openConfig(tool: ToolDefinition) {
     const cfg = tool.configJson ? JSON.parse(tool.configJson) : {}
     configApiProvider.value = cfg.provider || ''
     configApiKey.value = cfg.apiKey || ''
-    configModelId.value = cfg.modelId ?? null
   } catch {
     configApiProvider.value = ''
     configApiKey.value = ''
-    configModelId.value = null
   }
   showConfigModal.value = true
-
-  if (tool.id === 'image_generation') {
-    await fetchEnabledModels()
-  }
-}
-
-async function fetchEnabledModels() {
-  loadingModels.value = true
-  try {
-    const list: AiModel[] = (await listModelsApi()) ?? []
-    models.value = list
-      .filter((m) => m.enabled)
-      .map((m) => ({
-        label: `${m.name}`,
-        value: m.id,
-      }))
-  } catch {
-    models.value = []
-    toast.error(t('error.networkError'))
-  } finally {
-    loadingModels.value = false
-  }
 }
 
 async function handleSaveConfig() {
@@ -153,10 +120,6 @@ async function handleSaveConfig() {
         provider: configApiProvider.value || 'tavily',
         apiKey: configApiKey.value,
       })
-    } else if (editingTool.value.id === 'image_generation') {
-      if (configModelId.value != null) {
-        configJson = JSON.stringify({ modelId: configModelId.value })
-      }
     } else if (configApiKey.value) {
       configJson = JSON.stringify({ apiKey: configApiKey.value })
     }
@@ -269,27 +232,6 @@ async function handleSaveConfig() {
               <div class="space-y-2 mt-3">
                 <label for="tool-api-key" class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
                 <Input id="tool-api-key" name="tool-api-key" v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
-              </div>
-            </template>
-
-            <!-- image_generation -->
-            <template v-else-if="editingTool.id === 'image_generation'">
-              <div class="bg-muted/30 text-sm text-muted-foreground px-3 py-2 rounded-md mb-3">
-                {{ $t('toolManage.imageGenHint') }}
-              </div>
-              <div class="space-y-2">
-                <label for="tool-model" class="text-sm font-medium">{{ $t('agent.model') }}</label>
-                <Select v-model="configModelId">
-                  <SelectTrigger id="tool-model" name="tool-model" class="w-[180px]">
-                    <SelectValue :placeholder="$t('common.select')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="m in models" :key="m.value" :value="m.value">{{ m.label }}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="models.length === 0 && !loadingModels" class="text-xs text-amber-600 mt-2">
-                {{ $t('toolManage.noImageModel') }}
               </div>
             </template>
 

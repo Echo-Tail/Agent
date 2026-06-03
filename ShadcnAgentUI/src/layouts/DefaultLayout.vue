@@ -32,6 +32,7 @@ import {
   Languages,
   MessageCircle,
   Mail,
+  Image,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -95,6 +96,7 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.messages', key: 'Messages', icon: Mail },
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
+    { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
   ],
   // 数据与记录
   [
