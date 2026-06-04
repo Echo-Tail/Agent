@@ -304,9 +304,6 @@ public class ImageGenerationService {
         };
 
         Page<ImageGenerationRecord> result = recordRepository.findAll(spec, pageable);
-        log.info("listRecords(userId={}, startDate={}, endDate={}, prompt={}) → content={}, totalElements={}, totalPages={}, number={}",
-                userId, startDate, endDate, prompt,
-                result.getContent().size(), result.getTotalElements(), result.getTotalPages(), result.getNumber());
         return result;
     }
 
