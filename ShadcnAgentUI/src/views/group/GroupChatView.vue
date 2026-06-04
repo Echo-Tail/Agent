@@ -293,6 +293,7 @@ async function onInvited() {
                  :class="msg.senderType === 'AGENT' ? 'bg-primary/10' : 'bg-muted'">
               <img v-if="memberAvatars.get(`${msg.senderType}-${msg.senderId}`)?.avatar"
                    :src="memberAvatars.get(`${msg.senderType}-${msg.senderId}`)!.avatar!"
+                   :alt="memberAvatars.get(`${msg.senderType}-${msg.senderId}`)?.name || 'avatar'"
                    class="h-full w-full object-cover" />
               <AgentIcon v-else-if="msg.senderType === 'AGENT'"
                          :icon="memberAvatars.get(`AGENT-${msg.senderId}`)?.icon"
@@ -347,7 +348,7 @@ async function onInvited() {
         <h3 class="font-semibold text-sm mb-2">成员 ({{ members.length }})</h3>
         <div v-for="m in memberList" :key="m.id" class="flex items-center gap-3 py-1.5">
           <div v-if="m.memberType === 'USER'" class="h-8 w-8 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0">
-            <img v-if="m.avatar" :src="m.avatar" class="h-full w-full object-cover" />
+            <img v-if="m.avatar" :src="m.avatar" :alt="m.name || 'avatar'" class="h-full w-full object-cover" />
             <span v-else class="text-xs font-medium">{{ m.name.charAt(0).toUpperCase() }}</span>
           </div>
           <div v-else class="h-8 w-8 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">

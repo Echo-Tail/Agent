@@ -153,7 +153,7 @@ async function confirmDisband() {
             <div class="flex flex-col items-center gap-2">
               <label class="relative cursor-pointer group">
                 <div class="w-20 h-20 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/30 group-hover:border-primary/50 transition-colors">
-                  <img v-if="newGroupAvatarPreview" :src="newGroupAvatarPreview" class="w-full h-full object-cover" />
+                  <img v-if="newGroupAvatarPreview" :src="newGroupAvatarPreview" alt="new group avatar preview" class="w-full h-full object-cover" />
                   <Plus v-else class="h-6 w-6 text-muted-foreground/60" />
                 </div>
                 <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" @change="onAvatarSelected" />
@@ -188,7 +188,7 @@ async function confirmDisband() {
           <CardTitle class="flex items-center gap-2 text-base">
             <div class="relative shrink-0">
               <div v-if="group.avatar" class="w-8 h-8 rounded-full overflow-hidden">
-                <img :src="group.avatar" class="w-full h-full object-cover" />
+                <img :src="group.avatar" :alt="group.name + ' avatar'" class="w-full h-full object-cover" />
               </div>
               <div v-else class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <MessageCircle class="h-4 w-4 text-primary" />
