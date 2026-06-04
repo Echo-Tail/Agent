@@ -142,6 +142,7 @@ function clearUpload() {
           <img
             v-if="uploadedUrl || previewUrl"
             :src="uploadedUrl || previewUrl!"
+            alt="avatar preview"
             class="h-full w-full object-cover"
           />
           <ImagePlus v-else class="h-8 w-8 text-muted-foreground/50" />

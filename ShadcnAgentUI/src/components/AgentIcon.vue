@@ -16,6 +16,7 @@ const IconComponent = computed(() => (props.icon && AGENT_ICON_MAP[props.icon]) 
   <img
     v-if="avatar"
     :src="avatar"
+    alt="agent avatar"
     class="h-full w-full rounded-full object-cover"
   />
   <component :is="IconComponent" v-else :class="$props.class" />
