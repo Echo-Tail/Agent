@@ -35,8 +35,8 @@ public class TokenUsageService {
 
     /** 按日期区间查询各 Agent + 模型的调用统计，含费用计算 */
     public List<Map<String, Object>> getSummaryByDateRange(LocalDate startDate, LocalDate endDate) {
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.of(2024, 1, 1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
 
         List<Object[]> rows = repository.sumByModelBetween(start, end);
 
@@ -72,15 +72,15 @@ public class TokenUsageService {
 
     /** 按日期区间统计图片模型调用次数 */
     public Long getImageModelCallCount(LocalDate startDate, LocalDate endDate) {
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.of(2024, 1, 1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         return repository.countImageModelCallsBetween(start, end);
     }
 
     /** 按日期区间查询详细记录，含费用计算 */
     public List<Map<String, Object>> getDetailByDateRange(LocalDate startDate, LocalDate endDate) {
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.of(2024, 1, 1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDateTime.of(2099, 12, 31, 23, 59, 59);
         List<TokenUsageRecord> records = repository.findByCreatedAtBetweenOrderByCreatedAtDesc(start, end);
 
         return records.stream().map(r -> {
