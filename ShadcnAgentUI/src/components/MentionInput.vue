@@ -173,6 +173,8 @@ onUnmounted(() => {
 <template>
   <div class="relative flex-1 mention-container">
     <textarea
+      id="group-chat-input"
+      name="group-chat-input"
       ref="textareaRef"
       :value="modelValue"
       rows="1"

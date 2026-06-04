@@ -6,7 +6,6 @@ import { useKnowledgeStore } from '@/stores/knowledge'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/PageHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import SearchInput from '@/components/SearchInput.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,8 +18,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import {
+  Search,
   Plus,
   ArrowLeft,
   Upload,
@@ -41,6 +42,7 @@ const authStore = useAuthStore()
 const store = useKnowledgeStore()
 const { t, locale } = useI18n()
 
+const localSearchQuery = ref('')
 const showKbModal = ref(false)
 const editingKb = ref<{ id?: number; name: string; description: string }>({ name: '', description: '' })
 const isEditMode = ref(false)
@@ -57,8 +59,6 @@ const showDeleteKbDialog = ref(false)
 const deleteKbTarget = ref<number | null>(null)
 const showDeleteDocDialog = ref(false)
 const deleteDocTarget = ref<number | null>(null)
-
-let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 const isDetail = computed(() => !!route.params.id)
 const kbId = computed(() => Number(route.params.id))
@@ -231,14 +231,13 @@ async function handleDeleteDoc() {
   deleteDocTarget.value = null
 }
 
+function doSearch() {
+  store.search(localSearchQuery.value)
+}
+
 function openPreview(doc: KnowledgeDocument) {
   previewDoc.value = doc
   showPreview.value = true
-}
-
-function handleSearchInput(val: string) {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => store.search(val), 300)
 }
 
 function formatSize(chars: number | null | undefined) {
@@ -262,12 +261,22 @@ function formatDate(dateStr: string) {
   <!-- ====== LIST VIEW ====== -->
   <div v-if="!isDetail" class="space-y-6">
     <PageHeader :title="$t('knowledge.title')" :description="$t('knowledge.desc')">
-      <SearchInput
-        :model-value="store.searchQuery"
-        @update:model-value="(val: string | number) => handleSearchInput(String(val))"
-        :placeholder="$t('knowledge.searchPlaceholder')"
-        input-class="w-60 h-9 pl-8"
-      />
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            id="knowledge-search"
+            name="knowledge-search"
+            v-model="localSearchQuery"
+            :placeholder="$t('knowledge.searchPlaceholder')"
+            class="w-60 h-9 pl-7"
+            @keydown.enter="doSearch"
+          />
+        </div>
+        <Button size="sm" variant="outline" class="h-9" @click="doSearch">
+          <Search class="h-4 w-4 mr-1" />{{ $t('common.search') }}
+        </Button>
+      </div>
       <Button v-if="authStore.isAdmin" @click="openCreate">
         <Plus class="mr-2 h-4 w-4" />{{ $t('knowledge.createKb') }}
       </Button>
@@ -346,6 +355,7 @@ function formatDate(dateStr: string) {
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{{ isEditMode ? $t('knowledge.editKb') : $t('knowledge.createKb') }}</DialogTitle>
+          <DialogDescription class="sr-only">{{ isEditMode ? $t('knowledge.editKb') : $t('knowledge.createKb') }}</DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
           <div class="space-y-2">

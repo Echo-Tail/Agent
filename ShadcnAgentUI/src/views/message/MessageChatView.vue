@@ -217,6 +217,8 @@ function goBack() {
     <div class="px-4 py-3 border-t">
       <div class="flex gap-2">
         <textarea
+          id="private-chat-input"
+          name="private-chat-input"
           ref="textareaRef"
           :value="inputText"
           @input="(e: Event) => { const ta = e.target as HTMLTextAreaElement; inputText = ta.value; autoResize() }"
@@ -227,7 +229,7 @@ function goBack() {
         />
         <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
         <Button size="icon" variant="outline" class="h-[44px] w-[44px] shrink-0 relative" :disabled="fileUploading">
-          <input type="file" multiple class="absolute inset-0 opacity-0 cursor-pointer" @change="handleFileUpload" />
+          <input id="private-chat-file-upload" name="private-chat-file-upload" type="file" multiple class="absolute inset-0 opacity-0 cursor-pointer" @change="handleFileUpload" />
           <Paperclip class="h-4 w-4" />
         </Button>
         <Button size="icon" class="h-[44px] w-[44px] shrink-0" :disabled="!inputText.trim() || sending" @click="sendMessage">

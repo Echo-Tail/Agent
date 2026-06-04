@@ -141,7 +141,7 @@ function close() {
       <!-- 搜索 -->
       <div v-if="inviteTab === 'user'" class="relative">
         <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input v-model="keyword" placeholder="搜索用户名..." class="pl-8" />
+        <Input id="invite-search-input" name="invite-search-input" v-model="keyword" placeholder="搜索用户名..." class="pl-8" />
       </div>
 
       <!-- 已选计数 -->
