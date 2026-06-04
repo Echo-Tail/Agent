@@ -570,7 +570,7 @@ function formatDateTime(dateStr: string): string {
             <img
               :src="resultImageUrl(record.resultPath)"
               class="w-full h-full object-cover"
-              alt=""
+              :alt="record.prompt?.slice(0, 60) || 'generated image'"
               loading="lazy"
             />
           </div>

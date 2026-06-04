@@ -418,7 +418,7 @@ onMounted(() => {
                 :class="selectedRecordId === rec.id ? 'ring-primary' : 'ring-transparent hover:ring-muted-foreground/30'"
                 @click="selectedRecordId = rec.id"
               >
-                <img :src="getImageUrl(rec)" class="w-full aspect-[4/3] object-cover" />
+                <img :src="getImageUrl(rec)" :alt="rec.prompt?.slice(0, 30) || 'gallery image'" class="w-full aspect-[4/3] object-cover" />
                 <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1">
                   <p class="text-[11px] text-white truncate leading-tight">{{ rec.prompt?.slice(0, 28) }}</p>
                 </div>

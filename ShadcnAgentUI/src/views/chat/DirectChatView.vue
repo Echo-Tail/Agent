@@ -553,6 +553,8 @@ const availableAgents = computed(() => {
         />
         <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
         <textarea
+          id="chat-input"
+          name="chat-input"
           ref="textareaRef"
           :value="inputText"
           @input="(e: Event) => { const ta = e.target as HTMLTextAreaElement; inputText = ta.value; autoResize() }"

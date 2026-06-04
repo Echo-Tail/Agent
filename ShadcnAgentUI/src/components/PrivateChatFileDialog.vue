@@ -162,13 +162,13 @@ function close() {
       <div class="flex items-center gap-2 py-2">
         <div class="relative flex-1">
           <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input v-model="searchText" placeholder="搜索文件名..." class="pl-8 h-9" />
+          <Input id="file-search-input" name="file-search-input" v-model="searchText" placeholder="搜索文件名..." class="pl-8 h-9" />
         </div>
         <Button variant="outline" size="sm" :disabled="uploading" @click="triggerFileSelect">
           <Upload class="h-4 w-4 mr-1" />
           {{ uploading ? '上传中...' : '上传' }}
         </Button>
-        <input ref="fileInputRef" type="file" class="hidden" @change="handleUpload" />
+        <input id="file-upload-input" name="file-upload-input" ref="fileInputRef" type="file" class="hidden" @change="handleUpload" />
       </div>
 
       <!-- 排序按钮 -->

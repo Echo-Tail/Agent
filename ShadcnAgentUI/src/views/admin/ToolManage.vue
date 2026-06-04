@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import {
   listToolsApi,
@@ -193,6 +194,7 @@ async function handleSaveConfig() {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{{ editName || $t('toolManage.config') }}</DialogTitle>
+          <DialogDescription class="sr-only">{{ editName || $t('toolManage.config') }}</DialogDescription>
         </DialogHeader>
         <div v-if="editingTool" class="space-y-4">
           <div class="space-y-2">
