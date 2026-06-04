@@ -125,12 +125,10 @@ async function fetchHistory(page = 0) {
       endDate: filterEndDate.value || undefined,
       prompt: filterPrompt.value || undefined,
     })
-    console.log('fetchHistory result:', res)
     records.value = res.content ?? []
     totalPages.value = res.page?.totalPages ?? 0
     totalElements.value = res.page?.totalElements ?? 0
     currentPage.value = res.page?.number ?? 0
-    console.log('records:', records.value.length, 'totalPages:', totalPages.value, 'totalElements:', totalElements.value)
     if (page !== 0) {
       await nextTick()
     }
