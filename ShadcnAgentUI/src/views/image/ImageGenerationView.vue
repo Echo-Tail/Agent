@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
@@ -72,6 +72,9 @@ const totalPages = ref(0)
 const totalElements = ref(0)
 const currentPage = ref(0)
 const historyLoading = ref(false)
+const historyRef = ref<HTMLElement | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+void historyRef
 const filterPrompt = ref('')
 const filterStartDate = ref('')
 const filterEndDate = ref('')
@@ -113,7 +116,7 @@ onMounted(async () => {
 
 // ── History fetch ──
 async function fetchHistory(page = 0) {
-  historyLoading.value = true
+  if (records.value.length === 0) historyLoading.value = true
   try {
     const res: PageResponse<ImageRecord> = await listImageRecords({
       page,
@@ -122,11 +125,17 @@ async function fetchHistory(page = 0) {
       endDate: filterEndDate.value || undefined,
       prompt: filterPrompt.value || undefined,
     })
+    console.log('fetchHistory result:', res)
     records.value = res.content ?? []
-    totalPages.value = res.totalPages ?? 0
-    totalElements.value = res.totalElements ?? 0
-    currentPage.value = res.number ?? 0
-  } catch {
+    totalPages.value = res.page?.totalPages ?? 0
+    totalElements.value = res.page?.totalElements ?? 0
+    currentPage.value = res.page?.number ?? 0
+    console.log('records:', records.value.length, 'totalPages:', totalPages.value, 'totalElements:', totalElements.value)
+    if (page !== 0) {
+      await nextTick()
+    }
+  } catch (e) {
+    console.error('fetchHistory error:', e)
     records.value = []
     totalPages.value = 0
     totalElements.value = 0
@@ -137,7 +146,11 @@ async function fetchHistory(page = 0) {
 
 function goToPage(page: number) {
   if (page < 0 || page >= totalPages.value) return
-  fetchHistory(page)
+  // 保存滚动位置，翻页后恢复
+  const scrollY = window.scrollY
+  fetchHistory(page).then(() => {
+    window.scrollTo({ top: scrollY, behavior: 'instant' as ScrollBehavior })
+  })
 }
 
 function handleSearch() {
@@ -553,15 +566,14 @@ function formatDateTime(dateStr: string): string {
       </div>
 
       <!-- Pagination -->
-      <div
-        v-if="totalPages > 0"
-        class="flex items-center justify-between pt-2"
-      >
+      <div class="flex items-center justify-between pt-2">
         <p class="text-xs text-muted-foreground">
           {{ $t('imageGen.totalRecords', { count: totalElements }) }}
-          · {{ $t('imageGen.pageInfo', { current: currentPage + 1, total: totalPages }) }}
+          <template v-if="totalPages > 0">
+            · {{ $t('imageGen.pageInfo', { current: currentPage + 1, total: totalPages }) }}
+          </template>
         </p>
-        <div class="flex items-center gap-1">
+        <div v-if="totalPages > 0" class="flex items-center gap-1">
           <Button
             variant="outline"
             size="sm"
@@ -571,18 +583,16 @@ function formatDateTime(dateStr: string): string {
             <ChevronLeft class="h-3 w-3" />
           </Button>
 
-          <template v-for="p in totalPages" :key="p">
-            <Button
-              v-if="p === currentPage + 1 || p === 1 || p === totalPages || Math.abs(p - (currentPage + 1)) <= 1"
-              variant="outline"
-              size="sm"
-              :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
-              @click="goToPage(p - 1)"
-            >
-              {{ p }}
-            </Button>
-            <span v-else-if="p === currentPage + 2 || (currentPage >= 2 && p === 2)" class="text-muted-foreground text-xs">…</span>
-          </template>
+          <Button
+            v-for="p in totalPages"
+            :key="p"
+            variant="outline"
+            size="sm"
+            :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
+            @click="goToPage(p - 1)"
+          >
+            {{ p }}
+          </Button>
 
           <Button
             variant="outline"

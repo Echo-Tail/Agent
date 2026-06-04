@@ -25,6 +25,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import jakarta.persistence.criteria.Predicate;
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -145,6 +146,10 @@ public class ImageGenerationService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败（" + e.getStatusCode() + "），请稍后重试");
         } catch (BusinessException e) {
             throw e;
+        } catch (SocketException e) {
+            long timeCostMs = System.currentTimeMillis() - startTime;
+            log.error("PackyAPI connection reset ({}ms): {}", timeCostMs, e.getMessage());
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：服务连接被重置，请稍后重试");
         } catch (Exception e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
             log.error("Image generation failed ({}ms): {}", timeCostMs, e.getMessage());
@@ -264,6 +269,10 @@ public class ImageGenerationService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败（" + e.getStatusCode() + "），请稍后重试");
         } catch (BusinessException e) {
             throw e;
+        } catch (SocketException e) {
+            long timeCostMs = System.currentTimeMillis() - startTime;
+            log.error("PackyAPI edit connection reset ({}ms): {}", timeCostMs, e.getMessage());
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：服务连接被重置，请稍后重试");
         } catch (Exception e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
             log.error("Image editing failed ({}ms): {}", timeCostMs, e.getMessage());
@@ -294,7 +303,11 @@ public class ImageGenerationService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        return recordRepository.findAll(spec, pageable);
+        Page<ImageGenerationRecord> result = recordRepository.findAll(spec, pageable);
+        log.info("listRecords(userId={}, startDate={}, endDate={}, prompt={}) → content={}, totalElements={}, totalPages={}, number={}",
+                userId, startDate, endDate, prompt,
+                result.getContent().size(), result.getTotalElements(), result.getTotalPages(), result.getNumber());
+        return result;
     }
 
     /**
