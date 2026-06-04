@@ -60,6 +60,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v1/knowledge-bases/audit-logs").hasRole("ADMIN")
                         .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")
                         .requestMatchers("/v1/admin/tickets/**").hasRole("ADMIN")
+                        // 管理员下架画廊作品
+                        .requestMatchers(HttpMethod.DELETE, "/v1/gallery/items/*/admin").hasRole("ADMIN")
                         // 系统日志：写入需登录，查询/清空仅管理员
                         .requestMatchers(HttpMethod.GET, "/v1/system-logs", "/v1/system-logs/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/v1/system-logs").hasRole("ADMIN")
