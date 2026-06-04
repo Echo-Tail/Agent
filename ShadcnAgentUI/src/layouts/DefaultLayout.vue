@@ -33,6 +33,7 @@ import {
   MessageCircle,
   Mail,
   Image,
+  Images,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -71,6 +72,7 @@ const pageTitleKey: Record<string, string> = {
   TokenUsage: 'pageTitle.tokenUsage',
   TicketManage: 'pageTitle.ticketManage',
   KnowledgeBase: 'pageTitle.knowledgeBase',
+  Gallery: 'pageTitle.gallery',
   Logs: 'pageTitle.logs',
   Settings: 'pageTitle.settings',
 }
@@ -97,6 +99,7 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
     { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
+    { translationKey: 'nav.gallery', key: 'Gallery', icon: Images },
   ],
   // 数据与记录
   [

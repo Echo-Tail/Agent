@@ -5,6 +5,8 @@ import EmptyState from '@/components/EmptyState.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,10 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
-  Check, Copy, Download, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle,
+  Check, Copy, Download, Image, ImagePlus, Upload, Trash2, RefreshCw, Loader2, AlertCircle,
   Search, ChevronLeft, ChevronRight, ZoomIn, X,
 } from 'lucide-vue-next'
 import { generateImage, editImage, listImageRecords, deleteImageRecord } from '@/api/image'
+import { publishToGallery } from '@/api/gallery'
 import { getImageModelsApi } from '@/api/model'
 import { toast } from 'sonner'
 import { useI18n } from 'vue-i18n'
@@ -82,8 +85,10 @@ const filterEndDate = ref('')
 // ── Size options with descriptions ──
 const sizeOptions = [
   { value: '1024x1024', label: '1024 × 1024 — 方形' },
+  { value: '1504x1504', label: '1504 × 1504 — 方形' },
   { value: '1536x1024', label: '1536 × 1024 — 横向' },
   { value: '1024x1536', label: '1024 × 1536 — 纵向' },
+  { value: '1600x1600', label: '1600 × 1600 — 方形' },
   { value: '2048x2048', label: '2048 × 2048 — 方形 2K' },
   { value: '2048x1152', label: '2048 × 1152 — 横向 2K' },
   { value: '3840x2160', label: '3840 × 2160 — 横向 4K' },
@@ -209,6 +214,50 @@ function removeImage(index: number) {
   editPreviewUrls.value.splice(index, 1)
 }
 
+// ── Publish dialog ──
+const publishDialogOpen = ref(false)
+const publishRecordId = ref<number | null>(null)
+const publishFormTitle = ref('')
+const publishFormCategory = ref('')
+const publishFormStyle = ref('')
+const publishFormNegative = ref('')
+const publishing = ref(false)
+const publishError = ref('')
+
+function openPublishDialog(record: ImageRecord) {
+  publishRecordId.value = record.id
+  publishFormTitle.value = ''
+  publishFormCategory.value = ''
+  publishFormStyle.value = ''
+  publishFormNegative.value = ''
+  publishError.value = ''
+  publishDialogOpen.value = true
+}
+
+async function submitPublish() {
+  if (!publishRecordId.value) {
+    publishError.value = t('imageGen.publishSelectImage') || '请选择要发布的图片'
+    return
+  }
+  publishError.value = ''
+  publishing.value = true
+  try {
+    await publishToGallery({
+      recordId: publishRecordId.value,
+      title: publishFormTitle.value || undefined,
+      categoryTags: publishFormCategory.value || undefined,
+      styleTags: publishFormStyle.value || undefined,
+      negativePrompt: publishFormNegative.value || undefined,
+    })
+    toast.success(t('gallery.publishSuccess') || '发布成功')
+    publishDialogOpen.value = false
+  } catch {
+    // toast handled by interceptor
+  } finally {
+    publishing.value = false
+  }
+}
+
 // ── Delete record ──
 async function handleDeleteRecord(id: number) {
   try {
@@ -302,8 +351,9 @@ function formatDateTime(dateStr: string): string {
         <div class="space-y-4">
           <TabsContent value="generate" class="space-y-4 mt-0">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('imageGen.prompt') }}</label>
+              <label for="gen-prompt" class="text-sm font-medium">{{ $t('imageGen.prompt') }}</label>
               <Textarea
+                id="gen-prompt"
                 v-model="prompt"
                 :placeholder="$t('imageGen.promptPlaceholder')"
                 class="min-h-[200px]"
@@ -314,7 +364,7 @@ function formatDateTime(dateStr: string): string {
           <TabsContent value="edit" class="space-y-4 mt-0">
             <!-- File upload -->
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('imageGen.referenceImages') }} ({{ editImages.length }}/4)</label>
+              <label for="ref-images-upload" class="text-sm font-medium">{{ $t('imageGen.referenceImages') }} ({{ editImages.length }}/4)</label>
               <div class="flex flex-wrap gap-3">
                 <div
                   v-for="(url, idx) in editPreviewUrls"
@@ -334,14 +384,15 @@ function formatDateTime(dateStr: string): string {
                   class="flex items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors"
                 >
                   <Upload class="h-5 w-5 text-muted-foreground" />
-                  <input type="file" accept="image/*" multiple class="hidden" @change="handleFileSelect" />
+                  <input id="ref-images-upload" type="file" accept="image/*" multiple class="hidden" @change="handleFileSelect" />
                 </label>
               </div>
             </div>
 
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('imageGen.editPrompt') }}</label>
+              <label for="edit-prompt" class="text-sm font-medium">{{ $t('imageGen.editPrompt') }}</label>
               <Textarea
+                id="edit-prompt"
                 v-model="prompt"
                 :placeholder="$t('imageGen.editPromptPlaceholder')"
                 class="min-h-[200px]"
@@ -352,7 +403,7 @@ function formatDateTime(dateStr: string): string {
           <!-- Common params: size + quality + button (同一行) -->
           <div class="flex items-end gap-1">
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('imageGen.size') }}</label>
+              <span class="text-sm font-medium">{{ $t('imageGen.size') }}</span>
               <Select v-model="size">
                 <SelectTrigger class="min-w-[200px]">
                   <SelectValue />
@@ -365,7 +416,7 @@ function formatDateTime(dateStr: string): string {
               </Select>
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">{{ $t('imageGen.quality') }}</label>
+              <span class="text-sm font-medium">{{ $t('imageGen.quality') }}</span>
               <Select v-model="quality">
                 <SelectTrigger class="min-w-[128px]">
                   <SelectValue />
@@ -463,24 +514,27 @@ function formatDateTime(dateStr: string): string {
       <!-- Filters -->
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2">
-          <label class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterStartDate') }}</label>
+          <label for="filter-start-date" class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterStartDate') }}</label>
           <input
+            id="filter-start-date"
             type="date"
             v-model="filterStartDate"
             class="h-9 rounded-md border border-input bg-background px-3 text-sm"
           />
         </div>
         <div class="flex items-center gap-2">
-          <label class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterEndDate') }}</label>
+          <label for="filter-end-date" class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterEndDate') }}</label>
           <input
+            id="filter-end-date"
             type="date"
             v-model="filterEndDate"
             class="h-9 rounded-md border border-input bg-background px-3 text-sm"
           />
         </div>
         <div class="flex-1 min-w-[200px] flex items-center gap-2">
-          <label class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterPrompt') }}</label>
+          <label for="filter-prompt" class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterPrompt') }}</label>
           <Input
+            id="filter-prompt"
             v-model="filterPrompt"
             :placeholder="$t('imageGen.filterPromptPlaceholder')"
             class="h-9"
@@ -548,6 +602,15 @@ function formatDateTime(dateStr: string): string {
                 <Check v-if="copiedRecordId === record.id" class="h-3 w-3 text-green-500" />
                 <Copy v-else class="h-3 w-3" />
                 {{ $t('imageGen.copyPrompt') }}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-6 text-xs text-muted-foreground hover:text-primary gap-1 px-1.5"
+                @click.stop="openPublishDialog(record)"
+              >
+                <ImagePlus class="h-3 w-3" />
+                {{ $t('imageGen.publish') }}
               </Button>
               <Button
                 variant="ghost"
@@ -652,5 +715,40 @@ function formatDateTime(dateStr: string): string {
         />
       </div>
     </Teleport>
+
+    <!-- ═══ Publish Dialog ═══ -->
+    <Dialog :open="publishDialogOpen" @update:open="publishDialogOpen = $event">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ $t('imageGen.publish') }}</DialogTitle>
+          <DialogDescription>{{ $t('imageGen.publishSelectImage') }}</DialogDescription>
+        </DialogHeader>
+        <div class="space-y-5 py-2">
+          <div class="space-y-1.5">
+            <Label for="pub-title" class="text-sm">{{ $t('imageGen.publishTitle') }}</Label>
+            <Input id="pub-title" v-model="publishFormTitle" :placeholder="$t('imageGen.publishPlaceholder')" class="h-9" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pub-cat" class="text-sm">{{ $t('imageGen.publishCategory') }}</Label>
+            <Input id="pub-cat" v-model="publishFormCategory" :placeholder="$t('imageGen.publishCategoryPlaceholder')" class="h-9" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pub-style" class="text-sm">{{ $t('imageGen.publishStyle') }}</Label>
+            <Input id="pub-style" v-model="publishFormStyle" :placeholder="$t('imageGen.publishStylePlaceholder')" class="h-9" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pub-neg" class="text-sm">{{ $t('imageGen.publishNegative') }}</Label>
+            <Textarea id="pub-neg" v-model="publishFormNegative" :placeholder="$t('imageGen.publishNegativePlaceholder')" rows="2" class="min-h-[60px]" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="publishDialogOpen = false">{{ $t('imageGen.publishCancel') }}</Button>
+          <Button :disabled="publishing" @click="submitPublish">
+            <Loader2 v-if="publishing" class="w-4 h-4 mr-2 animate-spin" />
+            {{ $t('imageGen.publish') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

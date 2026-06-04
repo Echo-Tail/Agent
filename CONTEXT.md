@@ -168,6 +168,29 @@ type: "done"       → 完整文本
 - **AGENTS.md** = Agent 的 systemPrompt，双向同步（修改 systemPrompt 时重写文件）
 - **MEMORY.md** = HarnessAgent 自动维护的跨会话记忆，**所有用户共享**（框架限制，详见多租户设计）
 
+### 画廊（Gallery）
+团队精选作品展示空间，独立于图片生成历史记录的生命周期。入口为侧边栏"图像生成"下方的"画廊"菜单项（路由 `/agents/gallery`），所有用户可浏览。
+
+#### 核心概念
+
+- **画廊作品（GalleryItem）** — 用户从个人历史记录精选发布到公共画廊的单张图片。独立表 `gallery_items`，与 `image_generation_records` 无级联删除关系。
+- **发布** — 用户可在个人历史记录中点击"发布到画廊"（入口1），或在画廊页面点击"发布作品"弹窗选择记录（入口2）。发布时可选填标题、品类标签、风格标签、负面提示词。
+- **生命周期**：画廊记录的生命周期独立于历史记录。用户删除历史记录不影响画廊作品；反之，取消发布/下架也不删除历史记录。
+- **取消发布** — 发布者可在画廊作品详情中点击"取消发布"，状态变为 `REMOVED_BY_USER`。
+- **管理员下架** — 管理员可在任意作品详情中点击"下架"，状态变为 `REMOVED_BY_ADMIN`。`DELETE /v1/gallery/items/{id}/admin` 受 `hasRole("ADMIN")` 保护。
+
+#### 数据模型
+
+`gallery_items` 表：
+- `id` (PK), `record_id` (FK → image_generation_records), `user_id` (发布者)
+- `title`, `category_tags` (逗号分隔), `style_tags` (逗号分隔), `negative_prompt`
+- `status`: `PUBLISHED` / `REMOVED_BY_USER` / `REMOVED_BY_ADMIN`
+- `view_count`, `created_at`, `updated_at`
+
+#### 查询逻辑
+- 画廊列表 LEFT JOIN `image_generation_records`，过滤 `status=PUBLISHED` 且关联记录存在。如果用户删除了原始生成记录，画廊条目自动消失。
+- 排序：按 `created_at DESC`
+
 ### 图片生成（Image Generation）
 独立于 Agent 体系的图片生成功能，入口为侧边栏"Agent 广场"下方的"图像生成"菜单项（路由 `/agents/image`），所有用户可用。
 
