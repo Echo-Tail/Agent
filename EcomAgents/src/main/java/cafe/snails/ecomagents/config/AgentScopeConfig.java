@@ -16,6 +16,9 @@ import java.net.URI;
 @Configuration
 public class AgentScopeConfig {
 
+    /**
+     * 提供 AgentScope SDK 兼容的 Jackson ObjectMapper。
+     */
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper();

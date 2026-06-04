@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 群 Agent 绑定仓库。
+ */
 public interface GroupAgentRepository extends JpaRepository<GroupAgent, Long> {
     /** 查询群绑定的所有 Agent */
     List<GroupAgent> findByGroupId(Long groupId);

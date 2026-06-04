@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
+/**
+ * 聊天群仓库。
+ */
 public interface ChatGroupRepository extends JpaRepository<ChatGroup, Long> {
     /** 查找用户创建或加入的所有群 */
     List<ChatGroup> findByCreatedBy(Long userId);

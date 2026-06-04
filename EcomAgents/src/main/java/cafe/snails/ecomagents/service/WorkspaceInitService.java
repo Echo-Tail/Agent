@@ -19,8 +19,10 @@ import java.nio.file.Path;
 @RequiredArgsConstructor
 public class WorkspaceInitService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(WorkspaceInitService.class);
 
+    /** 工作区根目录配置。 */
     private final WorkspaceConfig workspaceConfig;
 
     /**
@@ -106,6 +108,9 @@ public class WorkspaceInitService {
         return buildAgentsMd(agent.getSystemPrompt(), agent.getId());
     }
 
+    /**
+     * 构建 Agent 工作区 AGENTS.md 内容，包含系统提示词、文件输出规范和知识库检索规则。
+     */
     private String buildAgentsMd(String systemPrompt, Long agentId) {
         String base = (systemPrompt != null ? systemPrompt : "You are a helpful AI assistant.");
         return base

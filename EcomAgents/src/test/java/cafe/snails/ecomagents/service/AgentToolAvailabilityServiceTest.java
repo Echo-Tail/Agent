@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * Agent 工具可用性服务测试，验证网页搜索工具绑定、启用和配置判断。
+ */
 class AgentToolAvailabilityServiceTest {
 
     @Mock

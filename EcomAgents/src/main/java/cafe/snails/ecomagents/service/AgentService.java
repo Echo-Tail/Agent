@@ -36,14 +36,22 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AgentService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
 
+    /** Agent 仓库。 */
     private final AgentRepository agentRepository;
+    /** AI 模型仓库，用于校验和绑定模型。 */
     private final AiModelRepository aiModelRepository;
+    /** 工作区初始化服务，负责生成 Agent 文件目录。 */
     private final WorkspaceInitService workspaceInitService;
+    /** 技能服务，负责同步 Agent 技能目录。 */
     private final SkillService skillService;
+    /** Agent 技能绑定仓库。 */
     private final AgentSkillRepository agentSkillRepository;
+    /** 工具配置仓库，用于过滤未启用工具。 */
     private final ToolConfigRepository toolConfigRepository;
+    /** 知识库仓库，用于过滤不存在的知识库 ID。 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
     /**
@@ -261,6 +269,9 @@ public class AgentService {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
+    /**
+     * 过滤未启用或不存在的工具 ID，避免 Agent 保存无效工具绑定。
+     */
     private List<String> filterEnabledToolIds(List<String> toolIds, Long agentId) {
         if (toolIds == null) return null;
         if (toolIds.isEmpty()) return new ArrayList<>();
@@ -283,6 +294,9 @@ public class AgentService {
         return filtered;
     }
 
+    /**
+     * 过滤不存在的知识库 ID，避免 Agent 保存悬空知识库绑定。
+     */
     private List<Long> filterExistingKnowledgeBaseIds(List<Long> knowledgeBaseIds, Long agentId) {
         if (knowledgeBaseIds == null) return null;
         if (knowledgeBaseIds.isEmpty()) return new ArrayList<>();

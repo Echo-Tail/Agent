@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** 当前异常处理器日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**

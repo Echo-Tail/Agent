@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class HarnessAgentManager {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(HarnessAgentManager.class);
 
     private final AgentRepository agentRepository;

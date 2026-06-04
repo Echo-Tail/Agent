@@ -12,16 +12,26 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
+/**
+ * Agent 工具可用性服务，综合判断工具绑定、全局启用和配置完整性。
+ */
 @Service
 @RequiredArgsConstructor
 public class AgentToolAvailabilityService {
 
+    /** 网页搜索工具在系统中的固定工具 ID。 */
     public static final String WEB_SEARCH_TOOL_ID = "web_search";
 
+    /** Agent 仓库，用于读取工具绑定信息。 */
     private final AgentRepository agentRepository;
+    /** 工具配置仓库，用于读取全局启用状态和配置 JSON。 */
     private final ToolConfigRepository toolConfigRepository;
+    /** JSON 解析器，用于读取工具配置内容。 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 获取指定 Agent 的网页搜索工具可用性详情。
+     */
     public ToolAvailability getWebSearchAvailability(Long agentId) {
         Agent agent = agentRepository.findById(agentId).orElse(null);
         if (agent == null) {
@@ -50,10 +60,16 @@ public class AgentToolAvailabilityService {
                 .build();
     }
 
+    /**
+     * 判断指定 Agent 是否可以实际调用网页搜索工具。
+     */
     public boolean isWebSearchAvailable(Long agentId) {
         return getWebSearchAvailability(agentId).isAvailable();
     }
 
+    /**
+     * 检查工具配置 JSON 中是否包含非空 apiKey。
+     */
     private boolean hasApiKey(String configJson) {
         if (configJson == null || configJson.isBlank()) return false;
         try {
@@ -65,6 +81,9 @@ public class AgentToolAvailabilityService {
         }
     }
 
+    /**
+     * 根据绑定、启用和配置状态生成面向前端展示的诊断消息。
+     */
     private String buildMessage(boolean bound, boolean enabled, boolean configured, boolean systemAgent) {
         if (!bound) {
             return "当前 Agent 未绑定网页搜索工具，请在 Agent 编辑页选择 web_search。";

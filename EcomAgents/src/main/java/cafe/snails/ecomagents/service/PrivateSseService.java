@@ -20,12 +20,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @RequiredArgsConstructor
 public class PrivateSseService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(PrivateSseService.class);
+    /** SSE 事件数据 JSON 序列化器。 */
     private final ObjectMapper objectMapper;
 
     /** userId → List<SseEmitter> */
     private final Map<Long, CopyOnWriteArrayList<SseEmitter>> userEmitters = new ConcurrentHashMap<>();
 
+    /**
+     * 为指定用户创建私聊 SSE 长连接，并在完成、超时或错误时自动移除。
+     */
     public SseEmitter createEmitter(Long userId) {
         SseEmitter emitter = new SseEmitter(0L);
         CopyOnWriteArrayList<SseEmitter> emitters = userEmitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>());

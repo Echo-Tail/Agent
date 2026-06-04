@@ -16,13 +16,16 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class GroupMember {
+    /** 群成员记录主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 群 ID。 */
     @Column(name = "group_id", nullable = false)
     private Long groupId;
 
+    /** 用户 ID。 */
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
@@ -31,9 +34,11 @@ public class GroupMember {
     @Column(nullable = false, length = 20)
     private GroupRole role;
 
+    /** 加入群的时间。 */
     @Column(nullable = false)
     private LocalDateTime joinedAt;
 
+    /** 首次持久化前自动补齐入群时间。 */
     @PrePersist
     protected void onCreate() {
         if (joinedAt == null) joinedAt = LocalDateTime.now();

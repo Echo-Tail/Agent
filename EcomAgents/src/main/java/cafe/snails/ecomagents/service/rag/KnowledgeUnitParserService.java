@@ -28,17 +28,26 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class KnowledgeUnitParserService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(KnowledgeUnitParserService.class);
+    /** 文本文档子块目标大小。 */
     private static final int TEXT_CHUNK_SIZE = 1200;
+    /** 相邻文本子块的重叠字符数。 */
     private static final int TEXT_CHUNK_OVERLAP = 200;
+    /** 每个父块聚合的文本子块数量。 */
     private static final int TEXT_PARENT_WINDOW = 2;  // 每 2 个子块组合为一个父块
+    /** 每个表格父块聚合的行数。 */
     private static final int TABULAR_PARENT_ROWS = 5;  // 每 5 行组合为一个父块
+    /** 单个 JSON 文档最多生成的知识单元数量，防止异常大文件拖垮解析。 */
     private static final int MAX_JSON_UNITS = 10000;
     /** JSON 节点序列化后最大字符数，超过则截断（防止 Ollama embedding 超限） */
     private static final int MAX_JSON_CONTENT_LENGTH = 5000;
 
     private final ObjectMapper objectMapper;
 
+    /**
+     * 根据文档类型选择 JSON、表格或文本解析策略，返回可用于向量索引的知识单元。
+     */
     public List<KnowledgeUnit> parse(KnowledgeDocument doc) {
         if (doc == null || doc.getContent() == null || doc.getContent().isBlank()) {
             return List.of();
@@ -66,6 +75,9 @@ public class KnowledgeUnitParserService {
         return units;
     }
 
+    /**
+     * 将 JSON 文档解析为按数组元素或对象节点组织的知识单元。
+     */
     private List<KnowledgeUnit> parseJson(KnowledgeDocument doc, String fileType) {
         try {
             JsonNode root = objectMapper.readTree(doc.getContent());
@@ -77,6 +89,9 @@ public class KnowledgeUnitParserService {
         }
     }
 
+    /**
+     * 递归收集 JSON 顶层数组元素、对象节点和普通值节点。
+     */
     private void collectJsonUnits(KnowledgeDocument doc, String fileType, JsonNode node, String path, List<KnowledgeUnit> units) {
         if (units.size() >= MAX_JSON_UNITS || node == null || node.isNull()) {
             return;
@@ -114,6 +129,9 @@ public class KnowledgeUnitParserService {
         }
     }
 
+    /**
+     * 对已作为单元输出的对象继续展开其中的数组字段，保留明细层可检索性。
+     */
     private void collectNestedContainerUnits(KnowledgeDocument doc, String fileType, JsonNode node, String path, List<KnowledgeUnit> units) {
         if (!node.isObject()) {
             return;
@@ -128,6 +146,9 @@ public class KnowledgeUnitParserService {
         }
     }
 
+    /**
+     * 将单个 JSON 节点转换为知识单元，并写入 JSONPath 和节点类型元数据。
+     */
     private KnowledgeUnit toJsonUnit(KnowledgeDocument doc, String fileType, JsonNode node, String path, String jsonUnitType) {
         String content;
         try {
@@ -156,6 +177,9 @@ public class KnowledgeUnitParserService {
         );
     }
 
+    /**
+     * 从常见业务字段中提取 JSON 单元标题，提升检索结果可读性。
+     */
     private String resolveJsonTitle(JsonNode node) {
         if (node == null || !node.isObject()) {
             return "";
@@ -169,6 +193,9 @@ public class KnowledgeUnitParserService {
         return "";
     }
 
+    /**
+     * 按边界感知滑窗拆分文本，并为每个子块生成父块上下文。
+     */
     private List<KnowledgeUnit> parseText(KnowledgeDocument doc, String fileType) {
         String normalized = doc.getContent().replace("\r\n", "\n").trim();
         List<KnowledgeUnit> units = new ArrayList<>();
@@ -299,6 +326,9 @@ public class KnowledgeUnitParserService {
         return units;
     }
 
+    /**
+     * 构造单行表格知识单元；保留给旧解析路径或测试复用。
+     */
     private KnowledgeUnit buildTabularUnit(KnowledgeDocument doc, String fileType, String content, int index) {
         Map<String, Object> metadata = new java.util.LinkedHashMap<>();
         metadata.put("rowIndex", index);
@@ -318,15 +348,6 @@ public class KnowledgeUnitParserService {
     /**
      * 从起始位置往后找最近的自然边界（段落/句子结尾）。
      * 优先级：段落边界 &gt; 行边界 &gt; 句子边界 &gt; 保底位置。
-     *
-     * @param text  全文
-     * @param start 搜索起始位置
-     * @param limit 搜索上限（不超此位置）
-     * @return 边界位置
-     */
-    /**
-     * 从起始位置往后找最近的自然边界（段落/句子结尾）。
-     * 优先级：段落边界(&gt; 行边界 &gt; 句子边界 &gt; 保底位置。
      *
      * @param text  全文
      * @param start 搜索起始位置
@@ -359,6 +380,9 @@ public class KnowledgeUnitParserService {
         return (limit - start > 100) ? limit : start + 1;
     }
 
+    /**
+     * 规范化文件类型；优先使用显式 fileType，缺失时从文件扩展名推断。
+     */
     private String normalizeType(String fileType, String fileName) {
         if (fileType != null && !fileType.isBlank()) {
             return fileType.toLowerCase();

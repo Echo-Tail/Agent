@@ -27,14 +27,23 @@ public class LlmConfig {
     private long connectionTimeout = 30;
     /** 模型 API 读取超时时间（秒） */
     private long readTimeout = 55;
+    /** Embedding 服务提供方，默认使用本地 Ollama。 */
     private String embeddingProvider = "ollama";
+    /** Embedding 服务基础地址；为空时使用本地 Ollama 默认地址。 */
     private String embeddingApiUrl;
+    /** Embedding 服务 API Key，使用无需鉴权的本地服务时可为空。 */
     private String embeddingApiKey;
+    /** Embedding 模型名称。 */
     private String embeddingModel = "bge-m3:latest";
+    /** Embedding 向量维度，必须与模型输出和向量库配置保持一致。 */
     private int embeddingDimension = 1024;
+    /** RAG 检索默认返回片段数上限。 */
     private int ragSearchLimit = 5;
+    /** RAG 向量相似度阈值，低于该值的结果会被过滤。 */
     private double ragSimilarityThreshold = 0.15;
+    /** RAG 检索等待超时时间（秒）。 */
     private long ragRetrievalTimeout = 8;
+    /** 注入模型提示词的 RAG 上下文最大字符数。 */
     private int ragMaxContextChars = 16000;
 
     public String getApiUrl() { return apiUrl; }

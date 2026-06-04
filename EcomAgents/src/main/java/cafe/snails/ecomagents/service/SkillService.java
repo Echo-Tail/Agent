@@ -37,6 +37,7 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class SkillService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(SkillService.class);
 
     private final WorkspaceConfig workspaceConfig;
@@ -45,11 +46,14 @@ public class SkillService {
     private final AgentSkillRepository agentSkillRepository;
     private final ObjectMapper objectMapper;
 
+    /** skills-lock.json 中时间字段使用的 ISO 日期时间格式。 */
     private static final DateTimeFormatter ISO_FORMAT = DateTimeFormatter.ISO_DATE_TIME;
 
+    /** GitHub 仓库 URL 匹配规则，支持 https://github.com/{owner}/{repo}[.git]。 */
     private static final Pattern GITHUB_REPO_PATTERN =
             Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+?)(?:\\.git)?(?:/.*)?$");
 
+    /** GitHub tree URL 匹配规则，支持直接导入仓库中的 skills 子目录。 */
     private static final Pattern GITHUB_TREE_PATTERN =
             Pattern.compile("^https?://github\\.com/([^/]+)/([^/]+?)/tree/[^/]+/(skills/.+)$");
 
@@ -519,6 +523,9 @@ public class SkillService {
         return ApiResponse.success("技能已删除", null);
     }
 
+    /**
+     * 从文件系统重新扫描全局技能池，将缺失的技能元数据补写到数据库。
+     */
     @Transactional
     public void refreshIndex() {
         Path skillsDir = getSkillsDir();
@@ -560,6 +567,9 @@ public class SkillService {
         }
     }
 
+    /**
+     * 从单个技能目录的 SKILL.md frontmatter 解析 Skills 元数据。
+     */
     private Skills parseSkillsFromDir(Path skillDir) {
         String name = skillDir.getFileName().toString();
         Path skillMd = findSkillMdInDir(skillDir);
@@ -624,6 +634,9 @@ public class SkillService {
         }
     }
 
+    /**
+     * 执行 Git 命令并捕获首行标准输出，失败时返回空。
+     */
     private String captureGitOutput(Path workingDir, String... args) {
         try {
             List<String> command = new ArrayList<>();
@@ -667,6 +680,9 @@ public class SkillService {
         return results;
     }
 
+    /**
+     * 在指定技能目录根层查找 SKILL.md。
+     */
     private Path findSkillMdInDir(Path dir) {
         try (var files = Files.list(dir)) {
             return files.filter(Files::isRegularFile)
@@ -678,12 +694,18 @@ public class SkillService {
         }
     }
 
+    /**
+     * 校验技能 frontmatter 中必须存在的基础字段。
+     */
     private String validateSkillFormat(String name, String description) {
         if (name == null || name.isBlank()) return "缺少 name frontmatter";
         if (description == null || description.isBlank()) return "缺少 description frontmatter";
         return null;
     }
 
+    /**
+     * 从 SKILL.md YAML frontmatter 中提取指定字段的简单字符串值。
+     */
     private String extractFrontmatterField(String content, String field) {
         if (content == null || content.isBlank()) return null;
         if (!content.startsWith("---")) return null;
@@ -703,10 +725,16 @@ public class SkillService {
         return null;
     }
 
+    /**
+     * 获取技能导入锁文件路径。
+     */
     private Path getLockFile() {
         return Path.of(workspaceConfig.getRoot(), "skills-lock.json");
     }
 
+    /**
+     * 读取 skills-lock.json 中的技能条目，保留原始 JSON 节点以便无损回写。
+     */
     private Map<String, JsonNode> readLockSkills() {
         Path lockFile = getLockFile();
         if (!Files.isReadable(lockFile)) return new LinkedHashMap<>();
@@ -724,6 +752,9 @@ public class SkillService {
         return new LinkedHashMap<>();
     }
 
+    /**
+     * 将新增导入技能合并写入 skills-lock.json。
+     */
     private void writeLockSkills(Map<String, JsonNode> existing, List<ImportedSkill> imported) {
         Path lockFile = getLockFile();
         try {
@@ -752,6 +783,9 @@ public class SkillService {
         }
     }
 
+    /**
+     * 从 skills-lock.json 中删除指定技能记录。
+     */
     private void removeFromLock(String skillName) {
         Map<String, JsonNode> existing = readLockSkills();
         if (!existing.containsKey(skillName)) return;
@@ -874,11 +908,15 @@ public class SkillService {
      * ZIP 炸弹异常，由 extractZip 在检测到安全威胁时抛出。
      */
     private static class ZipBombException extends Exception {
+        /** 使用安全检查失败原因创建异常。 */
         public ZipBombException(String message) {
             super(message);
         }
     }
 
+    /**
+     * 递归删除目录及其内容；删除失败时记录警告并继续处理其它文件。
+     */
     private void deleteRecursively(Path dir) {
         if (!Files.exists(dir)) return;
         try (var stream = Files.walk(dir)) {

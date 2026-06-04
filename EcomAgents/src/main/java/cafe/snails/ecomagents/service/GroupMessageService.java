@@ -23,7 +23,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class GroupMessageService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(GroupMessageService.class);
+    /** 群消息中 @Agent 的 Markdown 语法匹配规则：@[名称](agent:id)。 */
     private static final Pattern AGENT_MENTION_PATTERN = Pattern.compile("@\\[([^]]+)]\\(agent:(\\d+)\\)");
 
     private final GroupMessageRepository groupMessageRepository;

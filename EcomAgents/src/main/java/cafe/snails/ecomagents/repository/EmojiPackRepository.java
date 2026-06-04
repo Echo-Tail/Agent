@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
+/**
+ * 表情包仓库，支持按分类和创建时间排序查询。
+ */
 public interface EmojiPackRepository extends JpaRepository<EmojiPack, Long> {
     /** 按分类查询表情包 */
     List<EmojiPack> findByCategoryOrderByCreatedAtAsc(String category);

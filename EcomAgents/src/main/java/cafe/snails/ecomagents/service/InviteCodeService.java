@@ -21,10 +21,14 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class InviteCodeService {
 
+    /** 邀请码可用字符集。 */
     private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    /** 邀请码固定长度。 */
     private static final int CODE_LENGTH = 8;
+    /** 安全随机数生成器，用于降低邀请码可预测性。 */
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /** 邀请码仓库。 */
     private final InviteCodeRepository inviteCodeRepository;
 
     /** 获取所有邀请码列表 */

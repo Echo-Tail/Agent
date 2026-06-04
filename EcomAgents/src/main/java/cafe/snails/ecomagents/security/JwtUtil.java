@@ -23,15 +23,23 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
+    /** HMAC 签名密钥，由配置项 jwt.secret 派生。 */
     private final SecretKey key;
+    /** 令牌有效期，单位为秒。 */
     private final long expiration;
 
+    /**
+     * 创建 JWT 工具并初始化签名密钥和过期时间。
+     */
     public JwtUtil(@Value("${jwt.secret}") String secret,
                    @Value("${jwt.expiration}") long expiration) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = expiration;
     }
 
+    /**
+     * 生成包含用户 ID、用户名和角色声明的访问令牌。
+     */
     public String generateToken(Long userId, String username, String role) {
         Date now = new Date();
         return Jwts.builder()
@@ -44,6 +52,9 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * 解析并验证令牌签名，返回 Claims；签名无效或过期时抛出异常。
+     */
     public Claims parseToken(String token) {
         return Jwts.parser()
                 .verifyWith(key)
@@ -52,6 +63,9 @@ public class JwtUtil {
                 .getPayload();
     }
 
+    /**
+     * 判断令牌是否能通过签名和过期时间验证。
+     */
     public boolean isTokenValid(String token) {
         try {
             parseToken(token);
@@ -61,14 +75,17 @@ public class JwtUtil {
         }
     }
 
+    /** 从令牌声明中读取用户 ID。 */
     public Long getUserIdFromToken(String token) {
         return parseToken(token).get("userId", Long.class);
     }
 
+    /** 从令牌 subject 中读取用户名。 */
     public String getUsernameFromToken(String token) {
         return parseToken(token).getSubject();
     }
 
+    /** 从令牌声明中读取用户角色。 */
     public String getRoleFromToken(String token) {
         return parseToken(token).get("role", String.class);
     }

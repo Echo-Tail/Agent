@@ -26,15 +26,20 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FileStorageService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
+    /** 允许上传或由 Agent 生成的文件扩展名白名单。 */
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             "txt", "md", "pdf", "docx", "xlsx", "csv", "json",
             "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"
     );
+    /** 单个上传文件大小上限。 */
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
+    /** 文件元数据仓库。 */
     private final FileRecordRepository fileRecordRepository;
 
+    /** 文件上传目录，可通过 file.upload-dir 配置覆盖。 */
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
 
@@ -153,6 +158,9 @@ public class FileStorageService {
                 .orElse(ApiResponse.error(404, "文件不存在"));
     }
 
+    /**
+     * 提取文件扩展名；无扩展名时返回空字符串。
+     */
     private String getExtension(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(dot + 1) : "";

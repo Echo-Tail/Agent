@@ -17,23 +17,38 @@ import java.util.Map;
  */
 public class WebSearchTool {
 
+    /** 当前工具日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(WebSearchTool.class);
+    /** Tavily 搜索 API 地址。 */
     private static final String TAVILY_API_URL = "https://api.tavily.com/search";
+    /** 单次搜索请求最大等待时间。 */
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    /** 未指定结果数时的默认返回数量。 */
     private static final int DEFAULT_RESULTS = 3;
+    /** 单次搜索允许返回的最大结果数量。 */
     private static final int MAX_RESULTS = 5;
+    /** 单条搜索结果正文最大输出字符数，避免工具响应过长。 */
     private static final int MAX_RESULT_CONTENT_CHARS = 700;
 
+    /** Tavily API Key。 */
     private final String apiKey;
+    /** 用于调用 Tavily HTTP API 的 WebClient。 */
     private final WebClient webClient;
+    /** 用于解析 Tavily JSON 响应。 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建网页搜索工具。
+     */
     public WebSearchTool(String apiKey) {
         this.apiKey = apiKey;
         this.webClient = WebClient.create();
         this.objectMapper = new ObjectMapper();
     }
 
+    /**
+     * 执行互联网搜索，并将 Tavily 响应格式化为 Agent 可读的 Markdown 文本。
+     */
     @Tool(name = "web_search", description = "搜索互联网获取最新信息。查询天气、新闻、价格、汇率、实时数据或知识范围外的信息时必须使用此工具，不要使用本地 shell")
     public String search(
             @ToolParam(name = "query", description = "搜索关键词，应该简洁明确") String query,
@@ -75,6 +90,9 @@ public class WebSearchTool {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * 将 Tavily JSON 响应整理为摘要和结果列表。
+     */
     private String formatResults(String query, String responseJson) {
         try {
             Map<String, Object> response = objectMapper.readValue(responseJson, Map.class);
@@ -114,6 +132,9 @@ public class WebSearchTool {
         }
     }
 
+    /**
+     * 截断过长文本，控制工具返回内容长度。
+     */
     private String truncate(String value, int maxChars) {
         if (value == null || value.length() <= maxChars) {
             return value;

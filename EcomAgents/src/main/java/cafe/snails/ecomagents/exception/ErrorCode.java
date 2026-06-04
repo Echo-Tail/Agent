@@ -61,18 +61,23 @@ public enum ErrorCode {
     /** 模型 API 未配置 */
     LLM_NOT_CONFIGURED(6102, "LLM API key 未配置");
 
+    /** API 响应中的业务状态码。 */
     private final int code;
+    /** 未传入自定义消息时使用的默认提示。 */
     private final String defaultMessage;
 
+    /** 创建错误码枚举项。 */
     ErrorCode(int code, String defaultMessage) {
         this.code = code;
         this.defaultMessage = defaultMessage;
     }
 
+    /** 获取业务状态码。 */
     public int getCode() {
         return code;
     }
 
+    /** 获取默认错误提示。 */
     public String getDefaultMessage() {
         return defaultMessage;
     }

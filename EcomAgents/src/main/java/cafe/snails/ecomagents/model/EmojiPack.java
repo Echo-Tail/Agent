@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class EmojiPack {
+    /** 表情包主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,9 +31,11 @@ public class EmojiPack {
     @Column(length = 50)
     private String category;
 
+    /** 表情包创建时间。 */
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /** 首次持久化前自动补齐创建时间。 */
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();

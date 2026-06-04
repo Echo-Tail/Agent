@@ -84,6 +84,9 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * 提供 BCrypt 密码编码器。
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

@@ -16,19 +16,24 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class UserEmojiFavorite {
+    /** 收藏记录主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 用户 ID。 */
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    /** 表情包 ID。 */
     @Column(name = "emoji_id", nullable = false)
     private Long emojiId;
 
+    /** 收藏添加时间。 */
     @Column(nullable = false)
     private LocalDateTime addedAt;
 
+    /** 首次持久化前自动补齐收藏时间。 */
     @PrePersist
     protected void onCreate() {
         if (addedAt == null) addedAt = LocalDateTime.now();

@@ -11,6 +11,9 @@ import org.springframework.data.web.config.EnableSpringDataWebSupport;
 @EnableSpringDataWebSupport(pageSerializationMode = EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO)
 public class EcomAgentsApplication {
 
+    /**
+     * Spring Boot 应用启动入口。
+     */
     public static void main(String[] args) {
         SpringApplication.run(EcomAgentsApplication.class, args);
     }

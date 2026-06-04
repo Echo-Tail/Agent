@@ -24,6 +24,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 私聊控制器测试，验证私聊消息、联系人、已读和 SSE 入口。
+ */
 class PrivateMessageControllerTest {
 
     @Mock

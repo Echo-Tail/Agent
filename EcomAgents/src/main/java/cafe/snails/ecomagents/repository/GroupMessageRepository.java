@@ -9,6 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * 群消息仓库，提供历史消息分页、重连补偿和未读状态更新查询。
+ */
 public interface GroupMessageRepository extends JpaRepository<GroupMessage, Long> {
     /** 按时间倒序分页查询群消息（下拉加载历史） */
     List<GroupMessage> findByGroupIdOrderByCreatedAtDesc(Long groupId, Pageable pageable);

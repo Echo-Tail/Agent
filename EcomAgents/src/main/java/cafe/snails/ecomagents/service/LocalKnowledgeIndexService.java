@@ -50,17 +50,28 @@ import java.util.concurrent.atomic.AtomicLong;
 @RequiredArgsConstructor
 public class LocalKnowledgeIndexService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(LocalKnowledgeIndexService.class);
+    /** 首次查询触发索引构建时最多等待的毫秒数，超时后走文本检索降级。 */
     private static final long WAIT_FOR_REBUILD_MILLIS = 750;
 
+    /** 知识文档仓库，用于按知识库加载待索引文档。 */
     private final KnowledgeDocumentRepository docRepository;
+    /** LLM/RAG 配置，提供 embedding 地址、模型、维度和超时参数。 */
     private final LlmConfig llmConfig;
+    /** 知识单元解析器，将原始文档拆分为可索引的父子块。 */
     private final KnowledgeUnitParserService knowledgeUnitParserService;
 
+    /** 每个知识库当前可用的内存向量索引。 */
     private final Map<Long, KnowledgeIndex> indexes = new ConcurrentHashMap<>();
+    /** 每个知识库正在执行的重建任务，用于合并重复重建请求。 */
     private final Map<Long, CompletableFuture<Void>> rebuildTasks = new ConcurrentHashMap<>();
+    /** 每个知识库最新请求版本，用于丢弃过期的异步重建结果。 */
     private final Map<Long, AtomicLong> requestedVersions = new ConcurrentHashMap<>();
 
+    /**
+     * 应用启动完成后异步预热所有已存在知识库的向量索引。
+     */
     @Async
     @EventListener(ApplicationReadyEvent.class)
     public void warmIndexes() {
@@ -77,6 +88,15 @@ public class LocalKnowledgeIndexService {
         }
     }
 
+    /**
+     * 对指定知识库执行向量检索，只返回命中的文本片段。
+     *
+     * @param kbIds 知识库 ID 列表
+     * @param queryText 查询文本
+     * @param limit 返回片段上限
+     * @param threshold 相似度阈值
+     * @return 命中的知识片段文本
+     */
     public List<String> searchSimilar(List<Long> kbIds, String queryText, int limit, double threshold) {
         return searchSimilarDetailed(kbIds, queryText, limit, threshold).chunks();
     }
@@ -153,6 +173,11 @@ public class LocalKnowledgeIndexService {
         return new KnowledgeSearchResult(sortedChunks, sortedSources, sortedScores, degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
     }
 
+    /**
+     * 请求异步重建指定知识库索引；若当前在事务中，则延迟到事务提交后执行。
+     *
+     * @param kbId 知识库 ID
+     */
     public void rebuildAsync(Long kbId) {
         if (kbId == null) {
             return;
@@ -160,6 +185,9 @@ public class LocalKnowledgeIndexService {
         requestVersion(kbId);
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                /**
+                 * 数据库事务提交后再重建索引，确保读取到已提交文档内容。
+                 */
                 @Override
                 public void afterCommit() {
                     scheduleRebuild(kbId);
@@ -170,6 +198,9 @@ public class LocalKnowledgeIndexService {
         scheduleRebuild(kbId);
     }
 
+    /**
+     * 合并同一知识库的重复重建请求，确保同一时间只有一个重建任务运行。
+     */
     private void scheduleRebuild(Long kbId) {
         rebuildTasks.computeIfAbsent(kbId, id -> CompletableFuture.runAsync(() -> {
             try {
@@ -180,6 +211,11 @@ public class LocalKnowledgeIndexService {
         }));
     }
 
+    /**
+     * 移除指定知识库的本地索引并取消尚未完成的重建任务。
+     *
+     * @param kbId 知识库 ID
+     */
     public void evict(Long kbId) {
         if (kbId == null) {
             return;
@@ -192,6 +228,9 @@ public class LocalKnowledgeIndexService {
         }
     }
 
+    /**
+     * 获取现有索引；不存在时触发同步等待一小段时间的构建，超时则返回空以便降级。
+     */
     private KnowledgeIndex getOrBuildIndex(Long kbId) {
         KnowledgeIndex existing = indexes.get(kbId);
         if (existing != null) {
@@ -216,6 +255,9 @@ public class LocalKnowledgeIndexService {
         }
     }
 
+    /**
+     * 持续重建直到处理到最新请求版本，避免并发更新导致索引落后。
+     */
     private void rebuildUntilCurrent(Long kbId) {
         while (!Thread.currentThread().isInterrupted()) {
             long targetVersion = versionOf(kbId);
@@ -226,6 +268,9 @@ public class LocalKnowledgeIndexService {
         }
     }
 
+    /**
+     * 重建单个知识库的内存向量索引，并在版本仍然最新时发布到 indexes。
+     */
     private KnowledgeIndex rebuildIndex(Long kbId, long version) {
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId);
         SimpleKnowledge knowledge = createKnowledge();
@@ -282,14 +327,23 @@ public class LocalKnowledgeIndexService {
         return index;
     }
 
+    /**
+     * 递增指定知识库的重建请求版本。
+     */
     private long requestVersion(Long kbId) {
         return requestedVersions.computeIfAbsent(kbId, id -> new AtomicLong()).incrementAndGet();
     }
 
+    /**
+     * 读取指定知识库当前最新请求版本。
+     */
     private long versionOf(Long kbId) {
         return requestedVersions.computeIfAbsent(kbId, id -> new AtomicLong()).get();
     }
 
+    /**
+     * 创建 SimpleKnowledge 实例，绑定 Ollama embedding 模型和内存向量存储。
+     */
     private SimpleKnowledge createKnowledge() {
         OllamaTextEmbedding embeddingModel = OllamaTextEmbedding.builder()
                 .baseUrl(resolveEmbeddingBaseUrl())
@@ -309,6 +363,9 @@ public class LocalKnowledgeIndexService {
                 .build();
     }
 
+    /**
+     * 将解析后的知识单元转换为 AgentScope RAG 文档，并写入检索所需 payload。
+     */
     private Document toDocument(KnowledgeUnit unit, int unitIndex) {
         DocumentMetadata metadata = DocumentMetadata.builder()
                 .content(TextBlock.builder().text(formatUnitForRetrieval(unit)).build())
@@ -328,6 +385,9 @@ public class LocalKnowledgeIndexService {
         return document;
     }
 
+    /**
+     * 格式化参与向量化的文本，保留文件名和位置以提高检索可解释性。
+     */
     private String formatUnitForRetrieval(KnowledgeUnit unit) {
         StringBuilder sb = new StringBuilder();
         sb.append("[source: ").append(unit.fileName());
@@ -342,20 +402,32 @@ public class LocalKnowledgeIndexService {
         return sb.toString();
     }
 
+    /**
+     * 解析 embedding 服务地址，未配置时使用 Ollama 默认地址。
+     */
     private String resolveEmbeddingBaseUrl() {
         String configured = llmConfig.getEmbeddingApiUrl();
         return configured == null || configured.isBlank() ? "http://localhost:11434" : configured;
     }
 
+    /**
+     * 解析 embedding 模型名称，未配置时使用 bge-m3 默认模型。
+     */
     private String resolveEmbeddingModel() {
         String configured = llmConfig.getEmbeddingModel();
         return configured == null || configured.isBlank() ? "bge-m3:latest" : configured;
     }
 
+    /**
+     * 解析 embedding 向量维度，并保证至少为 1。
+     */
     private int resolveEmbeddingDimension() {
         return Math.max(1, llmConfig.getEmbeddingDimension());
     }
 
+    /**
+     * 判断异常链中是否包含超时信号。
+     */
     private boolean isTimeout(Throwable e) {
         Throwable current = e;
         while (current != null) {
@@ -371,6 +443,9 @@ public class LocalKnowledgeIndexService {
         return false;
     }
 
+    /**
+     * 知识检索结果，包含文本、来源、相似度和降级状态等诊断信息。
+     */
     public record KnowledgeSearchResult(
             List<String> chunks,
             List<String> sources,
@@ -381,11 +456,17 @@ public class LocalKnowledgeIndexService {
             long elapsedMillis,
             int returnedChars) {
 
+        /**
+         * 创建不含来源和分数的检索结果，主要用于空结果或降级场景。
+         */
         public KnowledgeSearchResult(List<String> chunks, boolean degraded, boolean timedOut,
                                      int searchedKbCount, long elapsedMillis, int returnedChars) {
             this(chunks, List.of(), List.of(), degraded, timedOut, searchedKbCount, elapsedMillis, returnedChars);
         }
 
+        /**
+         * 创建完整检索结果，并对集合和诊断字段进行显式赋值。
+         */
         public KnowledgeSearchResult(List<String> chunks, List<String> sources, List<Double> scores,
                                      boolean degraded, boolean timedOut,
                                      int searchedKbCount, long elapsedMillis, int returnedChars) {
@@ -400,12 +481,19 @@ public class LocalKnowledgeIndexService {
         }
     }
 
+    /**
+     * 单个知识库的内存索引和已成功索引片段数。
+     */
     private record KnowledgeIndex(SimpleKnowledge knowledge, int indexedChunks) {
+        /** 索引是否含有可检索片段。 */
         boolean available() {
             return indexedChunks > 0;
         }
     }
 
+    /**
+     * 检索命中的文本片段和相似度分数。
+     */
     private record ScoredChunk(String content, double score) {
     }
 }

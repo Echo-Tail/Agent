@@ -22,21 +22,26 @@ import java.util.List;
 @RequiredArgsConstructor
 public class KnowledgeBaseController {
 
+    /** 知识库业务服务。 */
     private final KnowledgeBaseService kbService;
+    /** 用户仓库，用于将当前用户 ID 转换为审计日志用户名。 */
     private final UserRepository userRepository;
 
     // ===== Knowledge Base CRUD (Admin-only) =====
 
+    /** 查询全部知识库。 */
     @GetMapping("/knowledge-bases")
     public ApiResponse<List<KnowledgeBase>> listKnowledgeBases() {
         return kbService.listKnowledgeBases();
     }
 
+    /** 查询单个知识库详情。 */
     @GetMapping("/knowledge-bases/{id}")
     public ApiResponse<KnowledgeBase> getKnowledgeBase(@PathVariable("id") Long id) {
         return kbService.getKnowledgeBase(id);
     }
 
+    /** 创建知识库。 */
     @PostMapping("/knowledge-bases")
     public ApiResponse<KnowledgeBase> createKnowledgeBase(@RequestBody KnowledgeBase kb,
                                                          @CurrentUserId Long userId) {
@@ -49,6 +54,7 @@ public class KnowledgeBaseController {
         return kbService.updateKnowledgeBase(id, kb);
     }
 
+    /** 删除知识库及其文档和关联 Agent 引用。 */
     @DeleteMapping("/knowledge-bases/{id}")
     public ApiResponse<Void> deleteKnowledgeBase(@PathVariable("id") Long id) {
         return kbService.deleteKnowledgeBase(id);
@@ -56,6 +62,7 @@ public class KnowledgeBaseController {
 
     // ===== Document Management =====
 
+    /** 查询指定知识库下的文档列表。 */
     @GetMapping("/knowledge-bases/{kbId}/documents")
     public ApiResponse<List<KnowledgeDocument>> listDocuments(@PathVariable("kbId") Long kbId) {
         return kbService.listDocuments(kbId);
@@ -105,6 +112,7 @@ public class KnowledgeBaseController {
         return ApiResponse.success(kbService.getAuditLogs(kbId));
     }
 
+    /** 查询全部知识库审计日志。 */
     @GetMapping("/knowledge-bases/audit-logs")
     public ApiResponse<List<KnowledgeAuditLog>> getAllAuditLogs() {
         return ApiResponse.success(kbService.getAllAuditLogs());
@@ -112,6 +120,9 @@ public class KnowledgeBaseController {
 
     // ===== Helpers =====
 
+    /**
+     * 根据用户 ID 解析用户名，用户不存在时退回为 ID 字符串。
+     */
     private String resolveUsername(Long userId) {
         return userRepository.findById(userId)
                 .map(u -> u.getUsername())

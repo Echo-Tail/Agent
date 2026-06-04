@@ -18,11 +18,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebConfig {
 
+    /** 当前用户 ID 参数解析器，支持控制器方法中使用 @CurrentUserId。 */
     private final CurrentUserIdArgumentResolver currentUserIdArgumentResolver;
 
+    /**
+     * 注册 MVC 跨域、静态资源和自定义方法参数解析器配置。
+     */
     @Bean
     public WebMvcConfigurer webMvcConfigurer() {
         return new WebMvcConfigurer() {
+            /** 配置 API 和聊天接口跨域访问规则。 */
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/v1/**")
@@ -37,12 +42,14 @@ public class WebConfig {
                         .allowCredentials(true);
             }
 
+            /** 将本地 uploads 目录暴露为 /uploads/** 静态资源。 */
             @Override
             public void addResourceHandlers(ResourceHandlerRegistry registry) {
                 registry.addResourceHandler("/uploads/**")
                         .addResourceLocations("file:./uploads/");
             }
 
+            /** 注册 @CurrentUserId 方法参数解析器。 */
             @Override
             public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
                 resolvers.add(currentUserIdArgumentResolver);

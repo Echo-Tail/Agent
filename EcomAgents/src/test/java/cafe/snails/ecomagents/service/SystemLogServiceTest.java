@@ -22,6 +22,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 系统日志服务测试，验证日志写入、查询、统计和清理。
+ */
 class SystemLogServiceTest {
 
     @Mock

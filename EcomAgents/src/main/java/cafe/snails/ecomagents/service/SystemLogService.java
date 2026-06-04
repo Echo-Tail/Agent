@@ -17,15 +17,24 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+/**
+ * 系统日志服务，负责日志写入、动态查询、统计聚合和清理。
+ */
 @Service
 @RequiredArgsConstructor
 public class SystemLogService {
 
+    /** 系统日志仓库。 */
     private final SystemLogRepository systemLogRepository;
 
+    /** 统计面板展示的固定日志级别集合。 */
     private static final List<String> LOG_LEVELS = List.of("DEBUG", "INFO", "WARN", "ERROR");
+    /** 统计面板展示的固定日志类别集合。 */
     private static final List<String> LOG_CATEGORIES = List.of("API", "USER_ACTION", "ROUTER", "ERROR", "PERFORMANCE", "AUTH");
 
+    /**
+     * 写入一条系统日志。
+     */
     @Transactional
     public ApiResponse<SystemLog> writeLog(String level, String category, String message,
                                            String data, Long duration, String route, Long userId) {
@@ -42,6 +51,9 @@ public class SystemLogService {
         return ApiResponse.success(systemLogRepository.save(log));
     }
 
+    /**
+     * 按级别、类别、时间范围和关键字动态分页查询日志。
+     */
     public ApiResponse<Page<SystemLog>> queryLogs(List<String> levels, List<String> categories,
                                                    LocalDateTime startDate, LocalDateTime endDate,
                                                    String search, int page, int size) {
@@ -76,6 +88,9 @@ public class SystemLogService {
         return ApiResponse.success(systemLogRepository.findAll(spec, pageable));
     }
 
+    /**
+     * 汇总日志总量、级别/类别分布、错误率和最近 24 小时错误趋势。
+     */
     public ApiResponse<Map<String, Object>> getStats() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime last24h = now.minusHours(24);
@@ -124,6 +139,9 @@ public class SystemLogService {
         return ApiResponse.success(stats);
     }
 
+    /**
+     * 清空所有系统日志。
+     */
     @Transactional
     public ApiResponse<Void> clearLogs() {
         systemLogRepository.deleteAll();

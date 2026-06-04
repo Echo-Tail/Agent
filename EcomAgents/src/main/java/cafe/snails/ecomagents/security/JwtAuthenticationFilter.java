@@ -30,7 +30,9 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    /** JWT 工具，用于解析和校验令牌。 */
     private final JwtUtil jwtUtil;
+    /** 用户详情服务，用于加载认证主体的权限信息。 */
     private final CustomUserDetailsService userDetailsService;
 
     @Override
@@ -65,6 +67,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * 从 Authorization 请求头或 SSE token 查询参数中提取 JWT。
+     */
     private String extractToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {

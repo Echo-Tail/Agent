@@ -23,6 +23,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ChatController {
 
+    /** 当前控制器日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     private final HarnessChatService harnessChatService;

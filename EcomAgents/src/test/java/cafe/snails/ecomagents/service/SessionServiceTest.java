@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 会话服务测试，验证会话列表、详情、归档和清理逻辑。
+ */
 class SessionServiceTest {
 
     @Mock

@@ -23,8 +23,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SessionMapper {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(SessionMapper.class);
 
+    /** DB 会话仓库。 */
     private final SessionRepository sessionRepository;
 
     /**
@@ -135,6 +137,9 @@ public class SessionMapper {
         });
     }
 
+    /**
+     * 生成 HarnessAgent JSONL 会话 ID，包含 Agent、用户和随机 UUID 以避免冲突。
+     */
     private static String generateHarnessSessionId(Long agentId, Long userId) {
         return "sess-" + agentId + "-" + userId + "-" + UUID.randomUUID().toString().replace("-", "");
     }

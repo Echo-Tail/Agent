@@ -9,6 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * 私聊消息仓库，提供会话消息查询、未读统计、已读更新和联系人提取。
+ */
 public interface ChatPrivateMessageRepository extends JpaRepository<ChatPrivateMessage, Long> {
     /** 查询两个用户之间的私聊消息（双向） */
     @Query("SELECT m FROM ChatPrivateMessage m WHERE (m.senderId = :userId1 AND m.receiverId = :userId2) OR (m.senderId = :userId2 AND m.receiverId = :userId1) ORDER BY m.createdAt DESC")

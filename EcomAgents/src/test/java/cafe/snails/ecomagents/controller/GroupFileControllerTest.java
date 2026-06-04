@@ -24,6 +24,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 群文件控制器测试，验证群文件上传、列表和下载入口。
+ */
 class GroupFileControllerTest {
 
     @Mock

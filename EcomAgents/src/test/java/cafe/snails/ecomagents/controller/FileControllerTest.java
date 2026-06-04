@@ -20,6 +20,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 文件控制器测试，验证文件上传和文件元数据查询接口。
+ */
 class FileControllerTest {
 
     @Mock

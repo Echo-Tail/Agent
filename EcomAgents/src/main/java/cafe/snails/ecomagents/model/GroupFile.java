@@ -15,10 +15,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class GroupFile {
+    /** 群文件记录主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 文件所属群 ID。 */
     @Column(name = "group_id", nullable = false)
     private Long groupId;
 
@@ -42,9 +44,11 @@ public class GroupFile {
     @Column(name = "storage_path", nullable = false, length = 500)
     private String storagePath;
 
+    /** 文件上传时间。 */
     @Column(nullable = false)
     private LocalDateTime uploadedAt;
 
+    /** 首次持久化前自动补齐上传时间。 */
     @PrePersist
     protected void onCreate() {
         if (uploadedAt == null) uploadedAt = LocalDateTime.now();

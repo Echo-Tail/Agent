@@ -48,6 +48,7 @@ public class AgentController {
         return agentService.getAgent(id);
     }
 
+    /** 查询指定 Agent 的网页搜索工具可用性。 */
     @GetMapping("/agents/{id}/web-search-availability")
     public ApiResponse<ToolAvailability> getWebSearchAvailability(@PathVariable("id") Long id) {
         return ApiResponse.success(toolAvailabilityService.getWebSearchAvailability(id));

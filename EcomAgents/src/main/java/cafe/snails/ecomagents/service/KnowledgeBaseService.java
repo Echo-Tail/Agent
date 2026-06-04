@@ -40,6 +40,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class KnowledgeBaseService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(KnowledgeBaseService.class);
 
     /** 标识符正则：字母/数字开头，后续可含字母/数字/下划线/连字符，至少 4 位 */
@@ -812,6 +813,9 @@ public class KnowledgeBaseService {
         return buildRelevantSnippet(synthetic, userQuery, maxLength);
     }
 
+    /**
+     * 知识单元和关键词分数的临时结构，用于本地重排序。
+     */
     private record ScoredUnit(KnowledgeUnit unit, int score) {
     }
 
@@ -881,6 +885,9 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    /**
+     * 按配置限制注入模型的知识上下文长度，避免提示词过长。
+     */
     private String limitContext(String context) {
         int maxChars = Math.max(500, llmConfig.getRagMaxContextChars());
         if (context == null || context.length() <= maxChars) {
@@ -889,6 +896,9 @@ public class KnowledgeBaseService {
         return context.substring(0, Math.max(0, maxChars - 32)) + "\n\n[knowledge context truncated]\n";
     }
 
+    /**
+     * 计算从指定纳秒时间点到当前的耗时毫秒数。
+     */
     private long elapsedMillis(long startedAtNanos) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
@@ -899,6 +909,9 @@ public class KnowledgeBaseService {
         return auditLogRepository.findByKbIdOrderByCreatedAtDesc(kbId);
     }
 
+    /**
+     * 获取所有知识库审计日志，按创建时间倒序返回。
+     */
     public List<KnowledgeAuditLog> getAllAuditLogs() {
         return auditLogRepository.findAllByOrderByCreatedAtDesc();
     }
@@ -948,6 +961,9 @@ public class KnowledgeBaseService {
         return sb.toString().trim();
     }
 
+    /**
+     * 将指定知识库当前内容同步到所有关联 Agent 的 KNOWLEDGE.md。
+     */
     @Transactional
     public void syncKnowledgeBaseToAgents(Long kbId) {
         String content = buildKnowledgeMdContent(kbId);

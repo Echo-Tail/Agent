@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 聊天控制器测试，验证 SSE 对话入口、会话解析和错误响应。
+ */
 class ChatControllerTest {
 
     @Mock

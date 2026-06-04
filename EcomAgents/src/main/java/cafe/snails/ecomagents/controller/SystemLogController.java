@@ -13,13 +13,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 系统日志控制器，提供日志写入、分页查询、统计和清空接口。
+ */
 @RestController
 @RequestMapping("/v1/system-logs")
 @RequiredArgsConstructor
 public class SystemLogController {
 
+    /** 系统日志业务服务。 */
     private final SystemLogService systemLogService;
 
+    /** 写入一条系统日志。 */
     @PostMapping
     public ApiResponse<SystemLog> createLog(@RequestBody SystemLogRequest request) {
         return systemLogService.writeLog(
@@ -33,6 +38,7 @@ public class SystemLogController {
         );
     }
 
+    /** 按级别、类别、时间范围和关键字分页查询日志。 */
     @GetMapping
     public ApiResponse<Page<SystemLog>> queryLogs(
             @RequestParam(required = false) List<String> levels,
@@ -45,11 +51,13 @@ public class SystemLogController {
         return systemLogService.queryLogs(levels, categories, startDate, endDate, search, page, size);
     }
 
+    /** 获取系统日志统计信息。 */
     @GetMapping("/stats")
     public ApiResponse<Map<String, Object>> getStats() {
         return systemLogService.getStats();
     }
 
+    /** 清空系统日志。 */
     @DeleteMapping
     public ApiResponse<Void> clearLogs() {
         return systemLogService.clearLogs();

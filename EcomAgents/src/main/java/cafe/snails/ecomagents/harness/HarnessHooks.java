@@ -27,14 +27,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class HarnessHooks implements Hook {
 
+    /** 当前 Hook 日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(HarnessHooks.class);
 
+    /** 与前端保持连接的 SSE emitter。 */
     private final SseEmitter emitter;
+    /** SSE payload JSON 序列化器。 */
     private final ObjectMapper objectMapper;
+    /** 当前执行对话的 Agent ID，用于日志定位。 */
     private final long agentId;
+    /** 标记 SSE 流是否已经结束，避免重复 complete。 */
     private final AtomicBoolean completed;
+    /** 累积模型增量输出，供调用方保存完整回复。 */
     private final StringBuilder partialContent;
 
+    /**
+     * 创建 Harness Hook，并绑定 SSE 输出和增量内容缓存。
+     */
     public HarnessHooks(SseEmitter emitter, ObjectMapper objectMapper, long agentId,
                         AtomicBoolean completed, StringBuilder partialContent) {
         this.emitter = emitter;
@@ -44,6 +53,9 @@ public class HarnessHooks implements Hook {
         this.partialContent = partialContent;
     }
 
+    /**
+     * 处理 AgentScope 事件并转换为前端 SSE 事件。
+     */
     @Override
     public <T extends HookEvent> Mono<T> onEvent(T event) {
         try {
@@ -99,11 +111,17 @@ public class HarnessHooks implements Hook {
     }
 
     @Override
+    /**
+     * Hook 优先级，数值越高越早处理事件。
+     */
     public int priority() {
         // 优先级高于默认 Hook，确保事件被及时推送
         return 100;
     }
 
+    /**
+     * 发送单条 JSON SSE 消息。
+     */
     private void sendSse(Map<String, Object> data) throws IOException {
         emitter.send(SseEmitter.event()
                 .data(" " + objectMapper.writeValueAsString(data)));
@@ -145,6 +163,9 @@ public class HarnessHooks implements Hook {
         return msg;
     }
 
+    /**
+     * 从工具执行结果中提取适合前端展示的摘要。
+     */
     private String extractResultSummary(String toolName, PostActingEvent e) {
         if (e.getToolResult() == null || e.getToolResult().getOutput() == null) {
             return "";
@@ -161,6 +182,9 @@ public class HarnessHooks implements Hook {
         return result;
     }
 
+    /**
+     * 将知识检索工具的详细结果压缩为状态摘要。
+     */
     private String summarizeKnowledgeRetrieval(String result) {
         if (result == null || result.isBlank()) {
             return "knowledge_empty";

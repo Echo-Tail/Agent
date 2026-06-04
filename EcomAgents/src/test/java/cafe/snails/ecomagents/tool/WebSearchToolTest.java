@@ -6,6 +6,9 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 网页搜索工具测试，验证空查询拦截、结果格式化和文本截断。
+ */
 class WebSearchToolTest {
 
     private final WebSearchTool tool = new WebSearchTool("test-key");

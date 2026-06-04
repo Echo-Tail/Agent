@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TokenCounter {
 
+    /** jtokkit 编码注册表。 */
     private static final EncodingRegistry REGISTRY = Encodings.newDefaultEncodingRegistry();
 
     /**

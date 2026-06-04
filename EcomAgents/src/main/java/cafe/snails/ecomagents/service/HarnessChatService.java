@@ -50,6 +50,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class HarnessChatService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(HarnessChatService.class);
 
     private final HarnessAgentManager harnessAgentManager;

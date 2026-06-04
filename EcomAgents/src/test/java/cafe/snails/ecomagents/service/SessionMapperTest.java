@@ -23,6 +23,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 会话映射服务测试，验证 Harness 会话 ID 与数据库会话元数据的映射。
+ */
 class SessionMapperTest {
 
     @Mock

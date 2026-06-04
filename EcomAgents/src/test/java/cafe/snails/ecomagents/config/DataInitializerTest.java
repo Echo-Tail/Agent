@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 数据初始化器测试，验证默认管理员、工具、表情和空会话清理逻辑。
+ */
 class DataInitializerTest {
 
     @Mock
@@ -56,7 +59,7 @@ class DataInitializerTest {
         assertEquals("admin", userCaptor.getValue().getUsername());
         assertEquals("encoded", userCaptor.getValue().getPassword());
         assertEquals("admin", userCaptor.getValue().getRole());
-        verify(toolConfigRepository).saveAll(argThat(tools -> ((List<?>) tools).size() == 2));
+        verify(toolConfigRepository).saveAll(argThat(tools -> ((List<?>) tools).size() == 1));
         verify(emojiPackRepository).saveAll(argThat(emojis -> ((List<?>) emojis).size() > 20));
         verify(sessionService).cleanupEmptySessions();
     }

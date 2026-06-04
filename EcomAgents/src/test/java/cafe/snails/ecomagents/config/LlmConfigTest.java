@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * LLM 配置测试，验证默认值和配置项读写。
+ */
 class LlmConfigTest {
 
     @Test

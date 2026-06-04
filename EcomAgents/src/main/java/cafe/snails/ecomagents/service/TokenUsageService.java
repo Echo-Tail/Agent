@@ -22,8 +22,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TokenUsageService {
 
+    /** Token 用量记录仓库。 */
     private final TokenUsageRecordRepository repository;
 
+    /** 美元兑人民币汇率，用于将模型价格换算为 CNY。 */
     @Value("${token-pricing.usd-cny-rate:6.8}")
     private BigDecimal usdCnyRate;
 

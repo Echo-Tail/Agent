@@ -17,6 +17,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 会话文件夹控制器测试，验证文件夹增删改查和排序。
+ */
 class SessionFolderControllerTest {
 
     @Mock

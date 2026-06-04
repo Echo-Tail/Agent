@@ -17,6 +17,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 邀请码服务测试，验证批量生成、重复规避和删除约束。
+ */
 class InviteCodeServiceTest {
 
     @Mock

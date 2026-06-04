@@ -28,6 +28,9 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 技能服务文件系统测试，验证技能目录、锁文件和导入导出相关行为。
+ */
 class SkillServiceFilesystemTest {
 
     @Mock

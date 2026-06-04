@@ -7,6 +7,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * SSE 服务测试，验证私聊和群聊 SSE 连接创建与空接收方容错。
+ */
 class SseServiceTest {
 
     @Test

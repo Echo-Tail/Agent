@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 用户服务测试，验证注册、登录、用户管理和权限相关行为。
+ */
 class UserServiceTest {
 
     @Mock

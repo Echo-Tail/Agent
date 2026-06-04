@@ -25,7 +25,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiModelService {
 
+    /** AI 模型配置仓库。 */
     private final AiModelRepository repository;
+    /** 全局 LLM 配置，用于补齐模型调用默认参数。 */
     private final LlmConfig llmConfig;
 
     /** 获取所有模型配置 */
@@ -301,6 +303,9 @@ public class AiModelService {
         return null;
     }
 
+    /**
+     * 规范化模型配置，统一供应商、根地址、API 类型和版本字段。
+     */
     private static void normalizeModelConfig(AiModel model) {
         if (model == null) return;
         if (model.getProvider() != null) {
@@ -311,17 +316,26 @@ public class AiModelService {
         model.setApiVersion("");
     }
 
+    /**
+     * 根据供应商和用户输入推断 API 协议类型。
+     */
     private static String normalizeApiType(String apiType, String provider) {
         if ("anthropic".equalsIgnoreCase(provider)) return "anthropic";
         if (apiType == null || apiType.isBlank()) return "openai";
         return apiType.trim().toLowerCase();
     }
 
+    /**
+     * 去除地址或路径末尾多余斜杠，避免拼接接口路径时出现双斜杠。
+     */
     private static String trimTrailingSlash(String value) {
         if (value == null) return null;
         return value.trim().replaceAll("/+$", "");
     }
 
+    /**
+     * 规范化路径，保证非空路径以斜杠开头且不以斜杠结尾。
+     */
     private static String normalizePath(String path) {
         if (path == null || path.isBlank()) return "";
         String normalized = path.trim();
@@ -329,6 +343,9 @@ public class AiModelService {
         return normalized.replaceAll("/+$", "");
     }
 
+    /**
+     * 根据供应商根地址和协议类型构造模型列表接口地址。
+     */
     private static String buildModelsUrl(String baseUrl, String provider, String apiType, String apiVersion) {
         URI uri = URI.create(baseUrl);
         if (uri.getScheme() == null || uri.getHost() == null) {
@@ -359,6 +376,9 @@ public class AiModelService {
                 : baseUrl + "/v1/models";
     }
 
+    /**
+     * 将模型验证 HTTP 状态码转换为用户可读错误说明。
+     */
     private static String describeValidationHttpError(int statusCode, String baseUrl, String modelsUrl) {
         if (statusCode == 401 || statusCode == 403) {
             return "API 认证失败，请检查 API Key、供应商和请求地址是否匹配";
@@ -369,6 +389,9 @@ public class AiModelService {
         return "API 返回错误状态: HTTP " + statusCode + "，请检查请求地址、供应商和 API Key";
     }
 
+    /**
+     * 校验模型供应商和根地址是否匹配，并拒绝包含具体接口路径的地址。
+     */
     private static ApiResponse<AiModel> validateApiUrl(String provider, String apiUrl) {
         URI uri;
         try {
@@ -399,6 +422,9 @@ public class AiModelService {
         return null;
     }
 
+    /**
+     * 提取 URL 路径并去掉 query string，用于判断地址是否已经包含 API 版本。
+     */
     private static String extractPathWithoutQuery(String apiUrl) {
         String path = extractPath(apiUrl);
         if (path == null) return null;

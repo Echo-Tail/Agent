@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * Token 用量服务测试，验证调用记录、区间统计和费用换算。
+ */
 class TokenUsageServiceTest {
 
     @Mock

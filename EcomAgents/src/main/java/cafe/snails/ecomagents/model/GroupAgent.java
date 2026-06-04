@@ -16,13 +16,16 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class GroupAgent {
+    /** 群 Agent 关联主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 群 ID。 */
     @Column(name = "group_id", nullable = false)
     private Long groupId;
 
+    /** 被拉入群的 Agent ID。 */
     @Column(name = "agent_id", nullable = false)
     private Long agentId;
 
@@ -30,9 +33,11 @@ public class GroupAgent {
     @Column(name = "added_by", nullable = false)
     private Long addedBy;
 
+    /** Agent 被拉入群的时间。 */
     @Column(nullable = false)
     private LocalDateTime addedAt;
 
+    /** 首次持久化前自动补齐拉入时间。 */
     @PrePersist
     protected void onCreate() {
         if (addedAt == null) addedAt = LocalDateTime.now();

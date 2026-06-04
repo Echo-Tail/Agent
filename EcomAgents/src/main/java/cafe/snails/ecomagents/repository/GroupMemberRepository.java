@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 群成员仓库。
+ */
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
     /** 查询群的所有成员 */
     List<GroupMember> findByGroupId(Long groupId);

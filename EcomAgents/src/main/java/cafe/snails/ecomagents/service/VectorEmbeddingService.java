@@ -40,6 +40,7 @@ import java.util.StringJoiner;
 @RequiredArgsConstructor
 public class VectorEmbeddingService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(VectorEmbeddingService.class);
 
     /** 文本分块大小（字符数） */
@@ -47,10 +48,14 @@ public class VectorEmbeddingService {
     /** 相邻分块之间的重叠字符数，保持上下文连续性 */
     private static final int CHUNK_OVERLAP = 200;
 
+    /** LLM/Embedding 配置。 */
     private final LlmConfig llmConfig;
+    /** WebClient 构建器，用于调用 Embedding API。 */
     private final WebClient.Builder webClientBuilder;
+    /** 数据源，用于初始化 pgvector 表和批量写入向量。 */
     private final DataSource dataSource;
 
+    /** JPA EntityManager，用于执行向量检索原生 SQL。 */
     @PersistenceContext
     private EntityManager entityManager;
 

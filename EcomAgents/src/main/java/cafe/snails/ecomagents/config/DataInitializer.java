@@ -26,12 +26,20 @@ import java.util.List;
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
 
+    /** 用户仓库，用于初始化管理员账号。 */
     private final UserRepository userRepository;
+    /** 工具配置仓库，用于初始化默认工具。 */
     private final ToolConfigRepository toolConfigRepository;
+    /** 表情包仓库，用于初始化内置表情。 */
     private final EmojiPackRepository emojiPackRepository;
+    /** 密码编码器，用于写入 BCrypt 管理员密码。 */
     private final PasswordEncoder passwordEncoder;
+    /** 会话服务，用于启动时清理空会话。 */
     private final SessionService sessionService;
 
+    /**
+     * 应用启动后执行种子数据初始化。
+     */
     @Override
     @Transactional
     public void run(String... args) {
@@ -99,6 +107,9 @@ public class DataInitializer implements CommandLineRunner {
         log.info("已初始化 {} 个 Emoji", emojis.size());
     }
 
+    /**
+     * 构造内置 Emoji 种子记录。
+     */
     private static EmojiPack pack(String emoji, String category) {
         return EmojiPack.builder()
                 .name(emoji)

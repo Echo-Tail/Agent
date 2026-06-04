@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Service
 public class LlmService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(LlmService.class);
 
     /** AgentScope Model 实例，由 AgentScopeConfig 注入 */
@@ -45,6 +46,9 @@ public class LlmService {
     /** JSON 序列化器 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建 LLM 服务并注入默认模型、配置和 JSON 序列化器。
+     */
     public LlmService(Model model, LlmConfig llmConfig, ObjectMapper objectMapper) {
         this.model = model;
         this.llmConfig = llmConfig;

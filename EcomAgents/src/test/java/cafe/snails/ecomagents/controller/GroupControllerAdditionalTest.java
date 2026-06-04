@@ -19,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 群控制器补充测试，覆盖群列表、创建、更新和删除等边界行为。
+ */
 class GroupControllerAdditionalTest {
 
     @Mock

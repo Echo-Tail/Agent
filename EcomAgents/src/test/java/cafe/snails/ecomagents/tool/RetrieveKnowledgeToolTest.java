@@ -12,6 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * 知识检索工具测试，验证未绑定知识库和正常检索委托行为。
+ */
 class RetrieveKnowledgeToolTest {
 
     @Test

@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 public class TokenUsageRecord {
 
+    /** 用量记录主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

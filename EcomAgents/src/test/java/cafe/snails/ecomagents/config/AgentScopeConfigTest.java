@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * AgentScope 配置测试，验证 ObjectMapper 和 URL 拆分工具方法。
+ */
 class AgentScopeConfigTest {
 
     @Test

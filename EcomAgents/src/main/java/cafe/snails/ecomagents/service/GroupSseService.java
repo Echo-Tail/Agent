@@ -20,7 +20,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @RequiredArgsConstructor
 public class GroupSseService {
 
+    /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(GroupSseService.class);
+    /** SSE 事件数据 JSON 序列化器。 */
     private final ObjectMapper objectMapper;
 
     /** groupId → List<SseEmitter> */

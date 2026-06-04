@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 知识库控制器测试，验证知识库、文档和审计日志接口。
+ */
 class KnowledgeBaseControllerTest {
 
     @Mock

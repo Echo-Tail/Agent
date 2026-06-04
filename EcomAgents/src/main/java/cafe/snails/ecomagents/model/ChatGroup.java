@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class ChatGroup {
+    /** 群主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,18 +31,22 @@ public class ChatGroup {
     @Column(nullable = false)
     private Long createdBy;
 
+    /** 群创建时间。 */
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /** 群资料最近更新时间。 */
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    /** 首次持久化前自动补齐创建和更新时间。 */
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (updatedAt == null) updatedAt = LocalDateTime.now();
     }
 
+    /** 每次更新实体前刷新更新时间。 */
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();

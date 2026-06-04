@@ -17,12 +17,18 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 @Component
 public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResolver {
 
+    /**
+     * 判断参数是否为带 @CurrentUserId 注解的 Long 类型。
+     */
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
         return parameter.hasParameterAnnotation(CurrentUserId.class)
                 && parameter.getParameterType().equals(Long.class);
     }
 
+    /**
+     * 从当前 SecurityContext 中解析 JwtPrincipal 并返回用户 ID。
+     */
     @Override
     public Object resolveArgument(MethodParameter parameter,
                                   ModelAndViewContainer mavContainer,

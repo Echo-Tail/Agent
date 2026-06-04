@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 用户服务补充测试，覆盖用户状态切换和管理操作边界。
+ */
 class UserServiceAdditionalTest {
 
     @Mock

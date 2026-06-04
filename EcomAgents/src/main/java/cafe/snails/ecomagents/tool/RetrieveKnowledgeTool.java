@@ -11,14 +11,22 @@ import java.util.List;
  */
 public class RetrieveKnowledgeTool {
 
+    /** 知识库服务，用于构建 RAG 上下文。 */
     private final KnowledgeBaseService knowledgeBaseService;
+    /** 当前 Agent 绑定的知识库 ID 列表。 */
     private final List<Long> kbIds;
 
+    /**
+     * 创建知识库检索工具实例。
+     */
     public RetrieveKnowledgeTool(KnowledgeBaseService knowledgeBaseService, List<Long> kbIds) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.kbIds = kbIds;
     }
 
+    /**
+     * 根据用户问题检索当前 Agent 绑定知识库中的相关上下文。
+     */
     @Tool(
             name = "retrieve_knowledge",
             description = "Retrieve relevant content from the knowledge bases bound to this agent. "

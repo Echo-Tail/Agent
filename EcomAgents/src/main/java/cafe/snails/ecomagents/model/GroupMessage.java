@@ -14,10 +14,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class GroupMessage {
+    /** 群消息主键 ID。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 消息所属群 ID。 */
     @Column(name = "group_id", nullable = false)
     private Long groupId;
 
@@ -43,9 +45,11 @@ public class GroupMessage {
     @Builder.Default
     private Boolean read = false;
 
+    /** 消息创建时间。 */
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /** 首次持久化前自动补齐消息创建时间。 */
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();

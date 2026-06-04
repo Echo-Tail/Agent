@@ -23,6 +23,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+/**
+ * 群消息服务测试，验证群消息发送、历史查询和 Agent 提及触发逻辑。
+ */
 class GroupMessageServiceTest {
 
     @Mock

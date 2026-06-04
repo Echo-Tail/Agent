@@ -11,27 +11,33 @@ import lombok.Getter;
 @Getter
 public class BusinessException extends RuntimeException {
 
+    /** 业务错误码，用于统一转换为 API 响应 code 和默认消息。 */
     private final ErrorCode errorCode;
+    /** 附加错误上下文，不参与异常序列化。 */
     private final transient Object data;
 
+    /** 使用错误码默认消息创建业务异常。 */
     public BusinessException(ErrorCode errorCode) {
         super(errorCode.getDefaultMessage());
         this.errorCode = errorCode;
         this.data = null;
     }
 
+    /** 使用自定义消息创建业务异常。 */
     public BusinessException(ErrorCode errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
         this.data = null;
     }
 
+    /** 使用自定义消息和附加上下文创建业务异常。 */
     public BusinessException(ErrorCode errorCode, String message, Object data) {
         super(message);
         this.errorCode = errorCode;
         this.data = data;
     }
 
+    /** 使用错误码和底层异常原因创建业务异常。 */
     public BusinessException(ErrorCode errorCode, Throwable cause) {
         super(errorCode.getDefaultMessage(), cause);
         this.errorCode = errorCode;
