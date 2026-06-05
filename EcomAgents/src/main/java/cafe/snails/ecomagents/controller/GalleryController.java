@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -30,7 +31,7 @@ public class GalleryController {
      */
     @PostMapping("/items")
     public ApiResponse<GalleryItemResponse> publish(
-            @RequestBody GalleryPublishRequest request,
+            @Valid @RequestBody GalleryPublishRequest request,
             @CurrentUserId Long userId) {
         var item = galleryService.publish(request, userId);
         var response = galleryService.getDetail(item.getId());

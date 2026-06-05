@@ -5,7 +5,7 @@ import cafe.snails.ecomagents.model.ChatPrivateMessage;
 import cafe.snails.ecomagents.repository.ChatPrivateMessageRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
 import cafe.snails.ecomagents.security.CurrentUserId;
-import cafe.snails.ecomagents.service.PrivateSseService;
+import cafe.snails.ecomagents.service.SseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -27,7 +27,7 @@ public class PrivateMessageController {
 
     private final ChatPrivateMessageRepository privateMessageRepository;
     private final UserRepository userRepository;
-    private final PrivateSseService privateSseService;
+    private final SseService sseService;
 
     /** 发送私聊消息 */
     @PostMapping
@@ -46,7 +46,7 @@ public class PrivateMessageController {
         msg = privateMessageRepository.save(msg);
 
         // SSE 推送新消息给接收方
-        privateSseService.sendToUser(receiverId, "message", Map.of(
+        sseService.broadcast(receiverId, "message", Map.of(
                 "id", msg.getId(),
                 "senderId", msg.getSenderId(),
                 "receiverId", msg.getReceiverId(),
@@ -58,7 +58,7 @@ public class PrivateMessageController {
                 .filter(r -> ((Long)r[0]).equals(userId))
                 .mapToLong(r -> (Long) r[1])
                 .sum() + 1; // +1 因为刚发送的消息还未计入
-        privateSseService.sendToUser(receiverId, "unread_private", Map.of(
+        sseService.broadcast(receiverId, "unread_private", Map.of(
                 "userId", userId,
                 "count", unreadCount
         ));
@@ -99,7 +99,7 @@ public class PrivateMessageController {
     /** 私聊 SSE 长连接 */
     @GetMapping(value = "/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe(@CurrentUserId Long userId) {
-        return privateSseService.createEmitter(userId);
+        return sseService.createEmitter(userId);
     }
 
     /** 获取最近联系人列表 */

@@ -12,7 +12,9 @@ import java.util.List;
  */
 @Entity
 @Table(name = "sessions")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

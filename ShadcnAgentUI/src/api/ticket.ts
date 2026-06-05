@@ -1,4 +1,4 @@
-import http from './request'
+import { api } from './request'
 import type { Ticket, TicketChangeRecord, TicketFilters, TicketRequest } from '@/types/ticket'
 
 function cleanParams(filters: TicketFilters = {}) {
@@ -8,37 +8,37 @@ function cleanParams(filters: TicketFilters = {}) {
 }
 
 export function listMyTicketsApi(filters?: TicketFilters) {
-  return http.get<any, Ticket[]>('/tickets/my', { params: cleanParams(filters) })
+  return api.get<Ticket[]>('/tickets/my', { params: cleanParams(filters) })
 }
 
 export function listAdminTicketsApi(filters?: TicketFilters) {
-  return http.get<any, Ticket[]>('/admin/tickets', { params: cleanParams(filters) })
+  return api.get<Ticket[]>('/admin/tickets', { params: cleanParams(filters) })
 }
 
 export function getMyTicketApi(id: number) {
-  return http.get<any, Ticket>(`/tickets/my/${id}`)
+  return api.get<Ticket>(`/tickets/my/${id}`)
 }
 
 export function getAdminTicketApi(id: number) {
-  return http.get<any, Ticket>(`/admin/tickets/${id}`)
+  return api.get<Ticket>(`/admin/tickets/${id}`)
 }
 
 export function createTicketApi(req: TicketRequest) {
-  return http.post<any, Ticket>('/tickets', req)
+  return api.post<Ticket>('/tickets', req)
 }
 
 export function updateTicketApi(id: number, req: TicketRequest) {
-  return http.put<any, Ticket>(`/tickets/${id}`, req)
+  return api.put<Ticket>(`/tickets/${id}`, req)
 }
 
 export function startTicketApi(id: number) {
-  return http.post<any, Ticket>(`/admin/tickets/${id}/start`)
+  return api.post<Ticket>(`/admin/tickets/${id}/start`)
 }
 
 export function completeTicketApi(id: number, handlingNote: string) {
-  return http.post<any, Ticket>(`/admin/tickets/${id}/complete`, { handlingNote })
+  return api.post<Ticket>(`/admin/tickets/${id}/complete`, { handlingNote })
 }
 
 export function listTicketChangesApi(id: number) {
-  return http.get<any, TicketChangeRecord[]>(`/tickets/${id}/changes`)
+  return api.get<TicketChangeRecord[]>(`/tickets/${id}/changes`)
 }

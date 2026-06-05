@@ -1,43 +1,43 @@
-import http from './request'
+import { api } from './request'
 import type { Agent, AgentCreateRequest, AgentUpdateRequest, ToolAvailability } from '@/types/agent'
 
 export function listAgentsApi(scope?: string) {
   const params = scope ? { scope } : undefined
-  return http.get<any, Agent[]>('/agents', { params })
+  return api.get<Agent[]>('/agents', { params })
 }
 
 export function listAgentsByScopeApi(scope: string) {
-  return http.get<any, Agent[]>('/agents', { params: { scope } })
+  return api.get<Agent[]>('/agents', { params: { scope } })
 }
 
 export function getAgentApi(id: number) {
-  return http.get<any, Agent>(`/agents/${id}`)
+  return api.get<Agent>(`/agents/${id}`)
 }
 
 export function createAgentApi(req: AgentCreateRequest) {
-  return http.post<any, Agent>('/agents', req)
+  return api.post<Agent>('/agents', req)
 }
 
 export function updateAgentApi(id: number, req: AgentUpdateRequest) {
-  return http.put<any, Agent>(`/agents/${id}`, req)
+  return api.put<Agent>(`/agents/${id}`, req)
 }
 
 export function deleteAgentApi(id: number) {
-  return http.delete<any, void>(`/agents/${id}`)
+  return api.delete(`/agents/${id}`)
 }
 
 export function getSystemAgentApi() {
-  return http.get<any, Agent>('/agents/system')
+  return api.get<Agent>('/agents/system')
 }
 
 export function getWebSearchAvailabilityApi(id: number) {
-  return http.get<any, ToolAvailability>(`/agents/${id}/web-search-availability`)
+  return api.get<ToolAvailability>(`/agents/${id}/web-search-availability`)
 }
 
 export function uploadAgentAvatarApi(id: number, file: File) {
   const formData = new FormData()
   formData.append('file', file)
-  return http.post<any, string>(`/agents/${id}/avatar`, formData, {
+  return api.post<string>(`/agents/${id}/avatar`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }

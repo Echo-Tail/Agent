@@ -10,7 +10,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "knowledge_documents")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

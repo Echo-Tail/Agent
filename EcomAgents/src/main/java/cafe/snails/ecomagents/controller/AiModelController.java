@@ -6,6 +6,7 @@ import cafe.snails.ecomagents.model.AiModel;
 import cafe.snails.ecomagents.service.AiModelService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -51,13 +52,13 @@ public class AiModelController {
 
     /** 创建模型配置 */
     @PostMapping("/models")
-    public ApiResponse<AiModel> createModel(@RequestBody AiModel model) {
+    public ApiResponse<AiModel> createModel(@Valid @RequestBody AiModel model) {
         return aiModelService.createModel(model);
     }
 
     /** 更新模型配置 */
     @PutMapping("/models/{id}")
-    public ApiResponse<AiModel> updateModel(@PathVariable("id") Long id, @RequestBody AiModel updates) {
+    public ApiResponse<AiModel> updateModel(@PathVariable("id") Long id, @Valid @RequestBody AiModel updates) {
         return aiModelService.updateModel(id, updates);
     }
 
@@ -69,7 +70,7 @@ public class AiModelController {
 
     /** 验证模型配置连通性并获取可用模型列表 */
     @PostMapping("/models/validate")
-    public ApiResponse<List<String>> validateModel(@RequestBody ModelValidateRequest request) {
+    public ApiResponse<List<String>> validateModel(@Valid @RequestBody ModelValidateRequest request) {
         return aiModelService.validateModel(request);
     }
 }

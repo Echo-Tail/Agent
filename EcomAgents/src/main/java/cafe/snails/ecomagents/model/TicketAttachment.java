@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 @Table(name = "ticket_attachments", indexes = {
         @Index(name = "idx_ticket_attachments_ticket", columnList = "ticket_id")
 })
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

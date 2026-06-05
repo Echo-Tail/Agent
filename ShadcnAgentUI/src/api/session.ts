@@ -1,46 +1,46 @@
-import http from './request'
+import { api } from './request'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER, STREAM_TIMEOUT } from '@/constants'
 import type { Session, SessionSummary, SessionFolder, SseEvent } from '@/types/session'
 import i18n from '@/locales'
 
 export function listSessionsApi(params?: { folderId?: number; agentId?: number }) {
-  return http.get<any, SessionSummary[]>('/sessions', { params })
+  return api.get<SessionSummary[]>('/sessions', { params })
 }
 
 export function getSessionApi(id: number) {
-  return http.get<any, Session>(`/sessions/${id}`)
+  return api.get<Session>(`/sessions/${id}`)
 }
 
 export function createSessionApi(data: { agentId: number; title?: string; folderId?: number }) {
-  return http.post<any, Session>('/sessions', data)
+  return api.post<Session>('/sessions', data)
 }
 
 export function updateSessionApi(id: number, data: { title?: string; folderId?: number | null }) {
-  return http.put<any, Session>(`/sessions/${id}`, data)
+  return api.put<Session>(`/sessions/${id}`, data)
 }
 
 export function deleteSessionApi(id: number) {
-  return http.delete<any, void>(`/sessions/${id}`)
+  return api.delete(`/sessions/${id}`)
 }
 
 export function addMessageApi(sessionId: number, role: string, content: string) {
-  return http.post<any, unknown>(`/sessions/${sessionId}/messages`, { role, content })
+  return api.post<unknown>(`/sessions/${sessionId}/messages`, { role, content })
 }
 
 export function listFoldersApi() {
-  return http.get<any, SessionFolder[]>('/session-folders')
+  return api.get<SessionFolder[]>('/session-folders')
 }
 
 export function createFolderApi(data: { name: string }) {
-  return http.post<any, SessionFolder>('/session-folders', data)
+  return api.post<SessionFolder>('/session-folders', data)
 }
 
 export function updateFolderApi(id: number, data: { name: string }) {
-  return http.put<any, SessionFolder>(`/session-folders/${id}`, data)
+  return api.put<SessionFolder>(`/session-folders/${id}`, data)
 }
 
 export function deleteFolderApi(id: number) {
-  return http.delete<any, void>(`/session-folders/${id}`)
+  return api.delete(`/session-folders/${id}`)
 }
 
 export interface StreamChatCallbacks {

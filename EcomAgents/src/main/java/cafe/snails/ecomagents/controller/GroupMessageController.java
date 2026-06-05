@@ -4,7 +4,7 @@ import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.GroupMessage;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.GroupMessageService;
-import cafe.snails.ecomagents.service.GroupSseService;
+import cafe.snails.ecomagents.service.SseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +22,7 @@ import java.util.Map;
 public class GroupMessageController {
 
     private final GroupMessageService groupMessageService;
-    private final GroupSseService groupSseService;
+    private final SseService sseService;
 
     /** 发送群消息 */
     @PostMapping("/messages")
@@ -44,6 +44,6 @@ public class GroupMessageController {
     /** 群 SSE 长连接 */
     @GetMapping(value = "/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe(@PathVariable Long groupId) {
-        return groupSseService.createEmitter(groupId);
+        return sseService.createEmitter(groupId);
     }
 }

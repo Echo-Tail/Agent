@@ -35,6 +35,7 @@ const showFileDialog = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let eventSource: EventSource | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
 watch(() => messages.value.length, () => {
   nextTick(() => {
@@ -90,7 +91,7 @@ onMounted(async () => {
   })
 
   eventSource.onerror = () => {
-    setTimeout(() => {
+    reconnectTimer = window.setTimeout(() => {
       if (eventSource) eventSource.close()
       const newToken = localStorage.getItem(STORAGE_KEY_TOKEN)
       const newUrl = newToken ? `${baseUrl}/v1/messages/sse?token=${encodeURIComponent(newToken)}` : `${baseUrl}/v1/messages/sse`
@@ -101,6 +102,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (eventSource) eventSource.close()
+  if (reconnectTimer) clearTimeout(reconnectTimer)
   if (pollTimer) clearInterval(pollTimer)
 })
 

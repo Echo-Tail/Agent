@@ -35,7 +35,7 @@ class GroupMessageServiceTest {
     @Mock
     private GroupAgentRepository groupAgentRepository;
     @Mock
-    private GroupSseService groupSseService;
+    private SseService sseService;
     @Mock
     private GroupService groupService;
     @Mock
@@ -46,7 +46,7 @@ class GroupMessageServiceTest {
     @BeforeEach
     void setUp() {
         service = new GroupMessageService(groupMessageRepository, groupMemberRepository,
-                groupAgentRepository, groupSseService, groupService, harnessChatService, new ObjectMapper());
+                groupAgentRepository, sseService, groupService, harnessChatService, new ObjectMapper());
     }
 
     @Test
@@ -86,12 +86,33 @@ class GroupMessageServiceTest {
         assertEquals(SenderType.USER, result.getData().getSenderType());
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(groupSseService).broadcast(eq(1L), eq("message"), payloadCaptor.capture());
+        verify(sseService).broadcast(eq(1L), eq("message"), payloadCaptor.capture());
         assertEquals(99L, payloadCaptor.getValue().get("id"));
         assertEquals("hello", payloadCaptor.getValue().get("content"));
-        verify(groupSseService).broadcast(eq(1L), eq("unread_group"), payloadCaptor.capture());
+        verify(sseService).broadcast(eq(1L), eq("unread_group"), payloadCaptor.capture());
         assertEquals(1L, payloadCaptor.getValue().get("groupId"));
         assertEquals(2L, payloadCaptor.getValue().get("senderId"));
+    }
+
+    @Test
+    void sendMessage_shouldPersistMessageEvenWhenBroadcastFails() {
+        // 验证：SSE 广播失败不应影响消息保存（原 @Transactional 已移除）
+        when(groupService.isMember(1L, 2L)).thenReturn(true);
+        when(groupMessageRepository.save(any())).thenAnswer(invocation -> {
+            GroupMessage msg = invocation.getArgument(0);
+            msg.setId(88L);
+            msg.setCreatedAt(LocalDateTime.of(2026, 6, 2, 12, 0));
+            return msg;
+        });
+        // broadcast 抛出异常（广播在 save 之后执行，save 已提交）
+        doThrow(new RuntimeException("SSE 连接已断开"))
+                .when(sseService).broadcast(eq(1L), eq("message"), any());
+
+        // sendMessage 会由于 broadcast 异常而向外抛，但验证 save 已发生
+        assertThrows(RuntimeException.class,
+                () -> service.sendMessage(1L, 2L, "broadcast will fail"));
+        // save 已被调用（消息已持久化到 DB），广播失败不影响
+        verify(groupMessageRepository).save(any());
     }
 
     @Test

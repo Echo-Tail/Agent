@@ -9,7 +9,9 @@ import lombok.*;
  */
 @Entity
 @Table(name = "session_folders")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

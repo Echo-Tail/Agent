@@ -120,6 +120,7 @@ watch(() => messages.value.length, () => {
 
 // SSE 连接
 let eventSource: EventSource | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
 function connectSse() {
   if (eventSource) eventSource.close()
@@ -152,7 +153,7 @@ function connectSse() {
 
   eventSource.onerror = () => {
     // 断线后 3 秒重连
-    setTimeout(() => connectSse(), 3000)
+    reconnectTimer = window.setTimeout(() => connectSse(), 3000)
   }
 }
 
@@ -184,6 +185,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   eventSource?.close()
+  if (reconnectTimer) clearTimeout(reconnectTimer)
 })
 
 async function handleFileUpload(event: Event) {

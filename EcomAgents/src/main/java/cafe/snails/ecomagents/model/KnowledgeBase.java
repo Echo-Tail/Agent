@@ -10,7 +10,9 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "knowledge_bases")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

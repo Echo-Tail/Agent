@@ -118,6 +118,46 @@ class FileStorageServiceTest {
     }
 
     @Test
+    void uploadFile_shouldSanitizePathTraversalInFilename() throws Exception {
+        // 包含 Linux 路径穿越的恶意文件名
+        var file = new MockMultipartFile("file", "../../etc/passwd.png", "image/png", "data".getBytes());
+        ApiResponse<FileRecord> result = fileStorageService.uploadFile(file, 1L);
+
+        assertEquals(200, result.getCode());
+        String storedPath = result.getData().getStoredPath();
+        // 确保存储路径在 tempDir 内（未穿越到系统目录）
+        assertTrue(storedPath.startsWith(tempDir.toAbsolutePath().toString()),
+                "存储路径应在上传目录内: " + storedPath);
+        // 原始文件名保留原始名称（未清洗）
+        assertEquals("../../etc/passwd.png", result.getData().getOriginalName());
+    }
+
+    @Test
+    void uploadFile_shouldSanitizeWindowsPathSeparator() throws Exception {
+        // 包含 Windows 反斜杠路径的恶意文件名
+        var file = new MockMultipartFile("file", "C:\\Windows\\system32\\evil.txt", "text/plain", "data".getBytes());
+        ApiResponse<FileRecord> result = fileStorageService.uploadFile(file, 1L);
+
+        assertEquals(200, result.getCode());
+        String storedPath = result.getData().getStoredPath();
+        // 确保存储路径在 tempDir 内
+        assertTrue(storedPath.startsWith(tempDir.toAbsolutePath().toString()),
+                "存储路径应在上传目录内: " + storedPath);
+        assertEquals("C:\\Windows\\system32\\evil.txt", result.getData().getOriginalName());
+    }
+
+    @Test
+    void saveContentAsFile_shouldSanitizePathTraversal() {
+        // saveContentAsFile 的路径穿越防护
+        var record = fileStorageService.saveContentAsFile("data", "../../etc/evil.md", 1L);
+        assertNotNull(record);
+        String storedPath = record.getStoredPath();
+        assertTrue(storedPath.startsWith(tempDir.toAbsolutePath().toString()),
+                "存储路径应在上传目录内: " + storedPath);
+        assertEquals("../../etc/evil.md", record.getOriginalName());
+    }
+
+    @Test
     void uploadFile_shouldAcceptAllSupportedExtensions() {
         byte[] content = "data".getBytes();
         String[][] testCases = {

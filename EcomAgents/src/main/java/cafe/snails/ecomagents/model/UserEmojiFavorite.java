@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "user_emoji_favorites",
        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "emoji_id"}))
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

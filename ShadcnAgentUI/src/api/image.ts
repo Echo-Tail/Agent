@@ -1,4 +1,4 @@
-import http from './request'
+import { api } from './request'
 
 export interface ImageGenerationResult {
   url: string
@@ -43,7 +43,7 @@ export interface RecordQuery {
  * 文生图 — 根据文字描述生成图片。
  */
 export function generateImage(prompt: string, size?: string, quality?: string) {
-  return http.post<any, ImageGenerationResult>('/images/generate', { prompt, size, quality }, {
+  return api.post<ImageGenerationResult>('/images/generate', { prompt, size, quality }, {
     timeout: 300_000, // 5 minutes for image generation
   })
 }
@@ -57,7 +57,7 @@ export function editImage(prompt: string, images: File[], size?: string, quality
   if (size) formData.append('size', size)
   if (quality) formData.append('quality', quality)
   images.forEach(file => formData.append('image', file))
-  return http.post<any, ImageGenerationResult>('/images/edit', formData, {
+  return api.post<ImageGenerationResult>('/images/edit', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 300_000, // 5 minutes for image generation
   })
@@ -75,12 +75,12 @@ export function listImageRecords(query?: RecordQuery) {
     if (query.endDate) params.endDate = query.endDate
     if (query.prompt) params.prompt = query.prompt
   }
-  return http.get<any, PageResponse<ImageRecord>>('/images/records', { params })
+  return api.get<PageResponse<ImageRecord>>('/images/records', { params })
 }
 
 /**
  * 删除一条历史记录。
  */
 export function deleteImageRecord(id: number) {
-  return http.delete<any, void>(`/images/records/${id}`)
+  return api.delete(`/images/records/${id}`)
 }

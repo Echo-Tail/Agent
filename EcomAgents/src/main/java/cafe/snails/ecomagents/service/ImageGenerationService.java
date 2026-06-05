@@ -376,9 +376,10 @@ public class ImageGenerationService {
         // Curl 测试证实 URL 有效，但 Spring WebClient 在 CloudFront SSL 重新协商时返回空体。
         // 改用 java.net.HttpURLConnection 直接下载。
         byte[] imageBytes;
+        java.net.HttpURLConnection conn = null;
         try {
             java.net.URL url = new java.net.URL(imageUrl);
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn = (java.net.HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36");
             conn.setRequestProperty("Accept", "*/*");
@@ -390,11 +391,16 @@ public class ImageGenerationService {
                 throw new IOException("图片下载失败（HTTP " + statusCode + "）");
             }
 
-            imageBytes = conn.getInputStream().readAllBytes();
-            conn.disconnect();
+            try (java.io.InputStream in = conn.getInputStream()) {
+                imageBytes = in.readAllBytes();
+            }
         } catch (IOException e) {
             log.error("Failed to download image from {}: {}", imageUrl, e.getMessage());
             throw new IOException("图片下载失败：" + e.getMessage());
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
 
         if (imageBytes == null || imageBytes.length == 0) {

@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "emoji_packs")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
