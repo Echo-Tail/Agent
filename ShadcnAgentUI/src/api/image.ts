@@ -44,7 +44,7 @@ export interface RecordQuery {
  */
 export function generateImage(prompt: string, size?: string, quality?: string) {
   return api.post<ImageGenerationResult>('/images/generate', { prompt, size, quality }, {
-    timeout: 300_000, // 5 minutes for image generation
+    timeout: 600_000, // 10 minutes for image generation
   })
 }
 
@@ -59,7 +59,7 @@ export function editImage(prompt: string, images: File[], size?: string, quality
   images.forEach(file => formData.append('image', file))
   return api.post<ImageGenerationResult>('/images/edit', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 300_000, // 5 minutes for image generation
+    timeout: 600_000, // 10 minutes for image generation
   })
 }
 

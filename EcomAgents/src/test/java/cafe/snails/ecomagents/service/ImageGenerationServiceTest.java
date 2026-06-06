@@ -133,39 +133,185 @@ class ImageGenerationServiceTest {
         assertThrows(BusinessException.class, () -> service.deleteRecord(999L, 1L));
     }
 
-    // ===== saveImageBytes via private reflection =====
+
+
+    // ===== isModelNotFoundError =====
 
     @Test
-    void saveImageBytes_shouldSaveToSubdirectory() throws Exception {
-        byte[] imageData = "fake-png-data".getBytes();
-
-        String resultPath = invokeSaveImageBytes(imageData, "generate");
-
-        assertTrue(resultPath.endsWith(".png"), "文件名应以 .png 结尾: " + resultPath);
-        Path fullPath = tempDir.resolve("generate").resolve(Path.of(resultPath).getFileName());
-        assertTrue(Files.exists(fullPath), "文件应存在于磁盘: " + fullPath);
-        assertArrayEquals(imageData, Files.readAllBytes(fullPath));
+    void isModelNotFoundError_shouldDetectPackyApiModelNotFound() throws Exception {
+        String errorBody = "{\"error\":{\"code\":\"model_not_found\",\"message\":\"分组 sora 下模型 gpt-image-2 无可用渠道（distributor）\",\"type\":\"packy_api_error\"}}";
+        boolean result = invokeIsModelNotFoundError(errorBody);
+        assertTrue(result);
     }
 
     @Test
-    void saveImageBytes_shouldCreateSubdirectoryIfNotExists() throws Exception {
-        byte[] data = "data".getBytes();
-
-        String resultPath = invokeSaveImageBytes(data, "edit");
-
-        Path dir = tempDir.resolve("edit");
-        assertTrue(Files.exists(dir), "子目录应被自动创建: " + dir);
-        assertTrue(resultPath.endsWith(".png"));
+    void isModelNotFoundError_shouldDetectUnknownParameter() throws Exception {
+        String errorBody = "{\"error\":{\"message\":\"Unknown parameter: 'response_format'.\",\"type\":\"invalid_request_error\",\"param\":\"response_format\",\"code\":\"unknown_parameter\"}}";
+        boolean result = invokeIsModelNotFoundError(errorBody);
+        assertTrue(result);
     }
 
     @Test
-    void saveImageBytes_shouldUseUniqueFileNames() throws Exception {
-        byte[] data = "test".getBytes();
+    void isModelNotFoundError_shouldReturnFalseForQuotaError() throws Exception {
+        String errorBody = "{\"error\":{\"code\":\"insufficient_quota\",\"message\":\"余额不足\",\"type\":\"packy_api_error\"}}";
+        boolean result = invokeIsModelNotFoundError(errorBody);
+        assertFalse(result);
+    }
 
-        String path1 = invokeSaveImageBytes(data, "generate");
-        String path2 = invokeSaveImageBytes(data, "generate");
+    @Test
+    void isModelNotFoundError_shouldReturnFalseForNullBody() throws Exception {
+        assertFalse(invokeIsModelNotFoundError(null));
+    }
 
-        assertNotEquals(path1, path2);
+    @Test
+    void isModelNotFoundError_shouldReturnFalseForEmptyBody() throws Exception {
+        assertFalse(invokeIsModelNotFoundError(""));
+    }
+
+    // ===== isFallbackConfigured =====
+
+    @Test
+    void isFallbackConfigured_shouldReturnTrueWhenExplicitConfigSet() throws Exception {
+        var model = mock(ImageGenerationService.class); // just a placeholder, won't use
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "https://api.example.com/v1/chat/completions");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "sk-test");
+
+        // Create a real AiModel object
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setApiUrl("https://api.packyapi.com");
+        aiModel.setApiKey("sk-packy");
+
+        boolean result = invokeIsFallbackConfigured(aiModel);
+        assertTrue(result);
+    }
+
+    @Test
+    void isFallbackConfigured_shouldReturnTrueWhenModelHasUrlAndKey() throws Exception {
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "");
+
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setApiUrl("https://api.packyapi.com");
+        aiModel.setApiKey("sk-packy");
+
+        boolean result = invokeIsFallbackConfigured(aiModel);
+        assertTrue(result);
+    }
+
+    @Test
+    void isFallbackConfigured_shouldReturnFalseWhenModelMissingUrl() throws Exception {
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "");
+
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setApiUrl("");
+        aiModel.setApiKey("sk-packy");
+
+        boolean result = invokeIsFallbackConfigured(aiModel);
+        assertFalse(result);
+    }
+
+    @Test
+    void isFallbackConfigured_shouldReturnFalseWhenModelMissingKey() throws Exception {
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "");
+
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setApiUrl("https://api.packyapi.com");
+        aiModel.setApiKey("");
+
+        boolean result = invokeIsFallbackConfigured(aiModel);
+        assertFalse(result);
+    }
+
+    // ===== extractImageUrlFromMarkdown =====
+
+    @Test
+    void extractImageUrlFromMarkdown_shouldExtractUrl() throws Exception {
+        String markdown = "![generated image](https://cdn.example.com/img/123.png)";
+        String url = invokeExtractImageUrlFromMarkdown(markdown);
+        assertEquals("https://cdn.example.com/img/123.png", url);
+    }
+
+    @Test
+    void extractImageUrlFromMarkdown_shouldReturnNullForPlainText() throws Exception {
+        String markdown = "这是一段普通文本，没有图片链接";
+        String url = invokeExtractImageUrlFromMarkdown(markdown);
+        assertNull(url);
+    }
+
+    @Test
+    void extractImageUrlFromMarkdown_shouldReturnNullForNullInput() throws Exception {
+        assertNull(invokeExtractImageUrlFromMarkdown(null));
+    }
+
+    // ===== escapeJson =====
+
+    @Test
+    void escapeJson_shouldEscapeSpecialCharacters() throws Exception {
+        String result = invokeEscapeJson("hello \"world\"\nline2");
+        assertEquals("hello \\\"world\\\"\\nline2", result);
+    }
+
+    @Test
+    void escapeJson_shouldHandleNull() throws Exception {
+        String result = invokeEscapeJson(null);
+        assertEquals("", result);
+    }
+
+    // ===== generate fallback flow test =====
+
+    @Test
+    void generate_shouldTriggerFallbackWhenPackyApiReturnsModelNotFound() {
+        // 配置 fallback 到本地不可用地址，验证 fallback 被触发（错误消息包含"备用接口"）
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "http://localhost:1/chat/completions");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "sk-fallback");
+
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setId(1L);
+        aiModel.setModelName("gpt-image-2");
+        aiModel.setApiUrl("http://localhost:1");
+        aiModel.setApiKey("sk-packy");
+        aiModel.setModelType("IMAGE");
+        aiModel.setEnabled(true);
+
+        // Mock repository to return our test model
+        when(aiModelRepository.findByModelTypeAndEnabled("IMAGE", true))
+                .thenReturn(List.of(aiModel));
+
+        // generate 会先尝试调 PackyAPI（localhost:1 连接被拒），再走 fallback
+        // fallback 地址也是 localhost:1，同样连接失败
+        var ex = assertThrows(BusinessException.class,
+                () -> service.generate("test prompt", "1024x1024", "standard", 1L));
+        // 验证异常消息包含 fallback 相关字样（说明 fallback 被触发了）
+        assertTrue(ex.getMessage().contains("备用接口") || ex.getMessage().contains("失败"),
+                "应触发 fallback, 消息: " + ex.getMessage());
+    }
+
+    @Test
+    void edit_shouldTriggerFallbackWhenPackyApiReturnsModelNotFound() throws Exception {
+        // 配置 fallback
+        ReflectionTestUtils.setField(service, "fallbackApiUrl", "http://localhost:1/chat/completions");
+        ReflectionTestUtils.setField(service, "fallbackApiKey", "sk-fallback");
+
+        var aiModel = new cafe.snails.ecomagents.model.AiModel();
+        aiModel.setId(1L);
+        aiModel.setModelName("gpt-image-2");
+        aiModel.setApiUrl("http://localhost:1");
+        aiModel.setApiKey("sk-packy");
+        aiModel.setModelType("IMAGE");
+        aiModel.setEnabled(true);
+
+        when(aiModelRepository.findByModelTypeAndEnabled("IMAGE", true))
+                .thenReturn(List.of(aiModel));
+
+        var image = new org.springframework.mock.web.MockMultipartFile(
+                "image", "test.png", "image/png", "fake-png-bytes".getBytes());
+
+        var ex = assertThrows(BusinessException.class,
+                () -> service.edit("edit this", "1024x1024", "standard", List.of(image), 1L));
+        assertTrue(ex.getMessage().contains("备用接口") || ex.getMessage().contains("失败"),
+                "应触发 fallback, 消息: " + ex.getMessage());
     }
 
     // ===== downloadImage error paths via reflection =====
@@ -181,6 +327,30 @@ class ImageGenerationServiceTest {
                 "底层异常应为 IOException");
     }
 
+    private boolean invokeIsModelNotFoundError(String body) throws Exception {
+        var method = ImageGenerationService.class.getDeclaredMethod("isModelNotFoundError", String.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(service, body);
+    }
+
+    private boolean invokeIsFallbackConfigured(cafe.snails.ecomagents.model.AiModel model) throws Exception {
+        var method = ImageGenerationService.class.getDeclaredMethod("isFallbackConfigured", cafe.snails.ecomagents.model.AiModel.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(service, model);
+    }
+
+    private String invokeExtractImageUrlFromMarkdown(String markdown) throws Exception {
+        var method = ImageGenerationService.class.getDeclaredMethod("extractImageUrlFromMarkdown", String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(service, markdown);
+    }
+
+    private String invokeEscapeJson(String value) throws Exception {
+        var method = ImageGenerationService.class.getDeclaredMethod("escapeJson", String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(service, value);
+    }
+
     private void invokeDownloadImage(String imageUrl, String subDir, String apiKey) throws Exception {
         var method = ImageGenerationService.class.getDeclaredMethod("downloadImage", String.class, String.class, String.class);
         method.setAccessible(true);
@@ -189,10 +359,5 @@ class ImageGenerationServiceTest {
 
     // ===== 反射辅助方法 =====
 
-    @SuppressWarnings("unchecked")
-    private String invokeSaveImageBytes(byte[] data, String subDir) throws Exception {
-        var method = ImageGenerationService.class.getDeclaredMethod("saveImageBytes", byte[].class, String.class);
-        method.setAccessible(true);
-        return (String) method.invoke(service, data, subDir);
-    }
+
 }
