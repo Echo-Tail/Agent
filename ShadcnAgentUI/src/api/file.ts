@@ -4,7 +4,7 @@
  * 通用文件存储服务，支持上传、列表、下载操作。
  * 文件按对话上下文隔离（contextType + contextId）。
  */
-import http from './request'
+import { api } from './request'
 import type { FileRecord } from '@/types/api'
 
 /**
@@ -20,7 +20,7 @@ export function uploadFileApi(file: File, contextType?: string, contextId?: numb
   formData.append('file', file)
   if (contextType) formData.append('contextType', contextType)
   if (contextId !== undefined) formData.append('contextId', String(contextId))
-  return http.post<any, FileRecord>('/files/upload', formData, {
+  return api.post<FileRecord>('/files/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
@@ -33,7 +33,7 @@ export function uploadFileApi(file: File, contextType?: string, contextId?: numb
  * @returns 文件列表（按上传时间降序排列）
  */
 export function listMyFilesApi(contextType: string, contextId: number) {
-  return http.get<any, FileRecord[]>('/files', {
+  return api.get<FileRecord[]>('/files', {
     params: { contextType, contextId },
   })
 }

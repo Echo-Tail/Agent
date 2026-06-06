@@ -4,7 +4,7 @@ import cafe.snails.ecomagents.model.ChatPrivateMessage;
 import cafe.snails.ecomagents.model.User;
 import cafe.snails.ecomagents.repository.ChatPrivateMessageRepository;
 import cafe.snails.ecomagents.repository.UserRepository;
-import cafe.snails.ecomagents.service.PrivateSseService;
+import cafe.snails.ecomagents.service.SseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,13 +34,13 @@ class PrivateMessageControllerTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private PrivateSseService privateSseService;
+    private SseService sseService;
 
     private PrivateMessageController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new PrivateMessageController(privateMessageRepository, userRepository, privateSseService);
+        controller = new PrivateMessageController(privateMessageRepository, userRepository, sseService);
     }
 
     @Test
@@ -77,9 +77,9 @@ class PrivateMessageControllerTest {
         assertEquals(2L, result.getData().getReceiverId());
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(privateSseService).sendToUser(eq(2L), eq("message"), payloadCaptor.capture());
+        verify(sseService).broadcast(eq(2L), eq("message"), payloadCaptor.capture());
         assertEquals(10L, payloadCaptor.getValue().get("id"));
-        verify(privateSseService).sendToUser(eq(2L), eq("unread_private"), payloadCaptor.capture());
+        verify(sseService).broadcast(eq(2L), eq("unread_private"), payloadCaptor.capture());
         assertEquals(1L, payloadCaptor.getValue().get("userId"));
         assertEquals(5L, payloadCaptor.getValue().get("count"));
     }
@@ -124,7 +124,7 @@ class PrivateMessageControllerTest {
     @Test
     void subscribe_shouldCreateEmitterForCurrentUser() {
         var emitter = new SseEmitter();
-        when(privateSseService.createEmitter(2L)).thenReturn(emitter);
+        when(sseService.createEmitter(2L)).thenReturn(emitter);
 
         assertSame(emitter, controller.subscribe(2L));
     }

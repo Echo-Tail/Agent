@@ -1,5 +1,6 @@
 package cafe.snails.ecomagents.dto;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -8,6 +9,7 @@ import lombok.Data;
 @Data
 public class GalleryPublishRequest {
     /** 关联的图片生成记录 ID */
+    @NotNull
     private Long recordId;
 
     /** 作品标题（选填，默认"未命名作品"） */

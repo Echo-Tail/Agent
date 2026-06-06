@@ -10,7 +10,9 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "invite_codes")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

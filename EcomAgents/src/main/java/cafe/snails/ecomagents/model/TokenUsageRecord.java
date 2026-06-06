@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "token_usage_records")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

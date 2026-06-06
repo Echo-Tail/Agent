@@ -1,4 +1,4 @@
-import http from './request'
+import { api } from './request'
 
 export interface ToolDefinition {
   id: string
@@ -10,17 +10,17 @@ export interface ToolDefinition {
 }
 
 export function listToolsApi() {
-  return http.get<any, ToolDefinition[]>('/tools')
+  return api.get<ToolDefinition[]>('/tools')
 }
 
 export function updateToolApi(id: string, data: { name?: string; description?: string }) {
-  return http.put<any, ToolDefinition>(`/tools/${id}`, data)
+  return api.put<ToolDefinition>(`/tools/${id}`, data)
 }
 
 export function toggleToolApi(id: string) {
-  return http.patch<any, ToolDefinition>(`/tools/${id}/toggle`)
+  return api.patch<ToolDefinition>(`/tools/${id}/toggle`)
 }
 
 export function saveToolConfigApi(id: string, configJson: string) {
-  return http.put<any, ToolDefinition>(`/tools/${id}/config`, { configJson })
+  return api.put<ToolDefinition>(`/tools/${id}/config`, { configJson })
 }

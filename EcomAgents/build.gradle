@@ -47,10 +47,6 @@ dependencies {
 
 bootRun {
     jvmArgs = [
-        '-Dhttps.proxyHost=127.0.0.1',
-        '-Dhttps.proxyPort=15236',
-        '-Dhttp.proxyHost=127.0.0.1',
-        '-Dhttp.proxyPort=15236',
         '-Djdk.tls.client.protocols=TLSv1.2,TLSv1.3'
     ]
 }

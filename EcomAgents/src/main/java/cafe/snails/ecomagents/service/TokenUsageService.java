@@ -35,6 +35,24 @@ public class TokenUsageService {
         repository.save(record);
     }
 
+    /** 图片生成固定单价（CNY/张） */
+    private static final BigDecimal IMAGE_UNIT_PRICE = new BigDecimal("0.20");
+
+    /** 计算 CNY 费用：图片按固定单价 × 调用次数，LLM 按 token 计价 */
+    private BigDecimal calculateCnyCost(String modelType, String modelName,
+                                         long callCount, int promptTokens, int completionTokens) {
+        if ("IMAGE".equals(modelType)) {
+            // 图片生成按张计费：单价 × 调用次数
+            return IMAGE_UNIT_PRICE.multiply(BigDecimal.valueOf(callCount))
+                    .setScale(2, java.math.RoundingMode.HALF_UP);
+        }
+        ModelPriceConfig pricing = ModelPriceConfig.match(modelName);
+        if (pricing != null) {
+            return pricing.calculateCost(promptTokens, completionTokens, usdCnyRate);
+        }
+        return BigDecimal.ZERO.setScale(2);
+    }
+
     /** 按日期区间查询各 Agent + 模型的调用统计，含费用计算 */
     public List<Map<String, Object>> getSummaryByDateRange(LocalDate startDate, LocalDate endDate) {
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.of(2024, 1, 1).atStartOfDay();
@@ -52,11 +70,8 @@ public class TokenUsageService {
             int promptTokens = row[6] != null ? ((Number) row[6]).intValue() : 0;
             int completionTokens = row[7] != null ? ((Number) row[7]).intValue() : 0;
 
-            // 计算 CNY 费用
-            ModelPriceConfig pricing = ModelPriceConfig.match(modelName);
-            BigDecimal cnyCost = pricing != null
-                    ? pricing.calculateCost(promptTokens, completionTokens, usdCnyRate)
-                    : BigDecimal.ZERO.setScale(2);
+            // 计算 CNY 费用（图片按固定单价，LLM 按 token 计价）
+            BigDecimal cnyCost = calculateCnyCost(modelType, modelName, callCount, promptTokens, completionTokens);
 
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("agentName", agentName);
@@ -89,10 +104,8 @@ public class TokenUsageService {
             int promptTokens = r.getPromptTokens() != null ? r.getPromptTokens() : 0;
             int completionTokens = r.getCompletionTokens() != null ? r.getCompletionTokens() : 0;
 
-            ModelPriceConfig pricing = ModelPriceConfig.match(r.getModelName());
-            BigDecimal cnyCost = pricing != null
-                    ? pricing.calculateCost(promptTokens, completionTokens, usdCnyRate)
-                    : BigDecimal.ZERO.setScale(2);
+            BigDecimal cnyCost = calculateCnyCost(r.getModelType(), r.getModelName(),
+                    1L, promptTokens, completionTokens);
 
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());

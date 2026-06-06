@@ -1,32 +1,32 @@
-import http from './request'
+import { api } from './request'
 import type { AiModel } from '@/types/api'
 
 export function listModelsApi() {
-  return http.get<any, AiModel[]>('/models')
+  return api.get<AiModel[]>('/models')
 }
 
 export function getModelApi(id: number) {
-  return http.get<any, AiModel>(`/models/${id}`)
+  return api.get<AiModel>(`/models/${id}`)
 }
 
 export function getDefaultModelApi() {
-  return http.get<any, AiModel>('/models/default')
+  return api.get<AiModel>('/models/default')
 }
 
 export function getImageModelsApi() {
-  return http.get<any, AiModel[]>('/models/image')
+  return api.get<AiModel[]>('/models/image')
 }
 
 export function createModelApi(data: Partial<AiModel>) {
-  return http.post<any, AiModel>('/models', data)
+  return api.post<AiModel>('/models', data)
 }
 
 export function updateModelApi(id: number, data: Partial<AiModel>) {
-  return http.put<any, AiModel>(`/models/${id}`, data)
+  return api.put<AiModel>(`/models/${id}`, data)
 }
 
 export function deleteModelApi(id: number) {
-  return http.delete<any, void>(`/models/${id}`)
+  return api.delete(`/models/${id}`)
 }
 
 export interface ModelValidateRequest {
@@ -37,5 +37,5 @@ export interface ModelValidateRequest {
 }
 
 export function validateModelApi(data: ModelValidateRequest) {
-  return http.post<any, string[]>('/models/validate', data)
+  return api.post<string[]>('/models/validate', data)
 }

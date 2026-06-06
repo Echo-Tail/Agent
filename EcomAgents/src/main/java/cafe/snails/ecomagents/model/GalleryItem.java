@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "gallery_items")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

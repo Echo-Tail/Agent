@@ -12,7 +12,9 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "ai_models")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

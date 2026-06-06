@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
  * <p>每条消息包含角色（user / assistant）和文本内容。</p>
  */
 @Embeddable
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

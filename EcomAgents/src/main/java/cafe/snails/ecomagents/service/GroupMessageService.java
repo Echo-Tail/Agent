@@ -4,15 +4,17 @@ import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.*;
 import cafe.snails.ecomagents.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,16 +33,20 @@ public class GroupMessageService {
     private final GroupMessageRepository groupMessageRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final GroupAgentRepository groupAgentRepository;
-    private final GroupSseService groupSseService;
+    private final SseService sseService;
     private final GroupService groupService;
     private final HarnessChatService harnessChatService;
     private final ObjectMapper objectMapper;
 
+    /** 共享线程池，用于异步触发 Agent 回复，避免每次 new Thread()。 */
+    private final ExecutorService agentReplyExecutor = Executors.newCachedThreadPool();
+
     /**
      * 发送群消息。
      * <p>如果是用户发送的消息且包含 @Agent，则异步触发 Agent 回复。</p>
+     * <p>注意：未使用 @Transactional，因为 SSE 广播在保存之后执行，
+     * 广播失败不应回滚已保存的消息。Spring Data JPA 的 save() 自带事务保护。</p>
      */
-    @Transactional
     public ApiResponse<GroupMessage> sendMessage(Long groupId, Long senderId, String content) {
         if (!groupService.isMember(groupId, senderId)) {
             return ApiResponse.error(403, "你不是群成员，无法发送消息");
@@ -59,7 +65,7 @@ public class GroupMessageService {
 
         // 通过 SSE 广播新消息
         GroupMessage finalMsg = msg;
-        groupSseService.broadcast(groupId, "message", Map.of(
+        sseService.broadcast(groupId, "message", Map.of(
                 "id", finalMsg.getId(),
                 "senderId", finalMsg.getSenderId(),
                 "senderType", "USER",
@@ -67,7 +73,7 @@ public class GroupMessageService {
                 "createdAt", finalMsg.getCreatedAt().toString()
         ));
         // 广播群聊未读事件
-        groupSseService.broadcast(groupId, "unread_group", Map.of(
+        sseService.broadcast(groupId, "unread_group", Map.of(
                 "groupId", groupId,
                 "senderId", senderId
         ));
@@ -93,17 +99,25 @@ public class GroupMessageService {
                 continue;
             }
 
-            // 异步触发 Agent 回复
+            // 异步触发 Agent 回复（使用共享线程池）
             Long finalAgentId = agentId;
             Long msgId = userMsg.getId();
-            new Thread(() -> {
+            agentReplyExecutor.submit(() -> {
                 try {
                     triggerAgentReply(groupId, finalAgentId, agentName, userMsg.getContent(), msgId);
                 } catch (Exception e) {
                     log.error("Agent reply failed: agentId={}, groupId={}", finalAgentId, groupId, e);
                 }
-            }).start();
+            });
         }
+    }
+
+    /**
+     * 关闭 Agent 回复线程池。
+     */
+    @PreDestroy
+    public void shutdownExecutor() {
+        agentReplyExecutor.shutdown();
     }
 
     /**
@@ -132,7 +146,7 @@ public class GroupMessageService {
 
             // 通过 SSE 广播 Agent 回复
             GroupMessage finalReply = reply;
-            groupSseService.broadcast(groupId, "message", Map.of(
+            sseService.broadcast(groupId, "message", Map.of(
                     "id", finalReply.getId(),
                     "senderId", finalReply.getSenderId(),
                     "senderType", "AGENT",
@@ -143,7 +157,7 @@ public class GroupMessageService {
             ));
         } catch (Exception e) {
             log.error("Agent reply error: agentId={}", agentId, e);
-            groupSseService.broadcast(groupId, "error", Map.of(
+            sseService.broadcast(groupId, "error", Map.of(
                     "message", "Agent 「" + agentName + "」回复失败: " + e.getMessage()
             ));
         }

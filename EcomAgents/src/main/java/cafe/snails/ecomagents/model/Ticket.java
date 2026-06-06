@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
         @Index(name = "idx_tickets_status", columnList = "status"),
         @Index(name = "idx_tickets_number", columnList = "ticket_number", unique = true)
 })
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

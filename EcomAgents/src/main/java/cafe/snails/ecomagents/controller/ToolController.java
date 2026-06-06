@@ -5,6 +5,7 @@ import cafe.snails.ecomagents.dto.ToolDefinition;
 import cafe.snails.ecomagents.service.ToolService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ public class ToolController {
      */
     @PutMapping("/tools/{id}")
     public ApiResponse<ToolDefinition> updateTool(@PathVariable("id") String id,
-                                                   @RequestBody ToolDefinition definition) {
+                                                   @Valid @RequestBody ToolDefinition definition) {
         return toolService.updateTool(id, definition);
     }
 

@@ -10,7 +10,9 @@ import java.time.LocalDateTime;
         @Index(name = "idx_system_logs_level", columnList = "level"),
         @Index(name = "idx_system_logs_category", columnList = "category")
 })
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

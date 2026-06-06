@@ -10,6 +10,7 @@ import cafe.snails.ecomagents.service.KnowledgeBaseService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -43,14 +44,14 @@ public class KnowledgeBaseController {
 
     /** 创建知识库。 */
     @PostMapping("/knowledge-bases")
-    public ApiResponse<KnowledgeBase> createKnowledgeBase(@RequestBody KnowledgeBase kb,
+    public ApiResponse<KnowledgeBase> createKnowledgeBase(@Valid @RequestBody KnowledgeBase kb,
                                                          @CurrentUserId Long userId) {
         return kbService.createKnowledgeBase(kb, userId);
     }
 
     @PutMapping("/knowledge-bases/{id}")
     public ApiResponse<KnowledgeBase> updateKnowledgeBase(@PathVariable("id") Long id,
-                                                          @RequestBody KnowledgeBase kb) {
+                                                          @Valid @RequestBody KnowledgeBase kb) {
         return kbService.updateKnowledgeBase(id, kb);
     }
 

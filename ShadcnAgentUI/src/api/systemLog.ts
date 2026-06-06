@@ -1,4 +1,4 @@
-import http from './request'
+import { api } from './request'
 
 export interface SystemLogDTO {
   id: number
@@ -41,7 +41,7 @@ export interface SubmitLogRequest {
 }
 
 export function submitLogApi(req: SubmitLogRequest) {
-  return http.post<any, SystemLogDTO>('/system-logs', req)
+  return api.post<SystemLogDTO>('/system-logs', req)
 }
 
 export function queryLogsApi(params: {
@@ -53,7 +53,7 @@ export function queryLogsApi(params: {
   endDate?: string
   search?: string
 }) {
-  return http.get<any, LogPageDTO>('/system-logs', {
+  return api.get<LogPageDTO>('/system-logs', {
     params: {
       page: params.page ?? 0,
       size: params.size ?? 20,
@@ -67,9 +67,9 @@ export function queryLogsApi(params: {
 }
 
 export function getLogStatsApi() {
-  return http.get<any, LogStatsDTO>('/system-logs/stats')
+  return api.get<LogStatsDTO>('/system-logs/stats')
 }
 
 export function clearLogsApi() {
-  return http.delete<any, null>('/system-logs')
+  return api.delete('/system-logs')
 }

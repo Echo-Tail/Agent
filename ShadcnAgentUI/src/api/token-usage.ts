@@ -1,4 +1,4 @@
-import http from './request'
+import { api } from './request'
 
 export interface TokenUsageSummary {
   agentName: string
@@ -31,19 +31,19 @@ export interface TokenUsageRecord {
 }
 
 export function getTokenUsageSummaryApi(startDate: string, endDate: string) {
-  return http.get<any, TokenUsageSummary[]>('/token-usage/summary', {
+  return api.get<TokenUsageSummary[]>('/token-usage/summary', {
     params: { startDate, endDate },
   })
 }
 
 export function getImageModelCallsApi(startDate: string, endDate: string) {
-  return http.get<any, number>('/token-usage/image-calls', {
+  return api.get<number>('/token-usage/image-calls', {
     params: { startDate, endDate },
   })
 }
 
 export function getTokenUsageDetailApi(startDate: string, endDate: string) {
-  return http.get<any, TokenUsageRecord[]>('/token-usage/detail', {
+  return api.get<TokenUsageRecord[]>('/token-usage/detail', {
     params: { startDate, endDate },
   })
 }

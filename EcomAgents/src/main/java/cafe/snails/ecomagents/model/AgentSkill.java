@@ -8,7 +8,9 @@ import java.time.LocalDateTime;
 @Table(name = "agent_skills", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"agent_id", "skill_name"})
 })
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "image_generation_records")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

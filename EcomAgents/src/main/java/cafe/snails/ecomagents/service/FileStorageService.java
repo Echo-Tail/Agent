@@ -71,8 +71,9 @@ public class FileStorageService {
             Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
             Files.createDirectories(uploadPath);
 
-            // 生成唯一文件名，防止覆盖
-            String storedName = UUID.randomUUID() + "_" + originalName;
+            // 生成唯一文件名（清洗原始文件名防止路径穿越）
+            String safeName = sanitizeFileName(originalName);
+            String storedName = UUID.randomUUID() + "_" + safeName;
             Path targetPath = uploadPath.resolve(storedName);
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -117,7 +118,9 @@ public class FileStorageService {
             Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
             Files.createDirectories(uploadPath);
 
-            String storedName = UUID.randomUUID() + "_" + originalName;
+            // 生成唯一文件名（清洗原始文件名防止路径穿越）
+            String safeName = sanitizeFileName(originalName);
+            String storedName = UUID.randomUUID() + "_" + safeName;
             Path targetPath = uploadPath.resolve(storedName);
             Files.writeString(targetPath, content);
 
@@ -156,6 +159,19 @@ public class FileStorageService {
         return fileRecordRepository.findById(id)
                 .map(ApiResponse::success)
                 .orElse(ApiResponse.error(404, "文件不存在"));
+    }
+
+    /**
+     * 清洗文件名，去除路径分隔符和「..」穿越，仅保留纯文件名部分。
+     */
+    private String sanitizeFileName(String fileName) {
+        // 取最后一个 / 或 \ 之后的部分（纯文件名）
+        int lastSep = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
+        if (lastSep >= 0) {
+            fileName = fileName.substring(lastSep + 1);
+        }
+        // 替换残留的可能有问题的字符
+        return fileName.replaceAll("[\0<>:\"|?*]", "_");
     }
 
     /**

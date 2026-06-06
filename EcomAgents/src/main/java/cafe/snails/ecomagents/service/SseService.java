@@ -14,47 +14,50 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 私聊 SSE 推送服务，按 userId 索引 SseEmitter。
+ * SSE 推送服务，按 Long 类型的 key（groupId 或 userId）管理 SseEmitter 列表。
+ * <p>统一替代了原有的 GroupSseService 和 PrivateSseService，两者逻辑完全相同。</p>
  */
 @Service
 @RequiredArgsConstructor
-public class PrivateSseService {
+public class SseService {
 
     /** 当前服务日志记录器。 */
-    private static final Logger log = LoggerFactory.getLogger(PrivateSseService.class);
+    private static final Logger log = LoggerFactory.getLogger(SseService.class);
     /** SSE 事件数据 JSON 序列化器。 */
     private final ObjectMapper objectMapper;
 
-    /** userId → List<SseEmitter> */
-    private final Map<Long, CopyOnWriteArrayList<SseEmitter>> userEmitters = new ConcurrentHashMap<>();
+    /** Long key → List<SseEmitter> */
+    private final Map<Long, CopyOnWriteArrayList<SseEmitter>> emittersByKey = new ConcurrentHashMap<>();
 
     /**
-     * 为指定用户创建私聊 SSE 长连接，并在完成、超时或错误时自动移除。
+     * 为指定 key（群 ID / 用户 ID）创建一个 SSE 连接。
      */
-    public SseEmitter createEmitter(Long userId) {
-        SseEmitter emitter = new SseEmitter(0L);
-        CopyOnWriteArrayList<SseEmitter> emitters = userEmitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>());
+    public SseEmitter createEmitter(Long key) {
+        SseEmitter emitter = new SseEmitter(0L); // 无超时
+        CopyOnWriteArrayList<SseEmitter> emitters = emittersByKey.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>());
         emitters.add(emitter);
 
         emitter.onCompletion(() -> {
             emitters.remove(emitter);
-            log.debug("Private SSE completed, userId={}", userId);
+            log.debug("SSE completed, key={}", key);
         });
         emitter.onTimeout(() -> {
             emitters.remove(emitter);
-            log.debug("Private SSE timeout, userId={}", userId);
+            log.debug("SSE timeout, key={}", key);
         });
         emitter.onError(e -> {
             emitters.remove(emitter);
-            log.debug("Private SSE error, userId={}: {}", userId, e.getMessage());
+            log.debug("SSE error, key={}: {}", key, e.getMessage());
         });
 
         return emitter;
     }
 
-    /** 向指定用户推送事件 */
-    public void sendToUser(Long userId, String eventName, Object data) {
-        CopyOnWriteArrayList<SseEmitter> emitters = userEmitters.get(userId);
+    /**
+     * 向指定 key 对应的所有在线客户端推送事件。
+     */
+    public void broadcast(Long key, String eventName, Object data) {
+        CopyOnWriteArrayList<SseEmitter> emitters = emittersByKey.get(key);
         if (emitters == null || emitters.isEmpty()) return;
 
         List<SseEmitter> deadEmitters = new java.util.ArrayList<>();
@@ -63,7 +66,7 @@ public class PrivateSseService {
                 emitter.send(SseEmitter.event()
                         .name(eventName)
                         .data(objectMapper.writeValueAsString(data)));
-            } catch (IOException e) {
+            } catch (Exception e) {
                 deadEmitters.add(emitter);
             }
         }

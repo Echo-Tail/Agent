@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "group_messages")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

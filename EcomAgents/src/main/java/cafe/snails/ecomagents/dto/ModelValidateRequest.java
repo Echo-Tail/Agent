@@ -1,5 +1,6 @@
 package cafe.snails.ecomagents.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,13 +15,16 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ModelValidateRequest {
     /** LLM 服务基础地址。 */
+    @NotBlank
     private String baseUrl;
     /** 模型供应商标识。 */
     private String provider;
     /** API 协议类型，例如 openai、azure。 */
+    @NotBlank
     private String apiType;
     /** API 版本，主要用于 Azure OpenAI 等版本化接口。 */
     private String apiVersion;
     /** 用于验证连通性的 API Key。 */
+    @NotBlank
     private String apiKey;
 }

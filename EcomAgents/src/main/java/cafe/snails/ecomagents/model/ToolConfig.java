@@ -10,7 +10,9 @@ import lombok.*;
  */
 @Entity
 @Table(name = "tool_configs")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

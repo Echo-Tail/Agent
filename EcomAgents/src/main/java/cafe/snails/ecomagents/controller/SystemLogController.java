@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,7 +27,7 @@ public class SystemLogController {
 
     /** 写入一条系统日志。 */
     @PostMapping
-    public ApiResponse<SystemLog> createLog(@RequestBody SystemLogRequest request) {
+    public ApiResponse<SystemLog> createLog(@Valid @RequestBody SystemLogRequest request) {
         return systemLogService.writeLog(
                 request.getLevel(),
                 request.getCategory(),

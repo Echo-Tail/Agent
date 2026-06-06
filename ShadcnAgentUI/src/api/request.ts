@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosRequestConfig } from 'axios'
 import axiosRetry from 'axios-retry'
 import { toast } from 'sonner'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER, API_BASE_URL, API_TIMEOUT } from '@/constants'
@@ -94,3 +94,29 @@ http.interceptors.response.use(
 )
 
 export default http
+
+/**
+ * 类型安全的 API 调用包装。
+ *
+ * 自动解包 ApiResponse<T> 中的 .data 字段，同时保持 T 的类型信息。
+ * 使用方式：api.get<T>(url) / api.post<T>(url, data) / 等
+ *
+ * 底层仍通过 http 实例发送请求，复用拦截器（Token 注入、401 跳转、日志记录）。
+ */
+export const api = {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return http.get<any, T>(url, config)
+  },
+  post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return http.post<any, T>(url, data, config)
+  },
+  put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return http.put<any, T>(url, data, config)
+  },
+  patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return http.patch<any, T>(url, data, config)
+  },
+  delete<T = void>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return http.delete<any, T>(url, config)
+  },
+}

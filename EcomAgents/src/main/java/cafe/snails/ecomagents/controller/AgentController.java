@@ -8,6 +8,7 @@ import cafe.snails.ecomagents.service.AgentService;
 import cafe.snails.ecomagents.service.AgentToolAvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -56,7 +57,7 @@ public class AgentController {
 
     /** 创建 Agent */
     @PostMapping("/agents")
-    public ApiResponse<Agent> createAgent(@RequestBody Agent agent,
+    public ApiResponse<Agent> createAgent(@Valid @RequestBody Agent agent,
                                           @CurrentUserId Long userId) {
         return agentService.createAgent(agent, userId);
     }
@@ -64,7 +65,7 @@ public class AgentController {
     /** 更新 Agent（仅创建者或管理员可操作） */
     @PutMapping("/agents/{id}")
     public ApiResponse<Agent> updateAgent(@PathVariable("id") Long id,
-                                          @RequestBody Agent agent,
+                                          @Valid @RequestBody Agent agent,
                                           @CurrentUserId Long userId) {
         return agentService.updateAgent(id, agent, userId);
     }
