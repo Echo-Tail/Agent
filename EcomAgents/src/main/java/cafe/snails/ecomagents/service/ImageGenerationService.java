@@ -142,7 +142,13 @@ public class ImageGenerationService {
 
         } catch (WebClientResponseException e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
-            log.error("PackyAPI generate failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), e.getResponseBodyAsString());
+            String body = e.getResponseBodyAsString();
+            log.error("PackyAPI generate failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), body);
+            // 检测模型下架等特定错误，给出明确提示
+            String message = extractPackyErrorMessage(body);
+            if (message != null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
+            }
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败（" + e.getStatusCode() + "），请稍后重试");
         } catch (BusinessException e) {
             throw e;
@@ -265,7 +271,13 @@ public class ImageGenerationService {
 
         } catch (WebClientResponseException e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
-            log.error("PackyAPI edit failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), e.getResponseBodyAsString());
+            String body = e.getResponseBodyAsString();
+            log.error("PackyAPI edit failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), body);
+            // 检测模型下架等特定错误，给出明确提示
+            String message = extractPackyErrorMessage(body);
+            if (message != null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
+            }
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败（" + e.getStatusCode() + "），请稍后重试");
         } catch (BusinessException e) {
             throw e;
@@ -411,6 +423,38 @@ public class ImageGenerationService {
         log.info("Image downloaded: {} -> {} ({} bytes)", imageUrl, targetPath, imageBytes.length);
 
         return Paths.get(uploadDir, subDir, fileName).toString();
+    }
+
+    /**
+     * 解析 PackyAPI 错误响应体，提取对用户友好的错误消息。
+     *
+     * @param body PackyAPI 返回的 JSON 错误体（可能为 null 或空）
+     * @return 友好的中文错误消息，无可识别错误时返回 null
+     */
+    private String extractPackyErrorMessage(String body) {
+        if (body == null || body.isBlank()) return null;
+        try {
+            var root = objectMapper.readTree(body);
+            var error = root.path("error");
+            if (error.isMissingNode()) return null;
+            String code = error.path("code").asText("");
+            String message = error.path("message").asText("");
+            // 模型下架：渠道不可用
+            if ("model_not_found".equals(code) && message.contains("无可用渠道")) {
+                return "图片生成功能暂不可用：底层模型渠道已下架，请联系管理员";
+            }
+            // 余额不足
+            if ("insufficient_quota".equals(code) || message.contains("余额不足")) {
+                return "图片生成功能暂不可用：API 余额不足";
+            }
+            // 超时
+            if (message.contains("timeout") || message.contains("超时")) {
+                return "图片生成超时，请稍后重试";
+            }
+        } catch (Exception ignored) {
+            // 解析失败则使用默认错误消息
+        }
+        return null;
     }
 
     /**

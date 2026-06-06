@@ -171,7 +171,7 @@ async function handleGenerate() {
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
-    toast.error(t('toast.imageGenFailed'))
+    // 错误提示由 request.ts 拦截器统一处理
   } finally {
     stopTimer()
     generating.value = false
@@ -188,7 +188,7 @@ async function handleEdit() {
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
-    toast.error(t('toast.imageGenFailed'))
+    // 错误提示由 request.ts 拦截器统一处理
   } finally {
     stopTimer()
     generating.value = false
