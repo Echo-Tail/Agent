@@ -42,6 +42,12 @@ class ImageGenerationServiceTest {
     @Mock
     private ImageGenerationRecordRepository recordRepository;
 
+    @Mock
+    private cafe.snails.ecomagents.service.TokenUsageService tokenUsageService;
+
+    @Mock
+    private cafe.snails.ecomagents.repository.UserRepository userRepository;
+
     private ImageGenerationService service;
 
     @TempDir
@@ -49,7 +55,7 @@ class ImageGenerationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ImageGenerationService(aiModelRepository, recordRepository, new ObjectMapper());
+        service = new ImageGenerationService(aiModelRepository, recordRepository, tokenUsageService, userRepository, new ObjectMapper());
         ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
         ReflectionTestUtils.setField(service, "timeoutSeconds", 300);
     }

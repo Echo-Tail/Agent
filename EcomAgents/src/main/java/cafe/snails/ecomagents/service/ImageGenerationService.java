@@ -4,6 +4,7 @@ import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.exception.ErrorCode;
 import cafe.snails.ecomagents.model.AiModel;
 import cafe.snails.ecomagents.model.ImageGenerationRecord;
+import cafe.snails.ecomagents.model.TokenUsageRecord;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import cafe.snails.ecomagents.repository.ImageGenerationRecordRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,6 +53,8 @@ public class ImageGenerationService {
 
     private final AiModelRepository aiModelRepository;
     private final ImageGenerationRecordRepository recordRepository;
+    private final TokenUsageService tokenUsageService;
+    private final cafe.snails.ecomagents.repository.UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${image.timeout-seconds:600}")
@@ -158,6 +161,7 @@ public class ImageGenerationService {
                     recordRepository.save(record);
 
                     log.info("Image generated for user {}: {} ({}ms)", userId, resultPath, timeCostMs);
+                    recordImageUsage(model, userId, true, null);
 
                     return new ImageGenerationResult("/" + resultPath.replace("\\", "/").replace("./", ""),
                             revisedPrompt, timeCostMs, record.getId());
@@ -308,6 +312,7 @@ public class ImageGenerationService {
                     recordRepository.save(record);
 
                     log.info("Image edited for user {}: {} ({}ms)", userId, resultPath, timeCostMs);
+                    recordImageUsage(model, userId, true, null);
 
                     return new ImageGenerationResult("/" + resultPath.replace("\\", "/").replace("./", ""),
                             revisedPrompt, timeCostMs, record.getId());
@@ -426,6 +431,45 @@ public class ImageGenerationService {
         out.write("\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         out.write(data);
         out.write("\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 记录图片生成的 Token 用量（固定 0.2 CNY/张）。
+     */
+    private void recordImageUsage(AiModel model, Long userId, boolean success, String errorMessage) {
+        try {
+            String username = null;
+            if (userId != null) {
+                username = userRepository.findById(userId)
+                        .map(cafe.snails.ecomagents.model.User::getUsername)
+                        .orElse(null);
+            }
+            TokenUsageRecord record = TokenUsageRecord.builder()
+                    .modelId(model != null ? model.getId() : null)
+                    .modelName(model != null ? model.getName() : MODEL_NAME)
+                    .modelType("IMAGE")
+                    .userId(userId)
+                    .agentId(0L)
+                    .agentName("图片生成")
+                    .username(username)
+                    .promptTokens(1)
+                    .completionTokens(0)
+                    .totalTokens(1)
+                    .success(success)
+                    .errorMessage(success ? null : truncate(errorMessage, 500))
+                    .build();
+            tokenUsageService.record(record);
+        } catch (Exception e) {
+            log.warn("Failed to record image token usage: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 截断字符串到指定最大长度。
+     */
+    private String truncate(String text, int maxLen) {
+        if (text == null) return null;
+        return text.length() <= maxLen ? text : text.substring(0, maxLen);
     }
 
     /**
@@ -643,6 +687,7 @@ public class ImageGenerationService {
                     .createdAt(LocalDateTime.now())
                     .build();
             recordRepository.save(record);
+            recordImageUsage(model, userId, true, null);
 
             return new ImageGenerationResult(
                     "/" + resultPath.replace("\\", "/").replace("./", ""),
@@ -768,6 +813,7 @@ public class ImageGenerationService {
                         .createdAt(LocalDateTime.now())
                         .build();
                 recordRepository.save(record);
+                recordImageUsage(model, userId, true, null);
 
                 return new ImageGenerationResult(
                         "/" + resultPath.replace("\\", "/").replace("./", ""),
