@@ -60,6 +60,18 @@ public class ImageGenerationService {
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
 
+    /** Fallback 生图 API 地址（OpenAI 兼容 Chat Completions） */
+    @Value("${image.fallback.api-url:}")
+    private String fallbackApiUrl;
+
+    /** Fallback API Key */
+    @Value("${image.fallback.api-key:}")
+    private String fallbackApiKey;
+
+    /** Fallback 模型名称 */
+    @Value("${image.fallback.model:gpt-image-2}")
+    private String fallbackModel;
+
     /**
      * 文生图 — 根据描述生成图片。
      *
@@ -144,7 +156,12 @@ public class ImageGenerationService {
             long timeCostMs = System.currentTimeMillis() - startTime;
             String body = e.getResponseBodyAsString();
             log.error("PackyAPI generate failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), body);
-            // 检测模型下架等特定错误，给出明确提示
+            // 检测模型下架：走 fallback 兼容 API 重试
+            if (isModelNotFoundError(body) && isFallbackConfigured()) {
+                log.info("PackyAPI model unavailable, falling back to Chat Completions API");
+                return callChatCompletionsFallback(prompt, finalSize, finalQuality, userId, startTime);
+            }
+            // 其他可识别错误，给出明确提示
             String message = extractPackyErrorMessage(body);
             if (message != null) {
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
@@ -423,6 +440,156 @@ public class ImageGenerationService {
         log.info("Image downloaded: {} -> {} ({} bytes)", imageUrl, targetPath, imageBytes.length);
 
         return Paths.get(uploadDir, subDir, fileName).toString();
+    }
+
+    /**
+     * 判断 PackyAPI 错误是否为模型下架（model_not_found）。
+     */
+    private boolean isModelNotFoundError(String body) {
+        if (body == null || body.isBlank()) return false;
+        try {
+            var root = objectMapper.readTree(body);
+            var error = root.path("error");
+            if (error.isMissingNode()) return false;
+            String code = error.path("code").asText("");
+            String message = error.path("message").asText("");
+            return "model_not_found".equals(code) && message.contains("无可用渠道");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Fallback API 是否已配置（api-url 和 api-key 均非空）。
+     */
+    private boolean isFallbackConfigured() {
+        return fallbackApiUrl != null && !fallbackApiUrl.isBlank()
+                && fallbackApiKey != null && !fallbackApiKey.isBlank();
+    }
+
+    /**
+     * 通过 OpenAI 兼容的 Chat Completions API 生图（fallback）。
+     * <p>当 PackyAPI 模型下架时自动调用此方法重试。</p>
+     */
+    private ImageGenerationResult callChatCompletionsFallback(String prompt, String size, String quality,
+                                                               Long userId, long startTime) {
+        try {
+            // 构建 OpenAI Chat Completions 请求体
+        String requestBody = String.format(
+                "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}],\"n\":1,\"size\":\"%s\"}",
+                escapeJson(fallbackModel), escapeJson(prompt), escapeJson(size));
+
+        log.info("Fallback ChatCompletions: url={}, model={}", fallbackApiUrl, fallbackModel);
+
+        // 发送 HTTP 请求
+        java.net.URL url = new java.net.URL(fallbackApiUrl);
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+        try {
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + fallbackApiKey);
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30_000);
+            conn.setReadTimeout(60_000);
+
+            // 写入请求体
+            try (java.io.OutputStream os = conn.getOutputStream()) {
+                os.write(requestBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+
+            int statusCode = conn.getResponseCode();
+            if (statusCode != 200) {
+                String errorBody = readStream(conn.getErrorStream());
+                log.error("Fallback ChatCompletions failed ({}): {}", statusCode, errorBody);
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                        "图片生成失败：备用接口返回 " + statusCode);
+            }
+
+            // 读取响应
+            String responseJson;
+            try (java.io.InputStream in = conn.getInputStream()) {
+                responseJson = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+
+            // 解析 OpenAI 响应，提取图片 URL
+            JsonNode root = objectMapper.readTree(responseJson);
+            JsonNode choices = root.get("choices");
+            if (choices == null || !choices.isArray() || choices.isEmpty()) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：备用接口返回格式异常");
+            }
+            String content = choices.get(0).path("message").path("content").asText("");
+            if (content.isBlank()) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：备用接口未返回图片");
+            }
+
+            // 从 Markdown 图片语法中提取 URL：![alt](url)
+            String imageUrl = extractImageUrlFromMarkdown(content);
+            if (imageUrl == null) {
+                // 如果无法从 Markdown 提取，直接将 content 作为 URL 尝试
+                imageUrl = content.trim();
+            }
+
+            long timeCostMs = System.currentTimeMillis() - startTime;
+            log.info("Fallback ChatCompletions succeeded ({}ms), url={}", timeCostMs, imageUrl);
+
+            // 下载图片到本地
+            String resultPath = downloadImage(imageUrl, "generate", fallbackApiKey);
+
+            // 保存历史记录
+            ImageGenerationRecord record = ImageGenerationRecord.builder()
+                    .userId(userId)
+                    .mode("GENERATE")
+                    .prompt(prompt)
+                    .revisedPrompt(content)
+                    .size(size)
+                    .quality(quality)
+                    .resultPath(resultPath)
+                    .timeCostMs(timeCostMs)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            recordRepository.save(record);
+
+            return new ImageGenerationResult(
+                    "/" + resultPath.replace("\\", "/").replace("./", ""),
+                    content, timeCostMs, record.getId());
+
+            } finally {
+                conn.disconnect();
+            }
+        } catch (IOException e) {
+            log.error("Fallback ChatCompletions IO error: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：备用接口调用异常");
+        }
+    }
+
+    /**
+     * 从 Markdown 格式中提取图片 URL：![alt](url)
+     */
+    private String extractImageUrlFromMarkdown(String markdown) {
+        if (markdown == null) return null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+                "!\\[.*?\\]\\((https?://[^)]+)\\)").matcher(markdown);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * 读取错误流内容。
+     */
+    private String readStream(java.io.InputStream stream) throws IOException {
+        if (stream == null) return "";
+        return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /**
+     * JSON 字符串转义（防止 prompt 中的引号破坏 JSON）。
+     */
+    private String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
