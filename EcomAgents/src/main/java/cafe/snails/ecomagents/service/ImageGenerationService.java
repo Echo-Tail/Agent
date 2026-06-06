@@ -156,10 +156,10 @@ public class ImageGenerationService {
             long timeCostMs = System.currentTimeMillis() - startTime;
             String body = e.getResponseBodyAsString();
             log.error("PackyAPI generate failed ({}ms): status={}, body={}", timeCostMs, e.getStatusCode(), body);
-            // 检测模型下架：走 fallback 兼容 API 重试
-            if (isModelNotFoundError(body) && isFallbackConfigured()) {
+            // 检测模型下架：走 fallback 兼容 API 重试（优先使用显式配置，否则用同模型 API）
+            if (isModelNotFoundError(body) && isFallbackConfigured(model)) {
                 log.info("PackyAPI model unavailable, falling back to Chat Completions API");
-                return callChatCompletionsFallback(prompt, finalSize, finalQuality, userId, startTime);
+                return callChatCompletionsFallback(prompt, finalSize, finalQuality, userId, startTime, model);
             }
             // 其他可识别错误，给出明确提示
             String message = extractPackyErrorMessage(body);
@@ -462,9 +462,14 @@ public class ImageGenerationService {
     /**
      * Fallback API 是否已配置（api-url 和 api-key 均非空）。
      */
-    private boolean isFallbackConfigured() {
-        return fallbackApiUrl != null && !fallbackApiUrl.isBlank()
-                && fallbackApiKey != null && !fallbackApiKey.isBlank();
+    private boolean isFallbackConfigured(AiModel model) {
+        // 有显式 fallback 配置，或可复用失败请求的模型信息
+        if (fallbackApiUrl != null && !fallbackApiUrl.isBlank()
+                && fallbackApiKey != null && !fallbackApiKey.isBlank()) {
+            return true;
+        }
+        return model != null && model.getApiUrl() != null && !model.getApiUrl().isBlank()
+                && model.getApiKey() != null && !model.getApiKey().isBlank();
     }
 
     /**
@@ -472,22 +477,30 @@ public class ImageGenerationService {
      * <p>当 PackyAPI 模型下架时自动调用此方法重试。</p>
      */
     private ImageGenerationResult callChatCompletionsFallback(String prompt, String size, String quality,
-                                                               Long userId, long startTime) {
+                                                               Long userId, long startTime, AiModel model) {
         try {
+            // 解析 fallback 目标：优先显式配置，否则复用失败的模型信息
+            String targetUrl = (fallbackApiUrl != null && !fallbackApiUrl.isBlank())
+                    ? fallbackApiUrl : model.getApiUrl() + "/v1/chat/completions";
+            String targetKey = (fallbackApiKey != null && !fallbackApiKey.isBlank())
+                    ? fallbackApiKey : model.getApiKey();
+            String targetModel = (fallbackModel != null && !fallbackModel.isBlank())
+                    ? fallbackModel : model.getModelName();
+
             // 构建 OpenAI Chat Completions 请求体
-        String requestBody = String.format(
-                "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}],\"n\":1,\"size\":\"%s\"}",
-                escapeJson(fallbackModel), escapeJson(prompt), escapeJson(size));
+            String requestBody = String.format(
+                    "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}],\"n\":1,\"size\":\"%s\"}",
+                    escapeJson(targetModel), escapeJson(prompt), escapeJson(size));
 
-        log.info("Fallback ChatCompletions: url={}, model={}", fallbackApiUrl, fallbackModel);
+            log.info("Fallback ChatCompletions: url={}, model={}", targetUrl, targetModel);
 
-        // 发送 HTTP 请求
-        java.net.URL url = new java.net.URL(fallbackApiUrl);
-        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-        try {
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + fallbackApiKey);
+            // 发送 HTTP 请求
+            java.net.URL url = new java.net.URL(targetUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            try {
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Authorization", "Bearer " + targetKey);
             conn.setDoOutput(true);
             conn.setConnectTimeout(30_000);
             conn.setReadTimeout(60_000);
@@ -533,7 +546,7 @@ public class ImageGenerationService {
             log.info("Fallback ChatCompletions succeeded ({}ms), url={}", timeCostMs, imageUrl);
 
             // 下载图片到本地
-            String resultPath = downloadImage(imageUrl, "generate", fallbackApiKey);
+            String resultPath = downloadImage(imageUrl, "generate", targetKey);
 
             // 保存历史记录
             ImageGenerationRecord record = ImageGenerationRecord.builder()
