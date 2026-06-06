@@ -38,12 +38,13 @@ public class TokenUsageService {
     /** 图片生成固定单价（CNY/张） */
     private static final BigDecimal IMAGE_UNIT_PRICE = new BigDecimal("0.20");
 
-    /** 计算 CNY 费用：图片按固定单价，LLM 按 token 计价 */
+    /** 计算 CNY 费用：图片按固定单价 × 调用次数，LLM 按 token 计价 */
     private BigDecimal calculateCnyCost(String modelType, String modelName,
-                                         int promptTokens, int completionTokens) {
+                                         long callCount, int promptTokens, int completionTokens) {
         if ("IMAGE".equals(modelType)) {
-            // 图片生成按张计费，1 条记录 = 1 张
-            return IMAGE_UNIT_PRICE;
+            // 图片生成按张计费：单价 × 调用次数
+            return IMAGE_UNIT_PRICE.multiply(BigDecimal.valueOf(callCount))
+                    .setScale(2, java.math.RoundingMode.HALF_UP);
         }
         ModelPriceConfig pricing = ModelPriceConfig.match(modelName);
         if (pricing != null) {
@@ -70,7 +71,7 @@ public class TokenUsageService {
             int completionTokens = row[7] != null ? ((Number) row[7]).intValue() : 0;
 
             // 计算 CNY 费用（图片按固定单价，LLM 按 token 计价）
-            BigDecimal cnyCost = calculateCnyCost(modelType, modelName, promptTokens, completionTokens);
+            BigDecimal cnyCost = calculateCnyCost(modelType, modelName, callCount, promptTokens, completionTokens);
 
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("agentName", agentName);
@@ -104,7 +105,7 @@ public class TokenUsageService {
             int completionTokens = r.getCompletionTokens() != null ? r.getCompletionTokens() : 0;
 
             BigDecimal cnyCost = calculateCnyCost(r.getModelType(), r.getModelName(),
-                    promptTokens, completionTokens);
+                    1L, promptTokens, completionTokens);
 
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());
