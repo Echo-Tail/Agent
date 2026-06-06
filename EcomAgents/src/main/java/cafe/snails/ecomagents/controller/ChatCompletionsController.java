@@ -4,6 +4,7 @@ import cafe.snails.ecomagents.dto.ChatCompletionsRequest;
 import cafe.snails.ecomagents.dto.ChatCompletionsResponse;
 import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.exception.ErrorCode;
+import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.ImageGenerationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -39,7 +40,8 @@ public class ChatCompletionsController {
      * 返回包含图片 URL 的 OpenAI 兼容响应。</p>
      */
     @PostMapping(value = "/completions", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ChatCompletionsResponse createChatCompletion(@RequestBody ChatCompletionsRequest request) {
+    public ChatCompletionsResponse createChatCompletion(@RequestBody ChatCompletionsRequest request,
+                                                          @CurrentUserId Long userId) {
         // 提取 prompt
         String prompt = request.resolvePrompt();
         if (prompt.isBlank()) {
@@ -53,7 +55,7 @@ public class ChatCompletionsController {
 
         // 调用图片生成（复用 ImageGenerationService 的 generate 逻辑）
         ImageGenerationService.ImageGenerationResult result = imageGenerationService.generate(
-                prompt, size, quality, null);
+                prompt, size, quality, userId);
 
         // 构建图片 Markdown URL（兼容 OpenAI 格式，content 中返回图片链接）
         String imageUrl = result.url();
