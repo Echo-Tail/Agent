@@ -15,15 +15,16 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
-  Check, Copy, Download, Image, ImagePlus, Upload, Trash2, RefreshCw, Loader2, AlertCircle,
+  Check, Copy, Download, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle,
   Search, ChevronLeft, ChevronRight, ZoomIn, X,
 } from 'lucide-vue-next'
 import { generateImage, editImage, listImageRecords, deleteImageRecord } from '@/api/image'
-import { publishToGallery } from '@/api/gallery'
 import { getImageModelsApi } from '@/api/model'
+import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
+import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 import { toast } from 'sonner'
 import { useI18n } from 'vue-i18n'
-import type { ImageRecord, PageResponse } from '@/api/image'
+import type { ImageRecord, ImageGenerationResult } from '@/api/image'
 
 const { t } = useI18n()
 
@@ -38,12 +39,15 @@ const activeMode = ref<'generate' | 'edit'>('generate')
 const prompt = ref('')
 const size = ref('1024x1024')
 const quality = ref('high')   // default: high
+const imageCount = ref(1)
 const editImages = ref<File[]>([])
 const editPreviewUrls = ref<string[]>([])
+const maskFile = ref<File | undefined>(undefined)
+const maskPreviewUrl = ref<string>('')
 
 // ── Generation ──
 const generating = ref(false)
-const result = ref<{ url: string; revisedPrompt: string | null; timeCostMs: number; recordId: number } | null>(null)
+const result = ref<ImageGenerationResult | null>(null)
 const timerSeconds = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 
@@ -104,7 +108,12 @@ const qualityOptions = [
 ]
 
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
-const hasResult = computed(() => result.value && result.value.url)
+const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
+const resultImageUrl = (url: string) => {
+  if (!url) return ''
+  const normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
+  return normalized.startsWith('/') ? normalized : '/' + normalized
+}
 
 // ── Lifecycle ──
 onMounted(async () => {
@@ -167,7 +176,7 @@ async function handleGenerate() {
   result.value = null
   startTimer()
   try {
-    result.value = await generateImage(prompt.value, size.value, quality.value)
+    result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value)
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
@@ -184,7 +193,7 @@ async function handleEdit() {
   result.value = null
   startTimer()
   try {
-    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value)
+    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value)
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
@@ -214,48 +223,106 @@ function removeImage(index: number) {
   editPreviewUrls.value.splice(index, 1)
 }
 
-// ── Publish dialog ──
-const publishDialogOpen = ref(false)
-const publishRecordId = ref<number | null>(null)
-const publishFormTitle = ref('')
-const publishFormCategory = ref('')
-const publishFormStyle = ref('')
-const publishFormNegative = ref('')
-const publishing = ref(false)
-const publishError = ref('')
-
-function openPublishDialog(record: ImageRecord) {
-  publishRecordId.value = record.id
-  publishFormTitle.value = ''
-  publishFormCategory.value = ''
-  publishFormStyle.value = ''
-  publishFormNegative.value = ''
-  publishError.value = ''
-  publishDialogOpen.value = true
+// ── Mask upload ──
+function handleMaskSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  const file = input.files[0]
+  if (maskPreviewUrl.value) URL.revokeObjectURL(maskPreviewUrl.value)
+  maskFile.value = file
+  maskPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
 }
 
-async function submitPublish() {
-  if (!publishRecordId.value) {
-    publishError.value = t('imageGen.publishSelectImage') || '请选择要发布的图片'
-    return
-  }
-  publishError.value = ''
-  publishing.value = true
+function removeMask() {
+  if (maskPreviewUrl.value) URL.revokeObjectURL(maskPreviewUrl.value)
+  maskFile.value = undefined
+  maskPreviewUrl.value = ''
+}
+
+// ── Asset upload dialog (replace publish) ──
+const assetUploadOpen = ref(false)
+const assetUploadRecordId = ref<number | null>(null)
+const assetUploadSpaceId = ref<number | undefined>(undefined)
+const uploadingAsset = ref(false)
+const assetSpaces = ref<AssetSpace[]>([])
+
+function openAssetUpload(record: ImageRecord) {
+  assetUploadRecordId.value = record.id
+  assetUploadSpaceId.value = undefined
+  assetUploadOpen.value = true
+  loadAssetSpaces()
+}
+
+async function loadAssetSpaces() {
   try {
-    await publishToGallery({
-      recordId: publishRecordId.value,
-      title: publishFormTitle.value || undefined,
-      categoryTags: publishFormCategory.value || undefined,
-      styleTags: publishFormStyle.value || undefined,
-      negativePrompt: publishFormNegative.value || undefined,
-    })
-    toast.success(t('gallery.publishSuccess') || '发布成功')
-    publishDialogOpen.value = false
+    assetSpaces.value = await listSpaces()
+  } catch { /* ignore */ }
+}
+
+async function submitAssetUpload() {
+  if (!assetUploadRecordId.value) return
+  uploadingAsset.value = true
+  try {
+    await importFromRecord(assetUploadRecordId.value, assetUploadSpaceId.value)
+    toast.success(t('assetLibrary.uploadSuccess') || '已上传到素材库')
+    assetUploadOpen.value = false
   } catch {
     // toast handled by interceptor
   } finally {
-    publishing.value = false
+    uploadingAsset.value = false
   }
+}
+
+// ── Asset picker (select reference images from library) ──
+const assetPickerOpen = ref(false)
+const pickerAssets = ref<PublicAsset[]>([])
+const pickerLoading = ref(false)
+const pickerSpaceId = ref<number | undefined>(undefined)
+const pickerKeyword = ref('')
+
+async function openAssetPicker() {
+  assetPickerOpen.value = true
+  pickerSpaceId.value = undefined
+  pickerKeyword.value = ''
+  await loadPickerAssets()
+}
+
+async function loadPickerAssets() {
+  pickerLoading.value = true
+  try {
+    const res: PageResponse<PublicAsset> = await listAssets({
+      spaceId: pickerSpaceId.value || undefined,
+      keyword: pickerKeyword.value || undefined,
+      page: 0,
+      size: 50,
+    })
+    pickerAssets.value = res.content ?? []
+  } catch { /* ignore */ }
+  finally { pickerLoading.value = false }
+}
+
+async function pickAsset(asset: PublicAsset) {
+  if (editImages.value.length >= 4) {
+    toast.error(t('imageGen.maxImages') || '最多 4 张参考图')
+    return
+  }
+  try {
+    const resp = await fetch(imageUrl(asset.filePath))
+    const blob = await resp.blob()
+    const file = new File([blob], asset.fileName, { type: blob.type })
+    editImages.value.push(file)
+    editPreviewUrls.value.push(URL.createObjectURL(blob))
+    toast.success(t('assetLibrary.uploadSuccess') || '已添加参考图')
+  } catch {
+    toast.error(t('imageGen.loadError') || '加载图片失败')
+  }
+}
+
+function imageUrl(path: string): string {
+  if (!path) return ''
+  const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  return '/uploads/' + n
 }
 
 // ── Delete record ──
@@ -303,14 +370,6 @@ function resetZoom() {
   zoomLevel.value = 1
   panX.value = 0
   panY.value = 0
-}
-
-// ── Helpers ──
-function resultImageUrl(path: string): string {
-  if (!path) return ''
-  // 去除 Windows 反斜杠和多余的 ./ 前缀
-  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
-  return normalized.startsWith('/') ? normalized : '/' + normalized
 }
 
 function formatTime(ms: number): string {
@@ -387,6 +446,34 @@ function formatDateTime(dateStr: string): string {
                   <input id="ref-images-upload" type="file" accept="image/*" multiple class="hidden" @change="handleFileSelect" />
                 </label>
               </div>
+              <Button v-if="editImages.length < 4" variant="outline" size="sm" class="mt-1" @click="openAssetPicker">
+                <Image class="h-4 w-4 mr-1" />
+                {{ $t('assetLibrary.upload') }}
+              </Button>
+            </div>
+
+            <!-- Mask upload (optional, local repaint) -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium">{{ $t('imageGen.maskImage') }}</label>
+              <p class="text-xs text-muted-foreground">{{ $t('imageGen.maskHint') }}</p>
+              <div class="flex flex-wrap gap-3 items-center">
+                <div v-if="maskPreviewUrl" class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border">
+                  <img :src="maskPreviewUrl" class="w-full h-full object-cover" alt="mask" />
+                  <button
+                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                    @click="removeMask()"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </button>
+                </div>
+                <label
+                  v-if="!maskPreviewUrl"
+                  class="flex items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors"
+                >
+                  <ImagePlus class="h-5 w-5 text-muted-foreground" />
+                  <input id="mask-upload" type="file" accept="image/png" class="hidden" @change="handleMaskSelect" />
+                </label>
+              </div>
             </div>
 
             <div class="space-y-2">
@@ -400,12 +487,12 @@ function formatDateTime(dateStr: string): string {
             </div>
           </TabsContent>
 
-          <!-- Common params: size + quality + button (同一行) -->
+          <!-- Common params: size + quality + count + button (同一行) -->
           <div class="flex items-end gap-1">
             <div class="space-y-2">
               <span class="text-sm font-medium">{{ $t('imageGen.size') }}</span>
               <Select v-model="size">
-                <SelectTrigger class="min-w-[200px]">
+                <SelectTrigger class="min-w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -418,7 +505,7 @@ function formatDateTime(dateStr: string): string {
             <div class="space-y-2">
               <span class="text-sm font-medium">{{ $t('imageGen.quality') }}</span>
               <Select v-model="quality">
-                <SelectTrigger class="min-w-[128px]">
+                <SelectTrigger class="min-w-[110px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -427,6 +514,21 @@ function formatDateTime(dateStr: string): string {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div class="space-y-2">
+              <span class="text-sm font-medium">{{ $t('imageGen.count') }}</span>
+              <div class="flex items-center border border-border rounded-md h-8">
+                <Button variant="ghost" size="sm" class="h-full w-6 rounded-none px-0 text-sm" :disabled="imageCount <= 1" @click="imageCount = Math.max(1, imageCount - 1)">-</Button>
+                <Input
+                  v-model.number="imageCount"
+                  type="number"
+                  min="1"
+                  max="10"
+                  class="w-9 h-full text-center border-0 rounded-none text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  @blur="imageCount = Math.max(1, Math.min(10, imageCount || 1))"
+                />
+                <Button variant="ghost" size="sm" class="h-full w-6 rounded-none px-0 text-sm" :disabled="imageCount >= 10" @click="imageCount = Math.min(10, imageCount + 1)">+</Button>
+              </div>
             </div>
             <div class="self-end flex items-center gap-2">
               <TooltipProvider>
@@ -460,22 +562,26 @@ function formatDateTime(dateStr: string): string {
           <Card v-if="hasResult" class="overflow-hidden h-full">
             <CardContent class="p-4 space-y-3">
               <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-sm">{{ $t('imageGen.result') }}</h3>
+                <h3 class="font-semibold text-sm">{{ $t('imageGen.result') }}（{{ result!.urls.length }} 张）</h3>
                 <Badge variant="secondary" class="text-xs">
                   {{ formatTime(result!.timeCostMs) }}
                 </Badge>
               </div>
 
-              <!-- Clickable image -->
-              <div
-                class="rounded-lg overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
-                @click="openLightbox(result!.url)"
-              >
-                <img
-                  :src="resultImageUrl(result!.url)"
-                  class="w-full max-h-[400px] object-contain hover:opacity-90 transition-opacity"
-                  alt="Generated image"
-                />
+              <!-- Image grid -->
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  v-for="(imgUrl, idx) in result!.urls"
+                  :key="idx"
+                  class="rounded-lg overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
+                  @click="openLightbox(imgUrl)"
+                >
+                  <img
+                    :src="resultImageUrl(imgUrl)"
+                    class="w-full h-auto object-contain hover:opacity-90 transition-opacity"
+                    :alt="'Generated image ' + (idx + 1)"
+                  />
+                </div>
               </div>
 
               <div v-if="result!.revisedPrompt" class="text-xs text-muted-foreground bg-muted/30 rounded-md p-3">
@@ -483,15 +589,15 @@ function formatDateTime(dateStr: string): string {
                 {{ result!.revisedPrompt }}
               </div>
 
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" @click="result = null; prompt = ''">
                   <RefreshCw class="mr-1 h-3 w-3" />
                   {{ $t('imageGen.generateAgain') }}
                 </Button>
-                <Button variant="outline" size="sm" as-child>
-                  <a :href="resultImageUrl(result!.url)" download target="_blank">
+                <Button v-for="(imgUrl, idx) in result!.urls" :key="'dl-' + idx" variant="outline" size="sm" as-child>
+                  <a :href="resultImageUrl(imgUrl)" :download="'image-' + (idx + 1) + '.png'" target="_blank">
                     <Image class="mr-1 h-3 w-3" />
-                    {{ $t('imageGen.download') }}
+                    {{ $t('imageGen.download') }}{{ result!.urls.length > 1 ? ' #' + (idx + 1) : '' }}
                   </a>
                 </Button>
               </div>
@@ -607,10 +713,10 @@ function formatDateTime(dateStr: string): string {
                 variant="ghost"
                 size="sm"
                 class="h-6 text-xs text-muted-foreground hover:text-primary gap-1 px-1.5"
-                @click.stop="openPublishDialog(record)"
+                @click.stop="openAssetUpload(record)"
               >
-                <ImagePlus class="h-3 w-3" />
-                {{ $t('imageGen.publish') }}
+                <Upload class="h-3 w-3" />
+                {{ $t('assetLibrary.upload') }}
               </Button>
               <Button
                 variant="ghost"
@@ -716,38 +822,68 @@ function formatDateTime(dateStr: string): string {
       </div>
     </Teleport>
 
-    <!-- ═══ Publish Dialog ═══ -->
-    <Dialog :open="publishDialogOpen" @update:open="publishDialogOpen = $event">
-      <DialogContent class="sm:max-w-md">
+    <!-- ═══ Asset Upload Dialog ═══ -->
+    <Dialog :open="assetUploadOpen" @update:open="assetUploadOpen = $event">
+      <DialogContent class="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{{ $t('imageGen.publish') }}</DialogTitle>
+          <DialogTitle>{{ $t('assetLibrary.uploadTo') }}</DialogTitle>
           <DialogDescription>{{ $t('imageGen.publishSelectImage') }}</DialogDescription>
         </DialogHeader>
-        <div class="space-y-5 py-2">
+        <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <Label for="pub-title" class="text-sm">{{ $t('imageGen.publishTitle') }}</Label>
-            <Input id="pub-title" v-model="publishFormTitle" :placeholder="$t('imageGen.publishPlaceholder')" class="h-9" />
-          </div>
-          <div class="space-y-1.5">
-            <Label for="pub-cat" class="text-sm">{{ $t('imageGen.publishCategory') }}</Label>
-            <Input id="pub-cat" v-model="publishFormCategory" :placeholder="$t('imageGen.publishCategoryPlaceholder')" class="h-9" />
-          </div>
-          <div class="space-y-1.5">
-            <Label for="pub-style" class="text-sm">{{ $t('imageGen.publishStyle') }}</Label>
-            <Input id="pub-style" v-model="publishFormStyle" :placeholder="$t('imageGen.publishStylePlaceholder')" class="h-9" />
-          </div>
-          <div class="space-y-1.5">
-            <Label for="pub-neg" class="text-sm">{{ $t('imageGen.publishNegative') }}</Label>
-            <Textarea id="pub-neg" v-model="publishFormNegative" :placeholder="$t('imageGen.publishNegativePlaceholder')" rows="2" class="min-h-[60px]" />
+            <Label for="asset-space" class="text-sm">{{ $t('assetLibrary.selectSpace') }}</Label>
+            <Select v-model="assetUploadSpaceId">
+              <SelectTrigger><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
+                <SelectItem v-for="sp in assetSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="publishDialogOpen = false">{{ $t('imageGen.publishCancel') }}</Button>
-          <Button :disabled="publishing" @click="submitPublish">
-            <Loader2 v-if="publishing" class="w-4 h-4 mr-2 animate-spin" />
-            {{ $t('imageGen.publish') }}
+          <Button variant="outline" @click="assetUploadOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button :disabled="uploadingAsset" @click="submitAssetUpload">
+            <Loader2 v-if="uploadingAsset" class="w-4 h-4 mr-2 animate-spin" />
+            {{ $t('assetLibrary.upload') }}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ═══ Asset Picker Dialog ═══ -->
+    <Dialog :open="assetPickerOpen" @update:open="assetPickerOpen = $event">
+      <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{{ $t('assetLibrary.uploadTo') }}</DialogTitle>
+          <DialogDescription>{{ $t('imageGen.publishSelectImage') }}</DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <Input v-model="pickerKeyword" :placeholder="$t('assetLibrary.searchPlaceholder')" class="h-8 text-sm" @keyup.enter="loadPickerAssets" />
+            <Button variant="outline" size="sm" @click="loadPickerAssets">{{ $t('assetLibrary.search') }}</Button>
+          </div>
+          <div v-if="pickerLoading" class="flex justify-center py-8">
+            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="pickerAssets.length === 0" class="flex flex-col items-center py-8 text-muted-foreground">
+            <Image class="h-10 w-10 mb-2 opacity-40" />
+            <p class="text-sm">{{ $t('assetLibrary.noAssets') }}</p>
+          </div>
+          <div v-else class="grid grid-cols-4 gap-3">
+            <div
+              v-for="asset in pickerAssets"
+              :key="asset.id"
+              class="relative aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer border border-border hover:border-primary/50 transition-colors group"
+              @click="pickAsset(asset)"
+            >
+              <img :src="imageUrl(asset.filePath)" class="w-full h-full object-cover" alt="" loading="lazy" />
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <ZoomIn class="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   </div>

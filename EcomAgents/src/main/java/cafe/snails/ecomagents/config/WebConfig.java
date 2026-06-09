@@ -37,12 +37,12 @@ public class WebConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 String[] origins = parseAllowedOrigins();
                 registry.addMapping("/v1/**")
-                        .allowedOrigins(origins)
+                        .allowedOriginPatterns(origins)
                         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);
                 registry.addMapping("/chat/**")
-                        .allowedOrigins(origins)
+                        .allowedOriginPatterns(origins)
                         .allowedMethods("GET", "POST", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);

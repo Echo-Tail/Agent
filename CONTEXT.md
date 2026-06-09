@@ -168,28 +168,46 @@ type: "done"       → 完整文本
 - **AGENTS.md** = Agent 的 systemPrompt，双向同步（修改 systemPrompt 时重写文件）
 - **MEMORY.md** = HarnessAgent 自动维护的跨会话记忆，**所有用户共享**（框架限制，详见多租户设计）
 
-### 画廊（Gallery）
-团队精选作品展示空间，独立于图片生成历史记录的生命周期。入口为侧边栏"图像生成"下方的"画廊"菜单项（路由 `/agents/gallery`），所有用户可浏览。
+### ~~画廊（Gallery）~~ [已废弃]
+画廊功能已废弃并在清理中，由「公共素材库」取代。相关代码逐步移除：
+- `GalleryItem` 实体 / `gallery_items` 表 → 待清理
+- `GalleryController` / `GalleryService` / `GalleryItemRepository` → 待清理
+- `GalleryView.vue` / `api/gallery.ts` → 待清理
+- 侧边栏"画廊"菜单项 → 已移除，替换为"公共素材库"
+
+### 公共素材库（Public Asset Library）
+所有用户共享的图片素材池，用于图生图时选取参考图。入口为侧边栏一级菜单"公共素材库"（路由 `/agents/assets`）。
 
 #### 核心概念
 
-- **画廊作品（GalleryItem）** — 用户从个人历史记录精选发布到公共画廊的单张图片。独立表 `gallery_items`，与 `image_generation_records` 无级联删除关系。
-- **发布** — 用户可在个人历史记录中点击"发布到画廊"（入口1），或在画廊页面点击"发布作品"弹窗选择记录（入口2）。发布时可选填标题、品类标签、风格标签、负面提示词。
-- **生命周期**：画廊记录的生命周期独立于历史记录。用户删除历史记录不影响画廊作品；反之，取消发布/下架也不删除历史记录。
-- **取消发布** — 发布者可在画廊作品详情中点击"取消发布"，状态变为 `REMOVED_BY_USER`。
-- **管理员下架** — 管理员可在任意作品详情中点击"下架"，状态变为 `REMOVED_BY_ADMIN`。`DELETE /v1/gallery/items/{id}/admin` 受 `hasRole("ADMIN")` 保护。
+- **素材（Asset）** — 单张图片文件，用户手动上传到素材库。支持格式：JPEG、PNG、WebP。存储在 `uploads/assets/` 目录。来源包括：本地上传、从生成结果「上传到素材库」。
+- **素材空间（Asset Space）** — 类似文件夹的分类容器，空间名**全局唯一**。所有用户共享空间池，上传时从已有空间列表选择一个，或新建一个。创建者和管理员可以修改/删除空间，普通用户只能使用。
+- **所有权隔离**：素材通过 `uploaded_by` 字段归属上传者。普通用户只能删除自己上传的素材。管理员可以删除任何素材。
 
 #### 数据模型
 
-`gallery_items` 表：
-- `id` (PK), `record_id` (FK → image_generation_records), `user_id` (发布者)
-- `title`, `category_tags` (逗号分隔), `style_tags` (逗号分隔), `negative_prompt`
-- `status`: `PUBLISHED` / `REMOVED_BY_USER` / `REMOVED_BY_ADMIN`
-- `view_count`, `created_at`, `updated_at`
+`asset_spaces` 表：
+- `id` (PK), `name` (全局唯一), `description` (可选), `created_by` (FK → users), `created_at`, `updated_at`
 
-#### 查询逻辑
-- 画廊列表 LEFT JOIN `image_generation_records`，过滤 `status=PUBLISHED` 且关联记录存在。如果用户删除了原始生成记录，画廊条目自动消失。
-- 排序：按 `created_at DESC`
+`public_assets` 表：
+- `id` (PK), `file_name` (原始文件名), `file_path` (服务器路径), `file_size` (字节), `mime_type`
+- `space_id` (FK → asset_spaces), `uploaded_by` (FK → users), `created_at`
+
+#### 权限矩阵
+
+| 行为 | 上传者 | 其他用户 | 管理员 |
+|------|--------|---------|--------|
+| 上传素材到任意空间 | ✅ | ✅ | ✅ |
+| 删除自己上传的素材 | ✅ | ❌ | ✅ |
+| 删除他人上传的素材 | ❌ | ❌ | ✅ |
+| 创建素材空间 | ✅ | ✅ | ✅ |
+| 修改/删除自己创建的空间 | ✅ | ❌ | ✅ |
+| 修改/删除他人创建的空间 | ❌ | ❌ | ✅ |
+
+#### 与图生图的集成
+- 图生图编辑 Tab 中，参考图来源增加"从素材库选择"入口
+- 选择后打开素材浏览器弹窗（按空间筛选），选中图片后作为参考图自动填充
+- 生成结果卡片增加"上传到素材库"按钮，选择目标空间后存入
 
 ### 图片生成（Image Generation）
 独立于 Agent 体系的图片生成功能，入口为侧边栏"Agent 广场"下方的"图像生成"菜单项（路由 `/agents/image`），所有用户可用。
