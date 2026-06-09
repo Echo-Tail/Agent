@@ -11,18 +11,19 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    host: '0.0.0.0',
+    port: 5174,
     proxy: {
       '/v1': {
-        target: 'http://localhost:8889',
+        target: 'http://localhost:8888',
         changeOrigin: true,
       },
       '/chat': {
-        target: 'http://localhost:8889',
+        target: 'http://localhost:8888',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:8889',
+        target: 'http://localhost:8888',
         changeOrigin: true,
       },
     },

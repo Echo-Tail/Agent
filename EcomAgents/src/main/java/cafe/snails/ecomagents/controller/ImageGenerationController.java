@@ -37,7 +37,8 @@ public class ImageGenerationController {
         String prompt = body.get("prompt");
         String size = body.get("size");
         String quality = body.get("quality");
-        var result = imageGenerationService.generate(prompt, size, quality, userId);
+        int n = parseIntOrDefault(body.get("n"), 1);
+        var result = imageGenerationService.generate(prompt, size, quality, n, userId);
         return ApiResponse.success(result);
     }
 
@@ -50,9 +51,23 @@ public class ImageGenerationController {
             @RequestParam(value = "size", required = false) String size,
             @RequestParam(value = "quality", required = false) String quality,
             @RequestParam("image") List<MultipartFile> images,
+            @RequestParam(value = "mask", required = false) MultipartFile mask,
+            @RequestParam(value = "n", required = false, defaultValue = "1") int n,
             @CurrentUserId Long userId) {
-        var result = imageGenerationService.edit(prompt, size, quality, images, userId);
+        var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId);
         return ApiResponse.success(result);
+    }
+
+    /**
+     * 安全解析整数，解析失败返回默认值。
+     */
+    private int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     /**

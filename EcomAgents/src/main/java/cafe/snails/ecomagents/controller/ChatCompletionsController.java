@@ -55,10 +55,10 @@ public class ChatCompletionsController {
 
         // 调用图片生成（复用 ImageGenerationService 的 generate 逻辑）
         ImageGenerationService.ImageGenerationResult result = imageGenerationService.generate(
-                prompt, size, quality, userId);
+                prompt, size, quality, 1, userId);
 
         // 构建图片 Markdown URL（兼容 OpenAI 格式，content 中返回图片链接）
-        String imageUrl = result.url();
+        String imageUrl = result.urls().get(0);
         String markdownContent = String.format("![generated image](%s)", imageUrl);
         if (result.revisedPrompt() != null && !result.revisedPrompt().isBlank()) {
             markdownContent += "\n\n" + result.revisedPrompt();

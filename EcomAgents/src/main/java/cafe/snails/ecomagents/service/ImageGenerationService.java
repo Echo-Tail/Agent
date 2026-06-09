@@ -84,58 +84,112 @@ public class ImageGenerationService {
      * @param userId  操作用户 ID
      * @return 生成结果（图片 URL、改写后提示词、耗时）
      */
-    public ImageGenerationResult generate(String prompt, String size, String quality, Long userId) {
+    /**
+     * 单次文生图 API 调用结果。
+     */
+    private record SingleGenerateResult(String savedPath, String revisedPrompt) {}
+
+    public ImageGenerationResult generate(String prompt, String size, String quality, int n, Long userId) {
         if (prompt == null || prompt.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "图片描述不能为空");
         }
+        if (n < 1 || n > 10) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "生成张数必须在 1~10 之间");
+        }
 
         AiModel model = getImageModel();
-
         String finalSize = (size != null && !size.isBlank()) ? size : DEFAULT_SIZE;
         String finalQuality = (quality != null && !quality.isBlank()) ? quality : DEFAULT_QUALITY;
+        long overallStart = System.currentTimeMillis();
 
+        // API 不支持 n>1，并行调用 n 次，每次 n=1
+        List<String> resultPaths = new ArrayList<>();
+        String revisedPrompt = null;
+        int maxParallel = Math.min(n, 4);
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(maxParallel);
+        try {
+            var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<SingleGenerateResult>>(n);
+            for (int i = 0; i < n; i++) {
+                futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() ->
+                        callGenerateOnce(prompt, finalSize, finalQuality, model), executor));
+            }
+            // 等待全部完成（任一失败则抛出异常）
+            for (var future : futures) {
+                SingleGenerateResult r = future.join();
+                resultPaths.add(r.savedPath());
+                if (revisedPrompt == null) {
+                    revisedPrompt = r.revisedPrompt();
+                }
+            }
+        } finally {
+            executor.shutdown();
+        }
+
+        long overallMs = System.currentTimeMillis() - overallStart;
+
+        // 每张图保存一条历史记录
+        List<Long> recordIds = new ArrayList<>();
+        for (String path : resultPaths) {
+            ImageGenerationRecord record = ImageGenerationRecord.builder()
+                    .userId(userId)
+                    .mode("GENERATE")
+                    .prompt(prompt)
+                    .revisedPrompt(revisedPrompt)
+                    .size(finalSize)
+                    .quality(finalQuality)
+                    .resultPath(path)
+                    .timeCostMs(overallMs)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            recordRepository.save(record);
+            recordIds.add(record.getId());
+        }
+
+        log.info("Generated {} image(s) for user {} ({}ms)", resultPaths.size(), userId, overallMs);
+        recordImageUsage(model, userId, true, null);
+
+        List<String> urls = resultPaths.stream()
+                .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
+                .toList();
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0));
+    }
+
+    /**
+     * 单次文生图 API 调用：发送 n=1 的请求，保存返回的图片，返回路径 + revised_prompt。
+     */
+    private SingleGenerateResult callGenerateOnce(String prompt, String size, String quality, AiModel model) {
         long startTime = System.currentTimeMillis();
         try {
             String requestJson = objectMapper.writeValueAsString(
-                    new GenerationRequest(MODEL_NAME, prompt, finalSize, finalQuality, 1, "png"));
+                    new GenerationRequest(MODEL_NAME, prompt, size, quality, 1, "png"));
 
-            log.debug("Image generate request: {}", requestJson);
-
-            // 使用 HttpURLConnection 替代 WebClient，避免长时间请求的响应读取问题
             java.net.URL url = new java.net.URL(model.getApiUrl() + "/v1/images/generations");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
             try {
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + model.getApiKey());
-                // Chrome UA 避免 CloudFront SSL 重新协商问题
-                // Chrome UA 避免 CloudFront SSL 重新协商问题
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36");
                 conn.setRequestProperty("Connection", "close");
                 conn.setDoOutput(true);
                 conn.setConnectTimeout(timeoutSeconds * 1000);
                 conn.setReadTimeout(timeoutSeconds * 1000);
 
-                // 写入请求体
                 try (java.io.OutputStream os = conn.getOutputStream()) {
                     os.write(requestJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
 
                 int statusCode = conn.getResponseCode();
+                long timeCostMs = System.currentTimeMillis() - startTime;
 
                 if (statusCode >= 200 && statusCode < 300) {
-                    // 成功响应
                     String responseJson;
                     try (java.io.InputStream in = conn.getInputStream()) {
                         responseJson = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     }
-
-                    long timeCostMs = System.currentTimeMillis() - startTime;
-
                     if (responseJson == null || responseJson.isBlank()) {
                         throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：API 返回了空响应");
                     }
-
                     JsonNode response = objectMapper.readTree(responseJson);
                     JsonNode dataArray = response.get("data");
                     if (dataArray == null || !dataArray.isArray() || dataArray.size() == 0) {
@@ -144,50 +198,19 @@ public class ImageGenerationService {
                     }
                     JsonNode dataNode = dataArray.get(0);
                     String revisedPrompt = dataNode.has("revised_prompt") ? dataNode.get("revised_prompt").asText() : null;
-
-                    String resultPath = resolveResultPath(dataNode, "generate", model.getApiKey());
-
-                    ImageGenerationRecord record = ImageGenerationRecord.builder()
-                            .userId(userId)
-                            .mode("GENERATE")
-                            .prompt(prompt)
-                            .revisedPrompt(revisedPrompt)
-                            .size(finalSize)
-                            .quality(finalQuality)
-                            .resultPath(resultPath)
-                            .timeCostMs(timeCostMs)
-                            .createdAt(LocalDateTime.now())
-                            .build();
-                    recordRepository.save(record);
-
-                    log.info("Image generated for user {}: {} ({}ms)", userId, resultPath, timeCostMs);
-                    recordImageUsage(model, userId, true, null);
-
-                    return new ImageGenerationResult("/" + resultPath.replace("\\", "/").replace("./", ""),
-                            revisedPrompt, timeCostMs, record.getId());
-
+                    String savedPath = resolveResultPath(dataNode, "generate", model.getApiKey());
+                    log.info("callGenerateOnce done in {}ms: {}", timeCostMs, savedPath);
+                    return new SingleGenerateResult(savedPath, revisedPrompt);
                 } else {
-                    // 错误响应
                     String errorBody;
                     try (java.io.InputStream in = conn.getErrorStream()) {
                         errorBody = in != null ? new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8) : "";
                     }
-
-                    long timeCostMs = System.currentTimeMillis() - startTime;
-                    log.error("Image generate failed ({}ms): status={}, body={}", timeCostMs, statusCode, errorBody);
-
-                    // 检测模型下架：走 fallback
-                    if (isModelNotFoundError(errorBody) && isFallbackConfigured(model)) {
-                        log.info("Primary API model unavailable, falling back to Chat Completions API");
-                        return callChatCompletionsFallback(prompt, finalSize, finalQuality, userId, startTime, model);
-                    }
+                    log.error("callGenerateOnce failed ({}ms): status={}, body={}", timeCostMs, statusCode, errorBody);
 
                     String message = extractPackyErrorMessage(errorBody);
-                    if (message != null) {
-                        throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
-                    }
-                    throw new BusinessException(ErrorCode.INTERNAL_ERROR,
-                            "图片生成失败（" + statusCode + "），请稍后重试");
+                    if (message != null) throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
+                    throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败（" + statusCode + "），请稍后重试");
                 }
             } finally {
                 conn.disconnect();
@@ -196,7 +219,7 @@ public class ImageGenerationService {
             throw e;
         } catch (IOException e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
-            log.error("Image generate IO error ({}ms): {}", timeCostMs, e.getMessage());
+            log.error("callGenerateOnce IO error ({}ms): {}", timeCostMs, e.getMessage());
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败：" + e.getMessage());
         }
     }
@@ -211,7 +234,7 @@ public class ImageGenerationService {
      * @param userId  操作用户 ID
      * @return 生成结果
      */
-    public ImageGenerationResult edit(String prompt, String size, String quality, List<MultipartFile> images, Long userId) {
+    public ImageGenerationResult edit(String prompt, String size, String quality, List<MultipartFile> images, MultipartFile mask, int n, Long userId) {
         if (prompt == null || prompt.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "修改描述不能为空");
         }
@@ -221,42 +244,112 @@ public class ImageGenerationService {
         if (images.size() > 4) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "参考图片最多 4 张");
         }
+        if (n < 1 || n > 10) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "生成张数必须在 1~10 之间");
+        }
 
         AiModel model = getImageModel();
-
         String finalSize = (size != null && !size.isBlank()) ? size : DEFAULT_SIZE;
         String finalQuality = (quality != null && !quality.isBlank()) ? quality : DEFAULT_QUALITY;
+        long overallStart = System.currentTimeMillis();
 
+        // API 不支持 n>1，并行调用 n 次，每次 n=1
+        List<String> resultPaths = new ArrayList<>();
+        String revisedPrompt = null;
+        int maxParallel = Math.min(n, 4);
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(maxParallel);
+        try {
+            byte[] multipartBody = buildEditMultipartBody(prompt, images, mask);
+
+            var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<SingleGenerateResult>>(n);
+            for (int i = 0; i < n; i++) {
+                futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() ->
+                        callEditOnce(model, multipartBody), executor));
+            }
+            for (var future : futures) {
+                SingleGenerateResult r = future.join();
+                resultPaths.add(r.savedPath());
+                if (revisedPrompt == null) {
+                    revisedPrompt = r.revisedPrompt();
+                }
+            }
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：" + e.getMessage());
+        } finally {
+            executor.shutdown();
+        }
+
+        long overallMs = System.currentTimeMillis() - overallStart;
+
+        // 每张图保存一条历史记录
+        List<Long> recordIds = new ArrayList<>();
+        for (String path : resultPaths) {
+            ImageGenerationRecord record = ImageGenerationRecord.builder()
+                    .userId(userId)
+                    .mode("EDIT")
+                    .prompt(prompt)
+                    .revisedPrompt(revisedPrompt)
+                    .size(finalSize)
+                    .quality(finalQuality)
+                    .resultPath(path)
+                    .timeCostMs(overallMs)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            recordRepository.save(record);
+            recordIds.add(record.getId());
+        }
+
+        log.info("Edited {} image(s) for user {} ({}ms)", resultPaths.size(), userId, overallMs);
+        recordImageUsage(model, userId, true, null);
+
+        List<String> urls = resultPaths.stream()
+                .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
+                .toList();
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0));
+    }
+
+    /**
+     * 构建 edit 的 multipart/form-data 请求体（n 固定传 1）。
+     */
+    private byte[] buildEditMultipartBody(String prompt, List<MultipartFile> images, MultipartFile mask) throws IOException {
+        String boundary = "----Boundary" + UUID.randomUUID().toString().replace("-", "");
+        java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
+
+        appendMultipartField(byteOut, boundary, "model", MODEL_NAME);
+        appendMultipartField(byteOut, boundary, "prompt", prompt);
+        appendMultipartField(byteOut, boundary, "n", "1");
+
+        for (MultipartFile imageFile : images) {
+            String fileName = imageFile.getOriginalFilename();
+            if (fileName == null || fileName.isBlank()) fileName = "image.png";
+            String mime = "image/png";
+            String ext = fileName.toLowerCase();
+            if (ext.endsWith(".jpg") || ext.endsWith(".jpeg")) mime = "image/jpeg";
+            else if (ext.endsWith(".gif")) mime = "image/gif";
+            else if (ext.endsWith(".webp")) mime = "image/webp";
+            appendMultipartFileField(byteOut, boundary, "image[]", fileName, mime, imageFile.getBytes());
+        }
+
+        if (mask != null && !mask.isEmpty()) {
+            String maskName = mask.getOriginalFilename();
+            if (maskName == null || maskName.isBlank()) maskName = "mask.png";
+            appendMultipartFileField(byteOut, boundary, "mask", maskName, "image/png", mask.getBytes());
+        }
+
+        byteOut.write(("--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return byteOut.toByteArray();
+    }
+
+    /**
+     * 单次 edit API 调用：发送 multipart 请求，保存返回图片。
+     */
+    private SingleGenerateResult callEditOnce(AiModel model, byte[] multipartBody) {
         long startTime = System.currentTimeMillis();
         try {
-            // 构建 multipart/form-data 请求体
-            String boundary = "----Boundary" + UUID.randomUUID().toString().replace("-", "");
+            // 从 multipart body 头部提取 boundary
+            String rawHead = new String(multipartBody, 0, Math.min(200, multipartBody.length), java.nio.charset.StandardCharsets.UTF_8);
+            String boundary = rawHead.substring(2, rawHead.indexOf("\r\n"));
 
-            java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
-
-            // model 字段
-            appendMultipartField(byteOut, boundary, "model", MODEL_NAME);
-
-            // prompt 字段
-            appendMultipartField(byteOut, boundary, "prompt", prompt);
-
-            // image[] 文件字段
-            for (MultipartFile imageFile : images) {
-                String fileName = imageFile.getOriginalFilename();
-                if (fileName == null || fileName.isBlank()) fileName = "image.png";
-                String mime = "image/png";
-                String ext = fileName.toLowerCase();
-                if (ext.endsWith(".jpg") || ext.endsWith(".jpeg")) mime = "image/jpeg";
-                else if (ext.endsWith(".gif")) mime = "image/gif";
-                else if (ext.endsWith(".webp")) mime = "image/webp";
-                appendMultipartFileField(byteOut, boundary, "image[]", fileName, mime, imageFile.getBytes());
-            }
-
-            // 结束 boundary
-            byteOut.write(("--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            byte[] multipartBody = byteOut.toByteArray();
-
-            // 发送请求
             java.net.URL url = new java.net.URL(model.getApiUrl() + "/v1/images/edits");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
             try {
@@ -274,19 +367,16 @@ public class ImageGenerationService {
                 }
 
                 int statusCode = conn.getResponseCode();
+                long timeCostMs = System.currentTimeMillis() - startTime;
 
                 if (statusCode >= 200 && statusCode < 300) {
                     String responseJson;
                     try (java.io.InputStream in = conn.getInputStream()) {
                         responseJson = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                     }
-
-                    long timeCostMs = System.currentTimeMillis() - startTime;
-
                     if (responseJson == null || responseJson.isBlank()) {
                         throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：API 返回了空响应");
                     }
-
                     JsonNode response = objectMapper.readTree(responseJson);
                     JsonNode dataArray = response.get("data");
                     if (dataArray == null || !dataArray.isArray() || dataArray.size() == 0) {
@@ -295,61 +385,27 @@ public class ImageGenerationService {
                     }
                     JsonNode dataNode = dataArray.get(0);
                     String revisedPrompt = dataNode.has("revised_prompt") ? dataNode.get("revised_prompt").asText() : null;
-
-                    String resultPath = resolveResultPath(dataNode, "edit", model.getApiKey());
-
-                    ImageGenerationRecord record = ImageGenerationRecord.builder()
-                            .userId(userId)
-                            .mode("EDIT")
-                            .prompt(prompt)
-                            .revisedPrompt(revisedPrompt)
-                            .size(finalSize)
-                            .quality(finalQuality)
-                            .resultPath(resultPath)
-                            .timeCostMs(timeCostMs)
-                            .createdAt(LocalDateTime.now())
-                            .build();
-                    recordRepository.save(record);
-
-                    log.info("Image edited for user {}: {} ({}ms)", userId, resultPath, timeCostMs);
-                    recordImageUsage(model, userId, true, null);
-
-                    return new ImageGenerationResult("/" + resultPath.replace("\\", "/").replace("./", ""),
-                            revisedPrompt, timeCostMs, record.getId());
-
+                    String savedPath = resolveResultPath(dataNode, "edit", model.getApiKey());
+                    log.info("callEditOnce done in {}ms: {}", timeCostMs, savedPath);
+                    return new SingleGenerateResult(savedPath, revisedPrompt);
                 } else {
                     String errorBody;
                     try (java.io.InputStream in = conn.getErrorStream()) {
                         errorBody = in != null ? new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8) : "";
                     }
-
-                    long timeCostMs = System.currentTimeMillis() - startTime;
-                    log.error("Image edit failed ({}ms): status={}, body={}", timeCostMs, statusCode, errorBody);
-
-                    if (isModelNotFoundError(errorBody) && isFallbackConfigured(model)) {
-                        log.info("Primary API edit model unavailable, falling back to Chat Completions API");
-                        return callChatCompletionsEditFallback(prompt, finalSize, finalQuality, images, userId, startTime, model);
-                    }
-
+                    log.error("callEditOnce failed ({}ms): status={}, body={}", timeCostMs, statusCode, errorBody);
                     String message = extractPackyErrorMessage(errorBody);
-                    if (message != null) {
-                        throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
-                    }
-                    throw new BusinessException(ErrorCode.INTERNAL_ERROR,
-                            "图片编辑失败（" + statusCode + "），请稍后重试");
+                    if (message != null) throw new BusinessException(ErrorCode.INTERNAL_ERROR, message);
+                    throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败（" + statusCode + "），请稍后重试");
                 }
             } finally {
                 conn.disconnect();
             }
         } catch (BusinessException e) {
             throw e;
-        } catch (SocketException e) {
+        } catch (IOException e) {
             long timeCostMs = System.currentTimeMillis() - startTime;
-            log.error("Image API edit connection reset ({}ms): {}", timeCostMs, e.getMessage());
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：服务连接被重置，请稍后重试");
-        } catch (Exception e) {
-            long timeCostMs = System.currentTimeMillis() - startTime;
-            log.error("Image editing failed ({}ms): {}", timeCostMs, e.getMessage());
+            log.error("callEditOnce IO error ({}ms): {}", timeCostMs, e.getMessage());
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：" + e.getMessage());
         }
     }
@@ -690,7 +746,7 @@ public class ImageGenerationService {
             recordImageUsage(model, userId, true, null);
 
             return new ImageGenerationResult(
-                    "/" + resultPath.replace("\\", "/").replace("./", ""),
+                    List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
                     content, timeCostMs, record.getId());
 
             } finally {
@@ -816,7 +872,7 @@ public class ImageGenerationService {
                 recordImageUsage(model, userId, true, null);
 
                 return new ImageGenerationResult(
-                        "/" + resultPath.replace("\\", "/").replace("./", ""),
+                        List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
                         content, timeCostMs, record.getId());
 
             } finally {
@@ -899,5 +955,5 @@ public class ImageGenerationService {
     /**
      * 图片生成结果 DTO。
      */
-    public record ImageGenerationResult(String url, String revisedPrompt, Long timeCostMs, Long recordId) {}
+    public record ImageGenerationResult(List<String> urls, String revisedPrompt, Long timeCostMs, Long recordId) {}
 }

@@ -1,7 +1,7 @@
 import { api } from './request'
 
 export interface ImageGenerationResult {
-  url: string
+  urls: string[]
   revisedPrompt: string | null
   timeCostMs: number
   recordId: number
@@ -41,22 +41,27 @@ export interface RecordQuery {
 
 /**
  * 文生图 — 根据文字描述生成图片。
+ * @param n 生成张数（1~10），默认 1
  */
-export function generateImage(prompt: string, size?: string, quality?: string) {
-  return api.post<ImageGenerationResult>('/images/generate', { prompt, size, quality }, {
+export function generateImage(prompt: string, size?: string, quality?: string, n: number = 1) {
+  return api.post<ImageGenerationResult>('/images/generate', { prompt, size, quality, n: String(n) }, {
     timeout: 600_000, // 10 minutes for image generation
   })
 }
 
 /**
  * 图生图 — 上传参考图片进行编辑。
+ * @param mask 可选遮罩图（PNG，透明区域=重绘区域，作用于第一张参考图）
+ * @param n 生成张数（1~10），默认 1
  */
-export function editImage(prompt: string, images: File[], size?: string, quality?: string) {
+export function editImage(prompt: string, images: File[], size?: string, quality?: string, mask?: File, n: number = 1) {
   const formData = new FormData()
   formData.append('prompt', prompt)
   if (size) formData.append('size', size)
   if (quality) formData.append('quality', quality)
+  formData.append('n', String(n))
   images.forEach(file => formData.append('image', file))
+  if (mask) formData.append('mask', mask)
   return api.post<ImageGenerationResult>('/images/edit', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 600_000, // 10 minutes for image generation

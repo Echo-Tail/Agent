@@ -24,7 +24,7 @@ import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 import { toast } from 'sonner'
 import { useI18n } from 'vue-i18n'
-import type { ImageRecord } from '@/api/image'
+import type { ImageRecord, ImageGenerationResult } from '@/api/image'
 
 const { t } = useI18n()
 
@@ -39,12 +39,15 @@ const activeMode = ref<'generate' | 'edit'>('generate')
 const prompt = ref('')
 const size = ref('1024x1024')
 const quality = ref('high')   // default: high
+const imageCount = ref(1)
 const editImages = ref<File[]>([])
 const editPreviewUrls = ref<string[]>([])
+const maskFile = ref<File | undefined>(undefined)
+const maskPreviewUrl = ref<string>('')
 
 // ── Generation ──
 const generating = ref(false)
-const result = ref<{ url: string; revisedPrompt: string | null; timeCostMs: number; recordId: number } | null>(null)
+const result = ref<ImageGenerationResult | null>(null)
 const timerSeconds = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 
@@ -105,7 +108,12 @@ const qualityOptions = [
 ]
 
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
-const hasResult = computed(() => result.value && result.value.url)
+const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
+const resultImageUrl = (url: string) => {
+  if (!url) return ''
+  const normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
+  return normalized.startsWith('/') ? normalized : '/' + normalized
+}
 
 // ── Lifecycle ──
 onMounted(async () => {
@@ -168,7 +176,7 @@ async function handleGenerate() {
   result.value = null
   startTimer()
   try {
-    result.value = await generateImage(prompt.value, size.value, quality.value)
+    result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value)
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
@@ -185,7 +193,7 @@ async function handleEdit() {
   result.value = null
   startTimer()
   try {
-    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value)
+    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value)
     toast.success(t('toast.imageGenerated'))
     await fetchHistory(0)
   } catch {
@@ -213,6 +221,23 @@ function removeImage(index: number) {
   URL.revokeObjectURL(editPreviewUrls.value[index])
   editImages.value.splice(index, 1)
   editPreviewUrls.value.splice(index, 1)
+}
+
+// ── Mask upload ──
+function handleMaskSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  const file = input.files[0]
+  if (maskPreviewUrl.value) URL.revokeObjectURL(maskPreviewUrl.value)
+  maskFile.value = file
+  maskPreviewUrl.value = URL.createObjectURL(file)
+  input.value = ''
+}
+
+function removeMask() {
+  if (maskPreviewUrl.value) URL.revokeObjectURL(maskPreviewUrl.value)
+  maskFile.value = undefined
+  maskPreviewUrl.value = ''
 }
 
 // ── Asset upload dialog (replace publish) ──
@@ -347,14 +372,6 @@ function resetZoom() {
   panY.value = 0
 }
 
-// ── Helpers ──
-function resultImageUrl(path: string): string {
-  if (!path) return ''
-  // 去除 Windows 反斜杠和多余的 ./ 前缀
-  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
-  return normalized.startsWith('/') ? normalized : '/' + normalized
-}
-
 function formatTime(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
@@ -435,6 +452,30 @@ function formatDateTime(dateStr: string): string {
               </Button>
             </div>
 
+            <!-- Mask upload (optional, local repaint) -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium">{{ $t('imageGen.maskImage') }}</label>
+              <p class="text-xs text-muted-foreground">{{ $t('imageGen.maskHint') }}</p>
+              <div class="flex flex-wrap gap-3 items-center">
+                <div v-if="maskPreviewUrl" class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border">
+                  <img :src="maskPreviewUrl" class="w-full h-full object-cover" alt="mask" />
+                  <button
+                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                    @click="removeMask()"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </button>
+                </div>
+                <label
+                  v-if="!maskPreviewUrl"
+                  class="flex items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors"
+                >
+                  <ImagePlus class="h-5 w-5 text-muted-foreground" />
+                  <input id="mask-upload" type="file" accept="image/png" class="hidden" @change="handleMaskSelect" />
+                </label>
+              </div>
+            </div>
+
             <div class="space-y-2">
               <label for="edit-prompt" class="text-sm font-medium">{{ $t('imageGen.editPrompt') }}</label>
               <Textarea
@@ -446,12 +487,12 @@ function formatDateTime(dateStr: string): string {
             </div>
           </TabsContent>
 
-          <!-- Common params: size + quality + button (同一行) -->
+          <!-- Common params: size + quality + count + button (同一行) -->
           <div class="flex items-end gap-1">
             <div class="space-y-2">
               <span class="text-sm font-medium">{{ $t('imageGen.size') }}</span>
               <Select v-model="size">
-                <SelectTrigger class="min-w-[200px]">
+                <SelectTrigger class="min-w-[160px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -464,7 +505,7 @@ function formatDateTime(dateStr: string): string {
             <div class="space-y-2">
               <span class="text-sm font-medium">{{ $t('imageGen.quality') }}</span>
               <Select v-model="quality">
-                <SelectTrigger class="min-w-[128px]">
+                <SelectTrigger class="min-w-[110px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -473,6 +514,21 @@ function formatDateTime(dateStr: string): string {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div class="space-y-2">
+              <span class="text-sm font-medium">{{ $t('imageGen.count') }}</span>
+              <div class="flex items-center border border-border rounded-md h-8">
+                <Button variant="ghost" size="sm" class="h-full w-6 rounded-none px-0 text-sm" :disabled="imageCount <= 1" @click="imageCount = Math.max(1, imageCount - 1)">-</Button>
+                <Input
+                  v-model.number="imageCount"
+                  type="number"
+                  min="1"
+                  max="10"
+                  class="w-9 h-full text-center border-0 rounded-none text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  @blur="imageCount = Math.max(1, Math.min(10, imageCount || 1))"
+                />
+                <Button variant="ghost" size="sm" class="h-full w-6 rounded-none px-0 text-sm" :disabled="imageCount >= 10" @click="imageCount = Math.min(10, imageCount + 1)">+</Button>
+              </div>
             </div>
             <div class="self-end flex items-center gap-2">
               <TooltipProvider>
@@ -506,22 +562,26 @@ function formatDateTime(dateStr: string): string {
           <Card v-if="hasResult" class="overflow-hidden h-full">
             <CardContent class="p-4 space-y-3">
               <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-sm">{{ $t('imageGen.result') }}</h3>
+                <h3 class="font-semibold text-sm">{{ $t('imageGen.result') }}（{{ result!.urls.length }} 张）</h3>
                 <Badge variant="secondary" class="text-xs">
                   {{ formatTime(result!.timeCostMs) }}
                 </Badge>
               </div>
 
-              <!-- Clickable image -->
-              <div
-                class="rounded-lg overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
-                @click="openLightbox(result!.url)"
-              >
-                <img
-                  :src="resultImageUrl(result!.url)"
-                  class="w-full max-h-[400px] object-contain hover:opacity-90 transition-opacity"
-                  alt="Generated image"
-                />
+              <!-- Image grid -->
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  v-for="(imgUrl, idx) in result!.urls"
+                  :key="idx"
+                  class="rounded-lg overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
+                  @click="openLightbox(imgUrl)"
+                >
+                  <img
+                    :src="resultImageUrl(imgUrl)"
+                    class="w-full h-auto object-contain hover:opacity-90 transition-opacity"
+                    :alt="'Generated image ' + (idx + 1)"
+                  />
+                </div>
               </div>
 
               <div v-if="result!.revisedPrompt" class="text-xs text-muted-foreground bg-muted/30 rounded-md p-3">
@@ -529,15 +589,15 @@ function formatDateTime(dateStr: string): string {
                 {{ result!.revisedPrompt }}
               </div>
 
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" @click="result = null; prompt = ''">
                   <RefreshCw class="mr-1 h-3 w-3" />
                   {{ $t('imageGen.generateAgain') }}
                 </Button>
-                <Button variant="outline" size="sm" as-child>
-                  <a :href="resultImageUrl(result!.url)" download target="_blank">
+                <Button v-for="(imgUrl, idx) in result!.urls" :key="'dl-' + idx" variant="outline" size="sm" as-child>
+                  <a :href="resultImageUrl(imgUrl)" :download="'image-' + (idx + 1) + '.png'" target="_blank">
                     <Image class="mr-1 h-3 w-3" />
-                    {{ $t('imageGen.download') }}
+                    {{ $t('imageGen.download') }}{{ result!.urls.length > 1 ? ' #' + (idx + 1) : '' }}
                   </a>
                 </Button>
               </div>
