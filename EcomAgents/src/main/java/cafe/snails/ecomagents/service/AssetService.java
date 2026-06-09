@@ -1,0 +1,250 @@
+package cafe.snails.ecomagents.service;
+
+import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.exception.BusinessException;
+import cafe.snails.ecomagents.exception.ErrorCode;
+import cafe.snails.ecomagents.model.AssetSpace;
+import cafe.snails.ecomagents.model.ImageGenerationRecord;
+import cafe.snails.ecomagents.model.PublicAsset;
+import cafe.snails.ecomagents.repository.AssetSpaceRepository;
+import cafe.snails.ecomagents.repository.ImageGenerationRecordRepository;
+import cafe.snails.ecomagents.repository.PublicAssetRepository;
+import cafe.snails.ecomagents.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AssetService {
+
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
+    private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+    private final AssetSpaceRepository assetSpaceRepository;
+    private final PublicAssetRepository publicAssetRepository;
+    private final UserRepository userRepository;
+    private final ImageGenerationRecordRepository imageGenerationRecordRepository;
+
+    @Value("${file.upload-dir:./uploads}")
+    private String uploadDir;
+
+    // ========== Asset Spaces ==========
+
+    public List<AssetSpace> listSpaces() {
+        return assetSpaceRepository.findAll();
+    }
+
+    @Transactional
+    public ApiResponse<AssetSpace> createSpace(String name, String description, Long userId) {
+        if (name == null || name.isBlank()) {
+            return ApiResponse.error(400, "空间名称不能为空");
+        }
+        if (assetSpaceRepository.existsByName(name.trim())) {
+            return ApiResponse.error(400, "空间名称已存在");
+        }
+        AssetSpace space = AssetSpace.builder()
+                .name(name.trim())
+                .description(description != null ? description.trim() : null)
+                .createdBy(userId)
+                .build();
+        assetSpaceRepository.save(space);
+        return ApiResponse.success("创建成功", space);
+    }
+
+    @Transactional
+    public ApiResponse<AssetSpace> updateSpace(Long id, String name, String description, Long userId) {
+        AssetSpace space = assetSpaceRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        if (!space.getCreatedBy().equals(userId) && !isAdmin(userId)) {
+            return ApiResponse.error(403, "没有权限修改此素材空间");
+        }
+        if (name != null && !name.isBlank() && !name.trim().equals(space.getName())) {
+            if (assetSpaceRepository.existsByName(name.trim())) {
+                return ApiResponse.error(400, "空间名称已存在");
+            }
+            space.setName(name.trim());
+        }
+        if (description != null) {
+            space.setDescription(description.trim());
+        }
+        assetSpaceRepository.save(space);
+        return ApiResponse.success("修改成功", space);
+    }
+
+    @Transactional
+    public ApiResponse<Void> deleteSpace(Long id, Long userId) {
+        AssetSpace space = assetSpaceRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        if (!space.getCreatedBy().equals(userId) && !isAdmin(userId)) {
+            return ApiResponse.error(403, "没有权限删除此素材空间");
+        }
+        assetSpaceRepository.delete(space);
+        return ApiResponse.success("删除成功", null);
+    }
+
+    // ========== Assets ==========
+
+    public Page<PublicAsset> listAssets(Long spaceId, String keyword, Long uploadedBy, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        return publicAssetRepository.search(spaceId, keyword, uploadedBy, startDate, endDate, pageable);
+    }
+
+    @Transactional
+    public ApiResponse<PublicAsset> uploadAsset(MultipartFile file, Long spaceId, Long userId) {
+        if (file == null || file.isEmpty()) {
+            return ApiResponse.error(400, "请选择要上传的图片");
+        }
+        String mimeType = file.getContentType();
+        if (mimeType == null || !ALLOWED_MIME_TYPES.contains(mimeType)) {
+            return ApiResponse.error(400, "仅支持 JPEG、PNG、WebP 格式");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            return ApiResponse.error(400, "图片大小不能超过 20MB");
+        }
+
+        AssetSpace space = null;
+        if (spaceId != null) {
+            space = assetSpaceRepository.findById(spaceId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        }
+
+        // Compute SHA-256 hash for deduplication
+        String contentHash;
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(fileBytes);
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hashBytes) {
+                hex.append(String.format("%02x", b));
+            }
+            contentHash = hex.toString();
+        } catch (IOException | NoSuchAlgorithmException e) {
+            log.error("Failed to compute file hash: {}", e.getMessage());
+            return ApiResponse.error(500, "文件处理失败");
+        }
+
+        // Check for existing asset with same content hash
+        var existing = publicAssetRepository.findByContentHash(contentHash);
+        if (existing.isPresent()) {
+            log.info("Duplicate upload skipped (hash={}), returning existing asset id={}", contentHash, existing.get().getId());
+            return ApiResponse.success("上传成功（检测到重复，使用已有素材）", existing.get());
+        }
+
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) originalName = "asset.png";
+
+        String ext = "";
+        int dot = originalName.lastIndexOf(".");
+        if (dot >= 0) ext = originalName.substring(dot);
+        String storedName = UUID.randomUUID() + ext;
+        String subDir = "assets";
+        Path targetDir = Paths.get(uploadDir, subDir).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(targetDir);
+            Path targetPath = targetDir.resolve(storedName);
+            Files.write(targetPath, fileBytes);
+
+            PublicAsset asset = PublicAsset.builder()
+                    .fileName(originalName)
+                    .filePath(subDir + "/" + storedName)
+                    .fileSize(file.getSize())
+                    .mimeType(mimeType)
+                    .space(space)
+                    .uploadedBy(userId)
+                    .contentHash(contentHash)
+                    .build();
+            publicAssetRepository.save(asset);
+            return ApiResponse.success("上传成功", asset);
+        } catch (IOException e) {
+            log.error("Asset upload failed: {}", e.getMessage());
+            return ApiResponse.error(500, "图片上传失败");
+        }
+    }
+
+    @Transactional
+    public ApiResponse<Void> deleteAsset(Long id, Long userId) {
+        PublicAsset asset = publicAssetRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材不存在"));
+        if (!asset.getUploadedBy().equals(userId) && !isAdmin(userId)) {
+            return ApiResponse.error(403, "没有权限删除此素材");
+        }
+        try {
+            Path filePath = Paths.get(uploadDir, asset.getFilePath()).toAbsolutePath().normalize();
+            Files.deleteIfExists(filePath);
+        } catch (IOException e) {
+            log.warn("Failed to delete asset file: {}", e.getMessage());
+        }
+        publicAssetRepository.delete(asset);
+        return ApiResponse.success("删除成功", null);
+    }
+
+    @Transactional
+    public ApiResponse<PublicAsset> importFromRecord(Long recordId, Long spaceId, Long userId) {
+        ImageGenerationRecord record = imageGenerationRecordRepository.findById(recordId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "生成记录不存在"));
+
+        AssetSpace space = null;
+        if (spaceId != null) {
+            space = assetSpaceRepository.findById(spaceId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        }
+
+        String sourcePath = record.getResultPath();
+        Path sourceFile = Paths.get(uploadDir, sourcePath).toAbsolutePath().normalize();
+        if (!Files.exists(sourceFile)) {
+            return ApiResponse.error(404, "原始图片文件不存在");
+        }
+
+        String ext = "";
+        String name = sourceFile.getFileName().toString();
+        int dot = name.lastIndexOf(".");
+        if (dot >= 0) ext = name.substring(dot);
+        String storedName = UUID.randomUUID() + ext;
+        String subDir = "assets";
+        Path targetDir = Paths.get(uploadDir, subDir).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(targetDir);
+            Path targetPath = targetDir.resolve(storedName);
+            Files.copy(sourceFile, targetPath);
+
+            PublicAsset asset = PublicAsset.builder()
+                    .fileName(name)
+                    .filePath(subDir + "/" + storedName)
+                    .fileSize(Files.size(targetPath))
+                    .mimeType("image/png")
+                    .space(space)
+                    .uploadedBy(userId)
+                    .build();
+            publicAssetRepository.save(asset);
+            return ApiResponse.success("导入成功", asset);
+        } catch (IOException e) {
+            log.error("Import from record failed: {}", e.getMessage());
+            return ApiResponse.error(500, "导入失败");
+        }
+    }
+
+    private boolean isAdmin(Long userId) {
+        return userRepository.findById(userId)
+                .map(u -> "admin".equals(u.getRole()))
+                .orElse(false);
+    }
+}

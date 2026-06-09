@@ -21,8 +21,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 /**
- * Spring Security 配置。定义 JWT 无状态认证、公开端点白名单、管理员端点隔离。
- * <p>认证流程：JwtAuthenticationFilter → SecurityContextHolder → @CurrentUserId</p>
+ * Spring Security 閰嶇疆銆傚畾涔?JWT 鏃犵姸鎬佽璇併€佸叕寮€绔偣鐧藉悕鍗曘€佺鐞嗗憳绔偣闅旂銆?
+ * <p>璁よ瘉娴佺▼锛欽wtAuthenticationFilter 鈫?SecurityContextHolder 鈫?@CurrentUserId</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -38,9 +38,9 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // SSE 异步派发不重新认证（安全上下文已在初始请求中建立）
+                        // SSE 寮傛娲惧彂涓嶉噸鏂拌璇侊紙瀹夊叏涓婁笅鏂囧凡鍦ㄥ垵濮嬭姹備腑寤虹珛锛?
                         .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
-                        // 公开端点
+                        // 鍏紑绔偣
                         .requestMatchers("/v1/login", "/v1/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/files/*/download").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/groups/*/files/*/download").permitAll()
@@ -48,7 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // 管理员端点
+                        // 绠＄悊鍛樼鐐?
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/models", "/v1/models/**").authenticated()
                         .requestMatchers("/v1/models/**").hasRole("ADMIN")
@@ -58,15 +58,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/v1/knowledge-bases", "/v1/knowledge-bases/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/v1/knowledge-bases/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/knowledge-bases/audit-logs").hasRole("ADMIN")
-                        .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")
+                                                .requestMatchers("/v1/invite-codes/**").hasRole("ADMIN")
+                        .requestMatchers("/v1/assets/**").authenticated()
                         .requestMatchers("/v1/admin/tickets/**").hasRole("ADMIN")
-                        // 管理员下架画廊作品
+                        // 绠＄悊鍛樹笅鏋剁敾寤婁綔鍝?
                         .requestMatchers(HttpMethod.DELETE, "/v1/gallery/items/*/admin").hasRole("ADMIN")
-                        // 系统日志：写入需登录，查询/清空仅管理员
+                        // 绯荤粺鏃ュ織锛氬啓鍏ラ渶鐧诲綍锛屾煡璇?娓呯┖浠呯鐞嗗憳
                         .requestMatchers(HttpMethod.GET, "/v1/system-logs", "/v1/system-logs/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/v1/system-logs").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/v1/system-logs").authenticated()
-                        // 其余端点需认证
+                        // 鍏朵綑绔偣闇€璁よ瘉
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
@@ -85,10 +86,11 @@ public class SecurityConfig {
     }
 
     /**
-     * 提供 BCrypt 密码编码器。
+     * 鎻愪緵 BCrypt 瀵嗙爜缂栫爜鍣ㄣ€?
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 }
+

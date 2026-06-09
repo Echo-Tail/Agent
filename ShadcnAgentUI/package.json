@@ -21,6 +21,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.5",
+    "embla-carousel": "^8.6.0",
+    "embla-carousel-vue": "^8.6.0",
     "lucide-vue-next": "^1.0.0",
     "marked": "^18.0.4",
     "pinia": "^2.3.1",

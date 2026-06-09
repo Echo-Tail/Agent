@@ -4,7 +4,6 @@
     "chat": "对话",
     "agentPlaza": "Agent 广场",
     "imageGeneration": "图像生成",
-    "gallery": "画廊",
     "history": "历史会话",
     "myTickets": "我的工单",
     "knowledgeBase": "知识库",
@@ -17,7 +16,8 @@
     "skillManage": "技能管理",
     "groupChat": "群聊",
     "messages": "消息",
-    "settings": "设置"
+    "settings": "设置",
+    "publicAssets": "素材库"
   },
   "pageTitle": {
     "myAgents": "我的 Agent",
@@ -25,7 +25,6 @@
     "agentPlaza": "Agent 广场",
     "imageGeneration": "图像生成",
     "imageGenDesc": "使用 gpt-image-2 模型生成图片",
-    "gallery": "画廊",
     "createAgent": "创建 Agent",
     "groupChat": "群聊",
     "groupChatDetail": "群聊天",
@@ -44,7 +43,9 @@
     "settings": "设置",
     "login": "登录",
     "register": "注册",
-    "dashboard": "我的 Agent"
+    "dashboard": "我的 Agent",
+    "publicAssets": "素材库",
+    "publicAssetsDesc": "上传和管理公共图片素材"
   },
   "pageDesc": {
     "logs": "查看和导出系统运行日志",
@@ -834,5 +835,31 @@
     "publishSelectImage": "将图片发布到画廊",
     "publishSuccess": "发布成功",
     "publishCancel": "取消"
+  },
+  "assetLibrary": {
+    "allSpaces": "全部空间",
+    "searchPlaceholder": "搜索文件名...",
+    "search": "搜索",
+    "upload": "上传素材",
+    "uploadTo": "上传到素材空间",
+    "uploadSuccess": "上传成功",
+    "newSpace": "新建空间",
+    "editSpace": "编辑空间",
+    "save": "保存",
+    "create": "创建",
+    "selectSpace": "选择空间",
+    "noSpace": "不分类",
+    "spaceNamePlaceholder": "空间名称",
+    "spaceDescPlaceholder": "空间描述（可选）",
+    "spaceCreated": "空间创建成功",
+    "spaceUpdated": "空间已更新",
+    "spaceDeleted": "空间已删除",
+    "confirmDeleteSpace": "确定删除此空间？空间内的素材将成为未分类状态。",
+    "noAssets": "暂无素材，点击上方按钮上传",
+    "deleteSuccess": "删除成功",
+    "files": "个文件",
+    "clickToSelect": "点击选择图片",
+    "noSpaces": "暂无素材空间，请先上传素材",
+    "searchResults": "搜索结果"
   }
 }

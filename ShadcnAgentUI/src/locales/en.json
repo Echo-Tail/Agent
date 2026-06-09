@@ -4,7 +4,6 @@
     "chat": "Chat",
     "agentPlaza": "Agent Plaza",
     "imageGeneration": "Image Generation",
-    "gallery": "Gallery",
     "history": "History",
     "myTickets": "My Tickets",
     "knowledgeBase": "Knowledge Base",
@@ -17,7 +16,8 @@
     "skillManage": "Skill Management",
     "groupChat": "Group Chat",
     "messages": "Messages",
-    "settings": "Settings"
+    "settings": "Settings",
+    "publicAssets": "Assets"
   },
   "pageTitle": {
     "myAgents": "My Agents",
@@ -25,7 +25,6 @@
     "agentPlaza": "Agent Plaza",
     "imageGeneration": "Image Generation",
     "imageGenDesc": "Generate images using gpt-image-2 model",
-    "gallery": "Gallery",
     "createAgent": "Create Agent",
     "groupChat": "Group Chat",
     "groupChatDetail": "Group Chat",
@@ -44,7 +43,9 @@
     "settings": "Settings",
     "login": "Login",
     "register": "Register",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "publicAssets": "Assets",
+    "publicAssetsDesc": "Upload and manage public image assets"
   },
   "pageDesc": {
     "logs": "View and export system operation logs",
@@ -834,5 +835,31 @@
     "publishSelectImage": "Publish image to gallery",
     "publishSuccess": "Published",
     "publishCancel": "Cancel"
+  },
+  "assetLibrary": {
+    "allSpaces": "All Spaces",
+    "searchPlaceholder": "Search by filename...",
+    "search": "Search",
+    "upload": "Upload",
+    "uploadTo": "Upload to Space",
+    "uploadSuccess": "Uploaded successfully",
+    "newSpace": "New Space",
+    "editSpace": "Edit Space",
+    "save": "Save",
+    "create": "Create",
+    "selectSpace": "Select space",
+    "noSpace": "Uncategorized",
+    "spaceNamePlaceholder": "Space name",
+    "spaceDescPlaceholder": "Description (optional)",
+    "spaceCreated": "Space created",
+    "spaceUpdated": "Space updated",
+    "spaceDeleted": "Space deleted",
+    "confirmDeleteSpace": "Delete this space? Assets will become uncategorized.",
+    "noAssets": "No assets yet. Click upload to add.",
+    "deleteSuccess": "Deleted",
+    "files": "files",
+    "clickToSelect": "Click to select images",
+    "noSpaces": "No asset spaces yet. Upload some assets first.",
+    "searchResults": "Search Results"
   }
 }
