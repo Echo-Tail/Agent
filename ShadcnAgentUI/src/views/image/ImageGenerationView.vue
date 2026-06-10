@@ -111,6 +111,7 @@ const canGenerate = computed(() => hasModel.value && prompt.value.trim().length 
 const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
 const resultImageUrl = (url: string) => {
   if (!url) return ''
+  if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url
   const normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
   return normalized.startsWith('/') ? normalized : '/' + normalized
 }
@@ -325,6 +326,21 @@ async function pickAsset(asset: PublicAsset) {
   }
 }
 
+// ── Asset picker preview ──
+const pickerPreviewAsset = ref<PublicAsset | null>(null)
+const pickerPreviewOpen = ref(false)
+
+function showPickerPreview(asset: PublicAsset) {
+  pickerPreviewAsset.value = asset
+  pickerPreviewOpen.value = true
+}
+
+function selectPickerPreview() {
+  if (pickerPreviewAsset.value) pickAsset(pickerPreviewAsset.value)
+  pickerPreviewOpen.value = false
+  pickerPreviewAsset.value = null
+}
+
 function imageUrl(path: string): string {
   if (!path) return ''
   const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
@@ -437,6 +453,12 @@ function formatDateTime(dateStr: string): string {
                   class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border"
                 >
                   <img :src="url" class="w-full h-full object-cover" alt="reference" />
+                  <button
+                    class="absolute top-0.5 left-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                    @click.stop="openLightbox(url)"
+                  >
+                    <ZoomIn class="h-3 w-3" />
+                  </button>
                   <button
                     class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
                     @click="removeImage(idx)"
@@ -841,7 +863,6 @@ function formatDateTime(dateStr: string): string {
             <Select v-model="assetUploadSpaceId">
               <SelectTrigger class="min-w-[200px]"><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
               <SelectContent>
-                <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
                 <SelectItem v-for="sp in assetSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
               </SelectContent>
             </Select>
@@ -870,7 +891,6 @@ function formatDateTime(dateStr: string): string {
                 <SelectValue :placeholder="$t('assetLibrary.allSpaces')" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
                 <SelectItem v-for="sp in pickerSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
               </SelectContent>
             </Select>
@@ -889,7 +909,7 @@ function formatDateTime(dateStr: string): string {
               v-for="asset in pickerAssets"
               :key="asset.id"
               class="relative aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer border border-border hover:border-primary/50 transition-colors group"
-              @click="pickAsset(asset)"
+              @click="showPickerPreview(asset)"
             >
               <img :src="imageUrl(asset.filePath)" class="w-full h-full object-cover" alt="" loading="lazy" />
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -900,5 +920,26 @@ function formatDateTime(dateStr: string): string {
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- ═══ Picker Preview Dialog ═══ -->
+    <Dialog :open="pickerPreviewOpen" @update:open="pickerPreviewOpen = $event">
+      <DialogContent class="sm:max-w-[50vw] max-h-[85vh] p-0 bg-background/95 backdrop-blur-sm">
+        <div class="relative flex items-center justify-center min-h-[50vh] p-8">
+          <img
+            v-if="pickerPreviewAsset"
+            :src="imageUrl(pickerPreviewAsset.filePath)"
+            class="max-h-[70vh] max-w-full object-contain rounded-lg"
+            :alt="pickerPreviewAsset.fileName"
+          />
+          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+            <Button size="sm" @click="selectPickerPreview">
+              <Check class="h-4 w-4 mr-1" />
+              选择这张图片
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
   </div>
 </template>

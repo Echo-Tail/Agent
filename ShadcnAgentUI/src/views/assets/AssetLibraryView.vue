@@ -486,9 +486,8 @@ function imageUrl(path: string): string {
             <div class="flex items-center gap-2">
               <div class="flex-1">
                 <Select v-model="uploadSpaceId">
-                  <SelectTrigger><SelectValue :placeholder="$t('assetLibrary.selectSpace')" /></SelectTrigger>
+                  <SelectTrigger class="min-w-[185px]"><SelectValue :placeholder="$t('assetLibrary.selectSpace')" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
                     <SelectItem v-for="sp in spaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
                   </SelectContent>
                 </Select>
