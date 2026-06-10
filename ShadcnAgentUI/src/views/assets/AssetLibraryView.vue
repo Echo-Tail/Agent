@@ -48,6 +48,24 @@ const previewUrls = ref<string[]>([])
 let previewKey = 0
 const maxVisible = 3
 
+// Create space dialog
+const createSpaceOpen = ref(false)
+const createSpaceName = ref('')
+const createSpaceBusy = ref(false)
+
+async function handleCreateSpace() {
+  if (!createSpaceName.value.trim() || createSpaceBusy.value) return
+  createSpaceBusy.value = true
+  try {
+    await createSpace(createSpaceName.value.trim())
+    toast.success(t('assetLibrary.spaceCreated'))
+    createSpaceOpen.value = false
+    createSpaceName.value = ''
+    await loadSpaces()
+  } catch { /* toast handled */ }
+  finally { createSpaceBusy.value = false }
+}
+
 // Asset preview (server images in a space)
 const assetPreviewOpen = ref(false)
 const assetPreviewIndex = ref(0)
@@ -275,10 +293,16 @@ function imageUrl(path: string): string {
           <input v-model="endDate" type="date" class="h-8 rounded-md border border-border bg-background px-2 text-xs" />
           <Button variant="outline" size="sm" @click="search">{{ $t('assetLibrary.search') }}</Button>
         </div>
-        <Button size="sm" @click="openUploadDialog()">
-          <Upload class="mr-1 h-4 w-4" />
-          {{ $t('assetLibrary.upload') }}
-        </Button>
+        <div class="flex items-center gap-6">
+          <Button size="sm" @click="openUploadDialog()">
+            <Upload class="mr-1 h-4 w-4" />
+            {{ $t('assetLibrary.upload') }}
+          </Button>
+          <Button variant="outline" size="sm" @click="createSpaceOpen = true">
+            <FolderPlus class="mr-1 h-4 w-4" />
+            {{ $t('assetLibrary.newSpace') }}
+          </Button>
+        </div>
       </div>
 
       <!-- Search results view -->
@@ -538,6 +562,28 @@ function imageUrl(path: string): string {
             {{ assetPreviewIndex + 1 }} / {{ assetPreviewUrls.length }}
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ CREATE SPACE DIALOG ══════════ -->
+    <Dialog v-model:open="createSpaceOpen">
+      <DialogContent class="sm:max-w-sm" aria-describedby="create-space-desc">
+        <DialogHeader><DialogTitle>{{ $t('assetLibrary.newSpace') }}</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="create-space-desc">{{ $t('assetLibrary.newSpace') }}</div></VisuallyHidden>
+        <div class="py-2">
+          <Input
+            v-model="createSpaceName"
+            :placeholder="$t('assetLibrary.spaceNamePlaceholder')"
+            @keyup.enter="handleCreateSpace"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="createSpaceOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button :disabled="!createSpaceName.trim() || createSpaceBusy" @click="handleCreateSpace">
+            <Loader2 v-if="createSpaceBusy" class="mr-1 h-4 w-4 animate-spin" />
+            {{ $t('assetLibrary.create') }}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 

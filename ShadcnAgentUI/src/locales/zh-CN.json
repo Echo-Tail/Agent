@@ -851,7 +851,7 @@
     "save": "保存",
     "create": "创建",
     "selectSpace": "选择空间",
-    "noSpace": "不分类",
+    "noSpace": "未分类",
     "spaceNamePlaceholder": "空间名称",
     "spaceDescPlaceholder": "空间描述（可选）",
     "spaceCreated": "空间创建成功",

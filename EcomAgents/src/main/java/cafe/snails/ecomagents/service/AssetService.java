@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import jakarta.annotation.PostConstruct;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -45,6 +47,19 @@ public class AssetService {
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
+
+    @PostConstruct
+    public void initDefaultSpace() {
+        if (!assetSpaceRepository.existsByName("未分类")) {
+            AssetSpace space = AssetSpace.builder()
+                    .name("未分类")
+                    .description("系统默认素材空间")
+                    .createdBy(0L)
+                    .build();
+            assetSpaceRepository.save(space);
+            log.info("Created default asset space: 未分类");
+        }
+    }
 
     // ========== Asset Spaces ==========
 
@@ -93,6 +108,10 @@ public class AssetService {
     public ApiResponse<Void> deleteSpace(Long id, Long userId) {
         AssetSpace space = assetSpaceRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        // 保护系统默认空间
+        if ("未分类".equals(space.getName())) {
+            return ApiResponse.error(403, "系统默认空间不能删除");
+        }
         if (!space.getCreatedBy().equals(userId) && !isAdmin(userId)) {
             return ApiResponse.error(403, "没有权限删除此素材空间");
         }

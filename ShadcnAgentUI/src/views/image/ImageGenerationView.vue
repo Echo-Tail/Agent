@@ -278,13 +278,19 @@ async function submitAssetUpload() {
 const assetPickerOpen = ref(false)
 const pickerAssets = ref<PublicAsset[]>([])
 const pickerLoading = ref(false)
-const pickerSpaceId = ref<number | undefined>(undefined)
+const pickerSpaceId = ref<number | null>(null)  // null = 未分类
 const pickerKeyword = ref('')
+const pickerSpaces = ref<AssetSpace[]>([])
 
 async function openAssetPicker() {
   assetPickerOpen.value = true
-  pickerSpaceId.value = undefined
   pickerKeyword.value = ''
+  try {
+    pickerSpaces.value = await listSpaces()
+    // 默认选中"未分类"空间
+    const defaultSpace = pickerSpaces.value.find(s => s.name === '未分类')
+    pickerSpaceId.value = defaultSpace?.id ?? null
+  } catch {}
   await loadPickerAssets()
 }
 
@@ -292,7 +298,7 @@ async function loadPickerAssets() {
   pickerLoading.value = true
   try {
     const res: PageResponse<PublicAsset> = await listAssets({
-      spaceId: pickerSpaceId.value || undefined,
+      spaceId: pickerSpaceId.value ?? undefined,
       keyword: pickerKeyword.value || undefined,
       page: 0,
       size: 50,
@@ -448,7 +454,7 @@ function formatDateTime(dateStr: string): string {
               </div>
               <Button v-if="editImages.length < 4" variant="outline" size="sm" class="mt-1" @click="openAssetPicker">
                 <Image class="h-4 w-4 mr-1" />
-                {{ $t('assetLibrary.upload') }}
+                选择素材
               </Button>
             </div>
 
@@ -853,24 +859,32 @@ function formatDateTime(dateStr: string): string {
 
     <!-- ═══ Asset Picker Dialog ═══ -->
     <Dialog :open="assetPickerOpen" @update:open="assetPickerOpen = $event">
-      <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+      <DialogContent class="sm:max-w-[1200px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{{ $t('assetLibrary.uploadTo') }}</DialogTitle>
-          <DialogDescription>{{ $t('imageGen.publishSelectImage') }}</DialogDescription>
+          <DialogTitle>选择素材</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
-          <div class="flex items-center gap-2">
-            <Input v-model="pickerKeyword" :placeholder="$t('assetLibrary.searchPlaceholder')" class="h-8 text-sm" @keyup.enter="loadPickerAssets" />
+          <div class="flex items-center gap-3 flex-wrap">
+            <Select v-model="pickerSpaceId" @update:model-value="loadPickerAssets">
+              <SelectTrigger class="min-w-[160px]">
+                <SelectValue :placeholder="$t('assetLibrary.allSpaces')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
+                <SelectItem v-for="sp in pickerSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-model="pickerKeyword" :placeholder="$t('assetLibrary.searchPlaceholder')" class="h-8 text-sm flex-1 min-w-[200px]" @keyup.enter="loadPickerAssets" />
             <Button variant="outline" size="sm" @click="loadPickerAssets">{{ $t('assetLibrary.search') }}</Button>
           </div>
-          <div v-if="pickerLoading" class="flex justify-center py-8">
-            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          <div v-if="pickerLoading" class="flex justify-center py-16">
+            <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-          <div v-else-if="pickerAssets.length === 0" class="flex flex-col items-center py-8 text-muted-foreground">
-            <Image class="h-10 w-10 mb-2 opacity-40" />
+          <div v-else-if="pickerAssets.length === 0" class="flex flex-col items-center py-16 text-muted-foreground">
+            <Image class="h-12 w-12 mb-2 opacity-40" />
             <p class="text-sm">{{ $t('assetLibrary.noAssets') }}</p>
           </div>
-          <div v-else class="grid grid-cols-4 gap-3">
+          <div v-else class="grid grid-cols-6 gap-3">
             <div
               v-for="asset in pickerAssets"
               :key="asset.id"
