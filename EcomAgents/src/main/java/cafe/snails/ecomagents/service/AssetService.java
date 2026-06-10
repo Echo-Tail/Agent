@@ -209,10 +209,23 @@ public class AssetService {
         }
 
         String sourcePath = record.getResultPath();
-        Path sourceFile = Paths.get(uploadDir, sourcePath).toAbsolutePath().normalize();
-        if (!Files.exists(sourceFile)) {
+        log.info("importFromRecord: recordId={}, resultPath='{}'", recordId, sourcePath);
+
+        // 尝试多种可能的路径找到源文件
+        Path sourceFile = tryResolveSource(sourcePath);
+        if (sourceFile == null) {
+            String normalized = sourcePath.replace("\\", "/");
+            String stripped = normalized.contains("uploads/")
+                    ? normalized.substring(normalized.indexOf("uploads/") + 8)
+                    : normalized;
+            log.info("importFromRecord: retry with stripped path='{}'", stripped);
+            sourceFile = tryResolveSource(stripped);
+        }
+        if (sourceFile == null) {
+            log.error("importFromRecord: source file not found for recordId={}, resultPath='{}'", recordId, sourcePath);
             return ApiResponse.error(404, "原始图片文件不存在");
         }
+        log.info("importFromRecord: resolved source file at '{}'", sourceFile);
 
         String ext = "";
         String name = sourceFile.getFileName().toString();
@@ -240,6 +253,29 @@ public class AssetService {
             log.error("Import from record failed: {}", e.getMessage());
             return ApiResponse.error(500, "导入失败");
         }
+    }
+
+    /**
+     * 尝试多种路径解析源图片文件。
+     * 返回存在的文件路径，全部失败则返回 null。
+     */
+    private Path tryResolveSource(String path) {
+        // 尝试 1: 相对于 uploadDir
+        Path p1 = Paths.get(uploadDir, path).toAbsolutePath().normalize();
+        log.debug("tryResolveSource: attempt 1 (uploadDir + path) -> {} exists={}", p1, Files.exists(p1));
+        if (Files.exists(p1)) return p1;
+        // 尝试 2: 作为绝对/相对路径直接解析
+        Path p2 = Paths.get(path).toAbsolutePath().normalize();
+        log.debug("tryResolveSource: attempt 2 (path as-is) -> {} exists={}", p2, Files.exists(p2));
+        if (Files.exists(p2)) return p2;
+        // 尝试 3: 去掉前导目录后的 path（兼容部分历史数据）
+        String clean = path.replace("\\", "/").replaceFirst("^.*?uploads/", "");
+        if (!clean.equals(path.replace("\\", "/"))) {
+            Path p3 = Paths.get(uploadDir, clean).toAbsolutePath().normalize();
+            log.debug("tryResolveSource: attempt 3 (stripped) -> {} exists={}", p3, Files.exists(p3));
+            if (Files.exists(p3)) return p3;
+        }
+        return null;
     }
 
     private boolean isAdmin(Long userId) {

@@ -833,7 +833,7 @@ function formatDateTime(dateStr: string): string {
           <div class="space-y-1.5">
             <Label for="asset-space" class="text-sm">{{ $t('assetLibrary.selectSpace') }}</Label>
             <Select v-model="assetUploadSpaceId">
-              <SelectTrigger><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
+              <SelectTrigger class="min-w-[200px]"><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
               <SelectContent>
                 <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
                 <SelectItem v-for="sp in assetSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
