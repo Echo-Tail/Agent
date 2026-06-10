@@ -22,7 +22,7 @@ import { generateImage, editImage, listImageRecords, deleteImageRecord } from '@
 import { getImageModelsApi } from '@/api/model'
 import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
-import { toast } from 'sonner'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { ImageRecord, ImageGenerationResult } from '@/api/image'
 
@@ -265,10 +265,10 @@ async function submitAssetUpload() {
   uploadingAsset.value = true
   try {
     await importFromRecord(assetUploadRecordId.value, assetUploadSpaceId.value)
-    toast.success(t('assetLibrary.uploadSuccess') || '已上传到素材库')
     assetUploadOpen.value = false
+    setTimeout(() => toast.success(t('assetLibrary.uploadSuccess')), 150)
   } catch {
-    // toast handled by interceptor
+    assetUploadOpen.value = false
   } finally {
     uploadingAsset.value = false
   }
