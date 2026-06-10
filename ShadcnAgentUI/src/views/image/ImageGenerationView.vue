@@ -470,7 +470,7 @@ function formatDateTime(dateStr: string): string {
                   v-if="!maskPreviewUrl"
                   class="flex items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors"
                 >
-                  <ImagePlus class="h-5 w-5 text-muted-foreground" />
+                  <Image class="h-5 w-5 text-muted-foreground" />
                   <input id="mask-upload" type="file" accept="image/png" class="hidden" @change="handleMaskSelect" />
                 </label>
               </div>
