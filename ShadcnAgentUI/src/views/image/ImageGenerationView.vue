@@ -711,6 +711,7 @@ function formatDateTime(dateStr: string): string {
           <CardContent class="p-3 space-y-1.5">
             <div class="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" class="text-xs">{{ getModeLabel(record.mode) }}</Badge>
+              <Badge v-if="record.width && record.height" variant="outline" class="text-xs text-muted-foreground">{{ record.width }}×{{ record.height }}</Badge>
               <Badge variant="secondary" class="text-xs">{{ formatTime(record.timeCostMs) }}</Badge>
             </div>
             <p class="text-xs text-muted-foreground line-clamp-2">{{ record.prompt }}</p>

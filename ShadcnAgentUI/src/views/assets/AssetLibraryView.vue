@@ -416,6 +416,7 @@ function imageUrl(path: string): string {
           </div>
           <CardContent class="p-2 space-y-1">
             <p class="text-xs truncate font-medium">{{ asset.fileName }}</p>
+            <p v-if="asset.width && asset.height" class="text-xs text-muted-foreground/70">{{ asset.width }}×{{ asset.height }}</p>
             <p class="text-xs text-muted-foreground">{{ formatSize(asset.fileSize) }} · {{ formatDate(asset.createdAt) }}</p>
             <div class="flex gap-1 pt-1">
               <Button v-if="asset.uploadedBy === currentUserId || isAdmin" variant="ghost" size="sm" class="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" @click.stop="handleDeleteAsset(asset.id)">

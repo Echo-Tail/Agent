@@ -191,6 +191,12 @@ public class AssetService {
                     .uploadedBy(userId)
                     .contentHash(contentHash)
                     .build();
+            // 读取图片尺寸
+            int[] dims = readImageSize(targetPath);
+            if (dims != null) {
+                asset.setWidth(dims[0]);
+                asset.setHeight(dims[1]);
+            }
             publicAssetRepository.save(asset);
             return ApiResponse.success("上传成功", asset);
         } catch (IOException e) {
@@ -266,6 +272,11 @@ public class AssetService {
                     .space(space)
                     .uploadedBy(userId)
                     .build();
+            int[] dims = readImageSize(targetPath);
+            if (dims != null) {
+                asset.setWidth(dims[0]);
+                asset.setHeight(dims[1]);
+            }
             publicAssetRepository.save(asset);
             return ApiResponse.success("导入成功", asset);
         } catch (IOException e) {
@@ -301,5 +312,24 @@ public class AssetService {
         return userRepository.findById(userId)
                 .map(u -> "admin".equals(u.getRole()))
                 .orElse(false);
+    }
+
+    /** 从图片文件读取宽高，失败时返回 null */
+    private int[] readImageSize(Path path) {
+        try (var in = javax.imageio.ImageIO.createImageInputStream(path.toFile())) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (readers.hasNext()) {
+                var reader = readers.next();
+                try {
+                    reader.setInput(in);
+                    return new int[]{reader.getWidth(0), reader.getHeight(0)};
+                } finally {
+                    reader.dispose();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to read image size from {}: {}", path, e.getMessage());
+        }
+        return null;
     }
 }

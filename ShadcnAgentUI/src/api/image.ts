@@ -17,6 +17,8 @@ export interface ImageRecord {
   quality: string
   resultPath: string
   timeCostMs: number
+  width?: number
+  height?: number
   createdAt: string
 }
 

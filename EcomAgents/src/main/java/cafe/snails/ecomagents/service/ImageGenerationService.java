@@ -141,6 +141,9 @@ public class ImageGenerationService {
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
+            // 读取图片尺寸
+            int[] d = readImageSize(Paths.get(uploadDir, path));
+            if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
         }
@@ -295,6 +298,8 @@ public class ImageGenerationService {
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
+            int[] d = readImageSize(Paths.get(uploadDir, path));
+            if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
         }
@@ -920,6 +925,24 @@ public class ImageGenerationService {
      * @param body API 返回的 JSON 错误体（可能为 null 或空）
      * @return 友好的中文错误消息，无可识别错误时返回 null
      */
+    private int[] readImageSize(java.nio.file.Path path) {
+        try (var in = javax.imageio.ImageIO.createImageInputStream(path.toFile())) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (readers.hasNext()) {
+                var reader = readers.next();
+                try {
+                    reader.setInput(in);
+                    return new int[]{reader.getWidth(0), reader.getHeight(0)};
+                } finally {
+                    reader.dispose();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to read image size from {}: {}", path, e.getMessage());
+        }
+        return null;
+    }
+
     private String extractPackyErrorMessage(String body) {
         if (body == null || body.isBlank()) return null;
         try {

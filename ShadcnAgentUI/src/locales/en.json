@@ -804,7 +804,7 @@
     "referenceImages": "Reference Images",
     "imageCount": "{count} image(s) selected",
     "maskImage": "Mask (Local Repaint)",
-    "maskHint": "Optional: upload a PNG mask. Transparent areas = repaint regions. The mask applies to the first reference image.",
+    "maskHint": "Optional: upload a PNG mask. Transparent areas = repaint regions. The mask applies to the first reference image. Mask size and format must match the original image.",
     "noModel": "No image model configured. Please contact admin.",
     "noModelTip": "Model unavailable: admin has not configured an image model",
     "result": "Result",

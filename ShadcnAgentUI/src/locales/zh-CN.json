@@ -804,7 +804,7 @@
     "referenceImages": "参考图片",
     "imageCount": "已选择 {count} 张图片",
     "maskImage": "遮罩图（局部重绘）",
-    "maskHint": "可选：上传 PNG mask，透明区域=重绘区域，mask 对第一张参考图生效",
+    "maskHint": "可选：上传 PNG mask，透明区域=重绘区域，mask 对第一张参考图生效。遮罩图大小和格式必须和原图相同",
     "noModel": "管理员未配置图片模型，请联系管理员设置",
     "noModelTip": "模型不可用：管理员未配置图片模型",
     "result": "生成结果",

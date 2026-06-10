@@ -29,6 +29,12 @@ public class PublicAsset {
     @Column(name = "content_hash", columnDefinition = "VARCHAR(64)")
     private String contentHash;
 
+    @Column
+    private Integer width;
+
+    @Column
+    private Integer height;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "space_id")
     private AssetSpace space;

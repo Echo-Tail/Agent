@@ -18,6 +18,8 @@ export interface PublicAsset {
   mimeType: string
   space: AssetSpace | null
   uploadedBy: number
+  width?: number
+  height?: number
   createdAt: string
 }
 
