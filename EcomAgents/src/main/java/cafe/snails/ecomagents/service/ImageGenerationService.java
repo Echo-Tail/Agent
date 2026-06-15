@@ -105,6 +105,7 @@ public class ImageGenerationService {
         // API 不支持 n>1，并行调用 n 次，每次 n=1
         List<String> resultPaths = new ArrayList<>();
         String revisedPrompt = null;
+        int failedCount = 0;
         int maxParallel = Math.min(n, 4);
         var executor = java.util.concurrent.Executors.newFixedThreadPool(maxParallel);
         try {
@@ -113,16 +114,23 @@ public class ImageGenerationService {
                 futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() ->
                         callGenerateOnce(prompt, finalSize, finalQuality, model), executor));
             }
-            // 等待全部完成（任一失败则抛出异常）
             for (var future : futures) {
-                SingleGenerateResult r = future.join();
-                resultPaths.add(r.savedPath());
-                if (revisedPrompt == null) {
-                    revisedPrompt = r.revisedPrompt();
+                try {
+                    SingleGenerateResult r = future.get();
+                    resultPaths.add(r.savedPath());
+                    if (revisedPrompt == null) {
+                        revisedPrompt = r.revisedPrompt();
+                    }
+                } catch (Exception e) {
+                    failedCount++;
+                    log.warn("One image generation failed: {}", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                 }
             }
         } finally {
             executor.shutdown();
+        }
+        if (resultPaths.isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成全部失败");
         }
 
         long overallMs = System.currentTimeMillis() - overallStart;
@@ -142,7 +150,9 @@ public class ImageGenerationService {
                     .createdAt(LocalDateTime.now())
                     .build();
             // 读取图片尺寸
-            int[] d = readImageSize(Paths.get(uploadDir, path));
+            // resultPath 可能已包含 uploadDir 前缀
+            Path imgPath = path.contains("uploads") ? Paths.get(path) : Paths.get(uploadDir, path);
+            int[] d = readImageSize(imgPath);
             if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
@@ -154,7 +164,7 @@ public class ImageGenerationService {
         List<String> urls = resultPaths.stream()
                 .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
                 .toList();
-        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0));
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
     }
 
     /**
@@ -259,10 +269,11 @@ public class ImageGenerationService {
         // API 不支持 n>1，并行调用 n 次，每次 n=1
         List<String> resultPaths = new ArrayList<>();
         String revisedPrompt = null;
+        int failedCount = 0;
         int maxParallel = Math.min(n, 4);
         var executor = java.util.concurrent.Executors.newFixedThreadPool(maxParallel);
         try {
-            byte[] multipartBody = buildEditMultipartBody(prompt, images, mask);
+            byte[] multipartBody = buildEditMultipartBody(prompt, finalSize, finalQuality, images, mask);
 
             var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<SingleGenerateResult>>(n);
             for (int i = 0; i < n; i++) {
@@ -270,16 +281,24 @@ public class ImageGenerationService {
                         callEditOnce(model, multipartBody), executor));
             }
             for (var future : futures) {
-                SingleGenerateResult r = future.join();
-                resultPaths.add(r.savedPath());
-                if (revisedPrompt == null) {
-                    revisedPrompt = r.revisedPrompt();
+                try {
+                    SingleGenerateResult r = future.get();
+                    resultPaths.add(r.savedPath());
+                    if (revisedPrompt == null) {
+                        revisedPrompt = r.revisedPrompt();
+                    }
+                } catch (Exception e) {
+                    failedCount++;
+                    log.warn("One image edit failed: {}", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
                 }
             }
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑失败：" + e.getMessage());
         } finally {
             executor.shutdown();
+        }
+        if (resultPaths.isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片编辑全部失败");
         }
 
         long overallMs = System.currentTimeMillis() - overallStart;
@@ -298,7 +317,8 @@ public class ImageGenerationService {
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
-            int[] d = readImageSize(Paths.get(uploadDir, path));
+            Path imgPath = path.contains("uploads") ? Paths.get(path) : Paths.get(uploadDir, path);
+            int[] d = readImageSize(imgPath);
             if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
@@ -310,19 +330,27 @@ public class ImageGenerationService {
         List<String> urls = resultPaths.stream()
                 .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
                 .toList();
-        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0));
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
     }
 
     /**
      * 构建 edit 的 multipart/form-data 请求体（n 固定传 1）。
      */
-    private byte[] buildEditMultipartBody(String prompt, List<MultipartFile> images, MultipartFile mask) throws IOException {
+    private byte[] buildEditMultipartBody(String prompt, String size, String quality, List<MultipartFile> images, MultipartFile mask) throws IOException {
         String boundary = "----Boundary" + UUID.randomUUID().toString().replace("-", "");
         java.io.ByteArrayOutputStream byteOut = new java.io.ByteArrayOutputStream();
 
         appendMultipartField(byteOut, boundary, "model", MODEL_NAME);
         appendMultipartField(byteOut, boundary, "prompt", prompt);
         appendMultipartField(byteOut, boundary, "n", "1");
+        if (size != null && !size.isBlank()) {
+            appendMultipartField(byteOut, boundary, "size", size);
+        }
+        if (quality != null && !quality.isBlank()) {
+            appendMultipartField(byteOut, boundary, "quality", quality);
+        }
+        appendMultipartField(byteOut, boundary, "input_fidelity", "high");
+        appendMultipartField(byteOut, boundary, "output_format", "png");
 
         for (MultipartFile imageFile : images) {
             String fileName = imageFile.getOriginalFilename();
@@ -752,7 +780,7 @@ public class ImageGenerationService {
 
             return new ImageGenerationResult(
                     List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
-                    content, timeCostMs, record.getId());
+                    content, timeCostMs, record.getId(), 0);
 
             } finally {
                 conn.disconnect();
@@ -878,7 +906,7 @@ public class ImageGenerationService {
 
                 return new ImageGenerationResult(
                         List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
-                        content, timeCostMs, record.getId());
+                        content, timeCostMs, record.getId(), 0);
 
             } finally {
                 conn.disconnect();
@@ -978,5 +1006,5 @@ public class ImageGenerationService {
     /**
      * 图片生成结果 DTO。
      */
-    public record ImageGenerationResult(List<String> urls, String revisedPrompt, Long timeCostMs, Long recordId) {}
+    public record ImageGenerationResult(List<String> urls, String revisedPrompt, Long timeCostMs, Long recordId, int failedCount) {}
 }

@@ -109,6 +109,20 @@ const qualityOptions = [
 
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
 const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
+
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value + 1
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '...')[] = [1]
+  if (current > 3) pages.push('...')
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (current < total - 2) pages.push('...')
+  if (total > 1) pages.push(total)
+  return pages
+})
 const resultImageUrl = (url: string) => {
   if (!url) return ''
   if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url
@@ -178,7 +192,11 @@ async function handleGenerate() {
   startTimer()
   try {
     result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value)
-    toast.success(t('toast.imageGenerated'))
+    if (result.value.failedCount > 0) {
+      toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
+    } else {
+      toast.success(t('toast.imageGenerated'))
+    }
     await fetchHistory(0)
   } catch {
     // 错误提示由 request.ts 拦截器统一处理
@@ -195,7 +213,11 @@ async function handleEdit() {
   startTimer()
   try {
     result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value)
-    toast.success(t('toast.imageGenerated'))
+    if (result.value.failedCount > 0) {
+      toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
+    } else {
+      toast.success(t('toast.imageGenerated'))
+    }
     await fetchHistory(0)
   } catch {
     // 错误提示由 request.ts 拦截器统一处理
@@ -779,16 +801,18 @@ function formatDateTime(dateStr: string): string {
             <ChevronLeft class="h-3 w-3" />
           </Button>
 
-          <Button
-            v-for="p in totalPages"
-            :key="p"
-            variant="outline"
-            size="sm"
-            :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
-            @click="goToPage(p - 1)"
-          >
-            {{ p }}
-          </Button>
+          <template v-for="(p, pi) in visiblePages" :key="typeof p === 'number' ? p : 'ellipsis-' + pi">
+            <span v-if="p === '...'" class="px-1 text-xs text-muted-foreground">...</span>
+            <Button
+              v-else
+              variant="outline"
+              size="sm"
+              :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
+              @click="goToPage(p - 1)"
+            >
+              {{ p }}
+            </Button>
+          </template>
 
           <Button
             variant="outline"

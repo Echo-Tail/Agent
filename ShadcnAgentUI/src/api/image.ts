@@ -5,6 +5,7 @@ export interface ImageGenerationResult {
   revisedPrompt: string | null
   timeCostMs: number
   recordId: number
+  failedCount: number
 }
 
 export interface ImageRecord {

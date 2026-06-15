@@ -13,6 +13,10 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
+    // Windows 下收窄文件监听范围，避免句柄泄漏导致 dev server 跑久了硬崩溃 (0xC0000409)
+    watch: {
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    },
     proxy: {
       '/v1': {
         target: 'http://localhost:8888',
