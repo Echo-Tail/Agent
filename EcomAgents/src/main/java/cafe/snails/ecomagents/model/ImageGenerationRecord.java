@@ -55,6 +55,14 @@ public class ImageGenerationRecord {
     @Column(name = "time_cost_ms")
     private Long timeCostMs;
 
+    /** 图片宽度（像素） */
+    @Column
+    private Integer width;
+
+    /** 图片高度（像素） */
+    @Column
+    private Integer height;
+
     /** 创建时间 */
     @Column(nullable = false)
     private LocalDateTime createdAt;

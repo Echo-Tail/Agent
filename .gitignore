@@ -49,6 +49,7 @@ replay_pid*
 */.toolstarget
 
 *.bat
+*.ps1
 .issue
 .issues
 .claude

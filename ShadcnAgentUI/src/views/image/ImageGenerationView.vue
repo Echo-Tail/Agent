@@ -22,7 +22,7 @@ import { generateImage, editImage, listImageRecords, deleteImageRecord } from '@
 import { getImageModelsApi } from '@/api/model'
 import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
-import { toast } from 'sonner'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import type { ImageRecord, ImageGenerationResult } from '@/api/image'
 
@@ -109,8 +109,23 @@ const qualityOptions = [
 
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
 const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
+
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = currentPage.value + 1
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '...')[] = [1]
+  if (current > 3) pages.push('...')
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (current < total - 2) pages.push('...')
+  if (total > 1) pages.push(total)
+  return pages
+})
 const resultImageUrl = (url: string) => {
   if (!url) return ''
+  if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url
   const normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
   return normalized.startsWith('/') ? normalized : '/' + normalized
 }
@@ -177,7 +192,11 @@ async function handleGenerate() {
   startTimer()
   try {
     result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value)
-    toast.success(t('toast.imageGenerated'))
+    if (result.value.failedCount > 0) {
+      toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
+    } else {
+      toast.success(t('toast.imageGenerated'))
+    }
     await fetchHistory(0)
   } catch {
     // 错误提示由 request.ts 拦截器统一处理
@@ -194,7 +213,11 @@ async function handleEdit() {
   startTimer()
   try {
     result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value)
-    toast.success(t('toast.imageGenerated'))
+    if (result.value.failedCount > 0) {
+      toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
+    } else {
+      toast.success(t('toast.imageGenerated'))
+    }
     await fetchHistory(0)
   } catch {
     // 错误提示由 request.ts 拦截器统一处理
@@ -265,10 +288,10 @@ async function submitAssetUpload() {
   uploadingAsset.value = true
   try {
     await importFromRecord(assetUploadRecordId.value, assetUploadSpaceId.value)
-    toast.success(t('assetLibrary.uploadSuccess') || '已上传到素材库')
     assetUploadOpen.value = false
+    setTimeout(() => toast.success(t('assetLibrary.uploadSuccess')), 150)
   } catch {
-    // toast handled by interceptor
+    assetUploadOpen.value = false
   } finally {
     uploadingAsset.value = false
   }
@@ -278,13 +301,19 @@ async function submitAssetUpload() {
 const assetPickerOpen = ref(false)
 const pickerAssets = ref<PublicAsset[]>([])
 const pickerLoading = ref(false)
-const pickerSpaceId = ref<number | undefined>(undefined)
+const pickerSpaceId = ref<number | null>(null)  // null = 未分类
 const pickerKeyword = ref('')
+const pickerSpaces = ref<AssetSpace[]>([])
 
 async function openAssetPicker() {
   assetPickerOpen.value = true
-  pickerSpaceId.value = undefined
   pickerKeyword.value = ''
+  try {
+    pickerSpaces.value = await listSpaces()
+    // 默认选中"未分类"空间
+    const defaultSpace = pickerSpaces.value.find(s => s.name === '未分类')
+    pickerSpaceId.value = defaultSpace?.id ?? null
+  } catch {}
   await loadPickerAssets()
 }
 
@@ -292,7 +321,7 @@ async function loadPickerAssets() {
   pickerLoading.value = true
   try {
     const res: PageResponse<PublicAsset> = await listAssets({
-      spaceId: pickerSpaceId.value || undefined,
+      spaceId: pickerSpaceId.value ?? undefined,
       keyword: pickerKeyword.value || undefined,
       page: 0,
       size: 50,
@@ -317,6 +346,21 @@ async function pickAsset(asset: PublicAsset) {
   } catch {
     toast.error(t('imageGen.loadError') || '加载图片失败')
   }
+}
+
+// ── Asset picker preview ──
+const pickerPreviewAsset = ref<PublicAsset | null>(null)
+const pickerPreviewOpen = ref(false)
+
+function showPickerPreview(asset: PublicAsset) {
+  pickerPreviewAsset.value = asset
+  pickerPreviewOpen.value = true
+}
+
+function selectPickerPreview() {
+  if (pickerPreviewAsset.value) pickAsset(pickerPreviewAsset.value)
+  pickerPreviewOpen.value = false
+  pickerPreviewAsset.value = null
 }
 
 function imageUrl(path: string): string {
@@ -432,6 +476,12 @@ function formatDateTime(dateStr: string): string {
                 >
                   <img :src="url" class="w-full h-full object-cover" alt="reference" />
                   <button
+                    class="absolute top-0.5 left-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                    @click.stop="openLightbox(url)"
+                  >
+                    <ZoomIn class="h-3 w-3" />
+                  </button>
+                  <button
                     class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
                     @click="removeImage(idx)"
                   >
@@ -448,7 +498,7 @@ function formatDateTime(dateStr: string): string {
               </div>
               <Button v-if="editImages.length < 4" variant="outline" size="sm" class="mt-1" @click="openAssetPicker">
                 <Image class="h-4 w-4 mr-1" />
-                {{ $t('assetLibrary.upload') }}
+                选择素材
               </Button>
             </div>
 
@@ -470,7 +520,7 @@ function formatDateTime(dateStr: string): string {
                   v-if="!maskPreviewUrl"
                   class="flex items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors"
                 >
-                  <ImagePlus class="h-5 w-5 text-muted-foreground" />
+                  <Image class="h-5 w-5 text-muted-foreground" />
                   <input id="mask-upload" type="file" accept="image/png" class="hidden" @change="handleMaskSelect" />
                 </label>
               </div>
@@ -683,6 +733,7 @@ function formatDateTime(dateStr: string): string {
           <CardContent class="p-3 space-y-1.5">
             <div class="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" class="text-xs">{{ getModeLabel(record.mode) }}</Badge>
+              <Badge v-if="record.width && record.height" variant="outline" class="text-xs text-muted-foreground">{{ record.width }}×{{ record.height }}</Badge>
               <Badge variant="secondary" class="text-xs">{{ formatTime(record.timeCostMs) }}</Badge>
             </div>
             <p class="text-xs text-muted-foreground line-clamp-2">{{ record.prompt }}</p>
@@ -750,16 +801,18 @@ function formatDateTime(dateStr: string): string {
             <ChevronLeft class="h-3 w-3" />
           </Button>
 
-          <Button
-            v-for="p in totalPages"
-            :key="p"
-            variant="outline"
-            size="sm"
-            :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
-            @click="goToPage(p - 1)"
-          >
-            {{ p }}
-          </Button>
+          <template v-for="(p, pi) in visiblePages" :key="typeof p === 'number' ? p : 'ellipsis-' + pi">
+            <span v-if="p === '...'" class="px-1 text-xs text-muted-foreground">...</span>
+            <Button
+              v-else
+              variant="outline"
+              size="sm"
+              :class="p === currentPage + 1 ? 'bg-primary text-primary-foreground' : ''"
+              @click="goToPage(p - 1)"
+            >
+              {{ p }}
+            </Button>
+          </template>
 
           <Button
             variant="outline"
@@ -833,9 +886,8 @@ function formatDateTime(dateStr: string): string {
           <div class="space-y-1.5">
             <Label for="asset-space" class="text-sm">{{ $t('assetLibrary.selectSpace') }}</Label>
             <Select v-model="assetUploadSpaceId">
-              <SelectTrigger><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
+              <SelectTrigger class="min-w-[200px]"><SelectValue :placeholder="$t('assetLibrary.noSpace')" /></SelectTrigger>
               <SelectContent>
-                <SelectItem :value="null">{{ $t('assetLibrary.noSpace') }}</SelectItem>
                 <SelectItem v-for="sp in assetSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
               </SelectContent>
             </Select>
@@ -853,29 +905,36 @@ function formatDateTime(dateStr: string): string {
 
     <!-- ═══ Asset Picker Dialog ═══ -->
     <Dialog :open="assetPickerOpen" @update:open="assetPickerOpen = $event">
-      <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+      <DialogContent class="sm:max-w-[1200px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{{ $t('assetLibrary.uploadTo') }}</DialogTitle>
-          <DialogDescription>{{ $t('imageGen.publishSelectImage') }}</DialogDescription>
+          <DialogTitle>选择素材</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
-          <div class="flex items-center gap-2">
-            <Input v-model="pickerKeyword" :placeholder="$t('assetLibrary.searchPlaceholder')" class="h-8 text-sm" @keyup.enter="loadPickerAssets" />
+          <div class="flex items-center gap-3 flex-wrap">
+            <Select v-model="pickerSpaceId" @update:model-value="loadPickerAssets">
+              <SelectTrigger class="min-w-[160px]">
+                <SelectValue :placeholder="$t('assetLibrary.allSpaces')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="sp in pickerSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-model="pickerKeyword" :placeholder="$t('assetLibrary.searchPlaceholder')" class="h-8 text-sm flex-1 min-w-[200px]" @keyup.enter="loadPickerAssets" />
             <Button variant="outline" size="sm" @click="loadPickerAssets">{{ $t('assetLibrary.search') }}</Button>
           </div>
-          <div v-if="pickerLoading" class="flex justify-center py-8">
-            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          <div v-if="pickerLoading" class="flex justify-center py-16">
+            <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-          <div v-else-if="pickerAssets.length === 0" class="flex flex-col items-center py-8 text-muted-foreground">
-            <Image class="h-10 w-10 mb-2 opacity-40" />
+          <div v-else-if="pickerAssets.length === 0" class="flex flex-col items-center py-16 text-muted-foreground">
+            <Image class="h-12 w-12 mb-2 opacity-40" />
             <p class="text-sm">{{ $t('assetLibrary.noAssets') }}</p>
           </div>
-          <div v-else class="grid grid-cols-4 gap-3">
+          <div v-else class="grid grid-cols-6 gap-3">
             <div
               v-for="asset in pickerAssets"
               :key="asset.id"
               class="relative aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer border border-border hover:border-primary/50 transition-colors group"
-              @click="pickAsset(asset)"
+              @click="showPickerPreview(asset)"
             >
               <img :src="imageUrl(asset.filePath)" class="w-full h-full object-cover" alt="" loading="lazy" />
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -886,5 +945,26 @@ function formatDateTime(dateStr: string): string {
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- ═══ Picker Preview Dialog ═══ -->
+    <Dialog :open="pickerPreviewOpen" @update:open="pickerPreviewOpen = $event">
+      <DialogContent class="sm:max-w-[50vw] max-h-[85vh] p-0 bg-background/95 backdrop-blur-sm">
+        <div class="relative flex items-center justify-center min-h-[50vh] p-8">
+          <img
+            v-if="pickerPreviewAsset"
+            :src="imageUrl(pickerPreviewAsset.filePath)"
+            class="max-h-[70vh] max-w-full object-contain rounded-lg"
+            :alt="pickerPreviewAsset.fileName"
+          />
+          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+            <Button size="sm" @click="selectPickerPreview">
+              <Check class="h-4 w-4 mr-1" />
+              选择这张图片
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
   </div>
 </template>

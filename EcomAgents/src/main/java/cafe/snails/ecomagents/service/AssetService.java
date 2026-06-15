@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import jakarta.annotation.PostConstruct;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -45,6 +47,19 @@ public class AssetService {
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
+
+    @PostConstruct
+    public void initDefaultSpace() {
+        if (!assetSpaceRepository.existsByName("未分类")) {
+            AssetSpace space = AssetSpace.builder()
+                    .name("未分类")
+                    .description("系统默认素材空间")
+                    .createdBy(0L)
+                    .build();
+            assetSpaceRepository.save(space);
+            log.info("Created default asset space: 未分类");
+        }
+    }
 
     // ========== Asset Spaces ==========
 
@@ -93,6 +108,10 @@ public class AssetService {
     public ApiResponse<Void> deleteSpace(Long id, Long userId) {
         AssetSpace space = assetSpaceRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材空间不存在"));
+        // 保护系统默认空间
+        if ("未分类".equals(space.getName())) {
+            return ApiResponse.error(403, "系统默认空间不能删除");
+        }
         if (!space.getCreatedBy().equals(userId) && !isAdmin(userId)) {
             return ApiResponse.error(403, "没有权限删除此素材空间");
         }
@@ -172,6 +191,12 @@ public class AssetService {
                     .uploadedBy(userId)
                     .contentHash(contentHash)
                     .build();
+            // 读取图片尺寸
+            int[] dims = readImageSize(targetPath);
+            if (dims != null) {
+                asset.setWidth(dims[0]);
+                asset.setHeight(dims[1]);
+            }
             publicAssetRepository.save(asset);
             return ApiResponse.success("上传成功", asset);
         } catch (IOException e) {
@@ -209,10 +234,23 @@ public class AssetService {
         }
 
         String sourcePath = record.getResultPath();
-        Path sourceFile = Paths.get(uploadDir, sourcePath).toAbsolutePath().normalize();
-        if (!Files.exists(sourceFile)) {
+        log.info("importFromRecord: recordId={}, resultPath='{}'", recordId, sourcePath);
+
+        // 尝试多种可能的路径找到源文件
+        Path sourceFile = tryResolveSource(sourcePath);
+        if (sourceFile == null) {
+            String normalized = sourcePath.replace("\\", "/");
+            String stripped = normalized.contains("uploads/")
+                    ? normalized.substring(normalized.indexOf("uploads/") + 8)
+                    : normalized;
+            log.info("importFromRecord: retry with stripped path='{}'", stripped);
+            sourceFile = tryResolveSource(stripped);
+        }
+        if (sourceFile == null) {
+            log.error("importFromRecord: source file not found for recordId={}, resultPath='{}'", recordId, sourcePath);
             return ApiResponse.error(404, "原始图片文件不存在");
         }
+        log.info("importFromRecord: resolved source file at '{}'", sourceFile);
 
         String ext = "";
         String name = sourceFile.getFileName().toString();
@@ -234,6 +272,11 @@ public class AssetService {
                     .space(space)
                     .uploadedBy(userId)
                     .build();
+            int[] dims = readImageSize(targetPath);
+            if (dims != null) {
+                asset.setWidth(dims[0]);
+                asset.setHeight(dims[1]);
+            }
             publicAssetRepository.save(asset);
             return ApiResponse.success("导入成功", asset);
         } catch (IOException e) {
@@ -242,9 +285,51 @@ public class AssetService {
         }
     }
 
+    /**
+     * 尝试多种路径解析源图片文件。
+     * 返回存在的文件路径，全部失败则返回 null。
+     */
+    private Path tryResolveSource(String path) {
+        // 尝试 1: 相对于 uploadDir
+        Path p1 = Paths.get(uploadDir, path).toAbsolutePath().normalize();
+        log.debug("tryResolveSource: attempt 1 (uploadDir + path) -> {} exists={}", p1, Files.exists(p1));
+        if (Files.exists(p1)) return p1;
+        // 尝试 2: 作为绝对/相对路径直接解析
+        Path p2 = Paths.get(path).toAbsolutePath().normalize();
+        log.debug("tryResolveSource: attempt 2 (path as-is) -> {} exists={}", p2, Files.exists(p2));
+        if (Files.exists(p2)) return p2;
+        // 尝试 3: 去掉前导目录后的 path（兼容部分历史数据）
+        String clean = path.replace("\\", "/").replaceFirst("^.*?uploads/", "");
+        if (!clean.equals(path.replace("\\", "/"))) {
+            Path p3 = Paths.get(uploadDir, clean).toAbsolutePath().normalize();
+            log.debug("tryResolveSource: attempt 3 (stripped) -> {} exists={}", p3, Files.exists(p3));
+            if (Files.exists(p3)) return p3;
+        }
+        return null;
+    }
+
     private boolean isAdmin(Long userId) {
         return userRepository.findById(userId)
                 .map(u -> "admin".equals(u.getRole()))
                 .orElse(false);
+    }
+
+    /** 从图片文件读取宽高，失败时返回 null */
+    private int[] readImageSize(Path path) {
+        try (var in = javax.imageio.ImageIO.createImageInputStream(path.toFile())) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (readers.hasNext()) {
+                var reader = readers.next();
+                try {
+                    reader.setInput(in);
+                    return new int[]{reader.getWidth(0), reader.getHeight(0)};
+                } finally {
+                    reader.dispose();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to read image size from {}: {}", path, e.getMessage());
+        }
+        return null;
     }
 }

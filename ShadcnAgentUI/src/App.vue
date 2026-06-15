@@ -11,6 +11,6 @@ onMounted(() => {
 </script>
 
 <template>
-  <Toaster richColors />
+  <Toaster richColors position="top-center" />
   <router-view />
 </template>
