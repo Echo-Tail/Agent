@@ -34,6 +34,7 @@ import {
   Mail,
   Image,
   ImagePlus,
+  ScrollText,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -73,6 +74,7 @@ const pageTitleKey: Record<string, string> = {
   TicketManage: 'pageTitle.ticketManage',
   KnowledgeBase: 'pageTitle.knowledgeBase',
   PublicAssets: 'pageTitle.publicAssets',
+  PromptLibrary: 'pageTitle.promptLibrary',
   Logs: 'pageTitle.logs',
   Settings: 'pageTitle.settings',
 }
@@ -100,6 +102,7 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
     { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
     { translationKey: 'nav.publicAssets', key: 'PublicAssets', icon: ImagePlus },
+    { translationKey: 'nav.promptLibrary', key: 'PromptLibrary', icon: ScrollText },
   ],
   // 数据与记录
   [

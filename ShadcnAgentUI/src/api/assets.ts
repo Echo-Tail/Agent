@@ -58,6 +58,10 @@ export function uploadAsset(file: File, spaceId?: number, onProgress?: (e: Axios
   })
 }
 
+export function moveAsset(id: number, spaceId: number) {
+  return api.put<PublicAsset>('/assets/' + id + '/move', { spaceId })
+}
+
 export function deleteAsset(id: number) {
   return api.delete('/assets/' + id)
 }
