@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Upload, Trash2, Search, Image, Folder, FolderPlus, Loader2, ZoomIn, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-vue-next'
+import { Upload, Trash2, Search, Image, Folder, FolderPlus, Loader2, ZoomIn, ChevronLeft, ChevronRight, ArrowLeft, Pencil } from 'lucide-vue-next'
 import { VisuallyHidden } from 'reka-ui'
-import { listSpaces, createSpace, listAssets, uploadAsset, deleteAsset } from '@/api/assets'
+import { listSpaces, createSpace, updateSpace, deleteSpace, listAssets, uploadAsset, deleteAsset, moveAsset } from '@/api/assets'
 import { toast } from 'sonner'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 
@@ -52,6 +52,81 @@ const maxVisible = 3
 const createSpaceOpen = ref(false)
 const createSpaceName = ref('')
 const createSpaceBusy = ref(false)
+
+// Rename space dialog
+const renameSpaceOpen = ref(false)
+const renameSpaceTarget = ref<AssetSpace | null>(null)
+const renameSpaceName = ref('')
+const renameSpaceBusy = ref(false)
+
+function openRenameDialog(space: AssetSpace) {
+  renameSpaceTarget.value = space
+  renameSpaceName.value = space.name
+  renameSpaceOpen.value = true
+}
+
+async function handleRenameSpace() {
+  if (!renameSpaceTarget.value || !renameSpaceName.value.trim() || renameSpaceBusy.value) return
+  renameSpaceBusy.value = true
+  try {
+    await updateSpace(renameSpaceTarget.value.id, renameSpaceName.value.trim())
+    toast.success(t('assetLibrary.spaceUpdated'))
+    renameSpaceOpen.value = false
+    renameSpaceTarget.value = null
+    renameSpaceName.value = ''
+    await loadSpaces()
+  } catch { /* toast handled */ }
+  finally { renameSpaceBusy.value = false }
+}
+
+// Delete space confirmation
+const deleteSpaceOpen = ref(false)
+const deleteSpaceTarget = ref<AssetSpace | null>(null)
+const deleteSpaceBusy = ref(false)
+
+function openDeleteDialog(space: AssetSpace) {
+  deleteSpaceTarget.value = space
+  deleteSpaceOpen.value = true
+}
+
+async function handleDeleteSpace() {
+  if (!deleteSpaceTarget.value || deleteSpaceBusy.value) return
+  deleteSpaceBusy.value = true
+  try {
+    await deleteSpace(deleteSpaceTarget.value.id)
+    toast.success(t('assetLibrary.spaceDeleted'))
+    deleteSpaceOpen.value = false
+    deleteSpaceTarget.value = null
+    await loadSpaces()
+  } catch { /* toast handled */ }
+  finally { deleteSpaceBusy.value = false }
+}
+
+// Move asset dialog
+const moveAssetOpen = ref(false)
+const moveAssetTarget = ref<PublicAsset | null>(null)
+const moveAssetSpaceId = ref<number | undefined>(undefined)
+const moveAssetBusy = ref(false)
+
+function openMoveDialog(asset: PublicAsset) {
+  moveAssetTarget.value = asset
+  moveAssetSpaceId.value = undefined
+  moveAssetOpen.value = true
+}
+
+async function handleMoveAsset() {
+  if (!moveAssetTarget.value || moveAssetSpaceId.value == null || moveAssetBusy.value) return
+  moveAssetBusy.value = true
+  try {
+    await moveAsset(moveAssetTarget.value.id, moveAssetSpaceId.value)
+    toast.success(t('assetLibrary.assetMoved'))
+    moveAssetOpen.value = false
+    moveAssetTarget.value = null
+    moveAssetSpaceId.value = undefined
+    await loadAssets()
+  } catch { /* toast handled */ }
+  finally { moveAssetBusy.value = false }
+}
 
 async function handleCreateSpace() {
   if (!createSpaceName.value.trim() || createSpaceBusy.value) return
@@ -333,6 +408,14 @@ function imageUrl(path: string): string {
             <CardContent class="p-2 space-y-1">
               <p class="text-xs truncate font-medium">{{ asset.fileName }}</p>
               <p class="text-xs text-muted-foreground">{{ formatSize(asset.fileSize) }} · {{ formatDate(asset.createdAt) }}</p>
+              <div class="flex gap-1 pt-1">
+                <Button v-if="asset.uploadedBy === currentUserId || isAdmin" variant="ghost" size="sm" class="h-6 w-6 p-0 text-muted-foreground hover:text-primary" @click.stop="openMoveDialog(asset)">
+                  <Folder class="h-3 w-3" />
+                </Button>
+                <Button v-if="asset.uploadedBy === currentUserId || isAdmin" variant="ghost" size="sm" class="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" @click.stop="handleDeleteAsset(asset.id)">
+                  <Trash2 class="h-3 w-3" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -358,9 +441,21 @@ function imageUrl(path: string): string {
           <Card
             v-for="space in spaces"
             :key="space.id"
-            class="cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+            class="cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all relative group"
             @click="selectSpace(space)"
           >
+            <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <Button variant="secondary" size="sm" class="h-7 w-7 p-0" @click.stop="openRenameDialog(space)">
+                <Pencil class="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                v-if="space.name !== '未分类'"
+                variant="secondary" size="sm" class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                @click.stop="openDeleteDialog(space)"
+              >
+                <Trash2 class="h-3.5 w-3.5" />
+              </Button>
+            </div>
             <CardContent class="flex flex-col items-center justify-center py-10 gap-3">
               <Folder class="h-14 w-14 text-muted-foreground/60" />
               <p class="font-medium text-center text-sm truncate max-w-full">{{ space.name }}</p>
@@ -419,6 +514,9 @@ function imageUrl(path: string): string {
             <p v-if="asset.width && asset.height" class="text-xs text-muted-foreground/70">{{ asset.width }}×{{ asset.height }}</p>
             <p class="text-xs text-muted-foreground">{{ formatSize(asset.fileSize) }} · {{ formatDate(asset.createdAt) }}</p>
             <div class="flex gap-1 pt-1">
+              <Button v-if="asset.uploadedBy === currentUserId || isAdmin" variant="ghost" size="sm" class="h-6 w-6 p-0 text-muted-foreground hover:text-primary" @click.stop="openMoveDialog(asset)">
+                <Folder class="h-3 w-3" />
+              </Button>
               <Button v-if="asset.uploadedBy === currentUserId || isAdmin" variant="ghost" size="sm" class="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" @click.stop="handleDeleteAsset(asset.id)">
                 <Trash2 class="h-3 w-3" />
               </Button>
@@ -582,6 +680,78 @@ function imageUrl(path: string): string {
           <Button :disabled="!createSpaceName.trim() || createSpaceBusy" @click="handleCreateSpace">
             <Loader2 v-if="createSpaceBusy" class="mr-1 h-4 w-4 animate-spin" />
             {{ $t('assetLibrary.create') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ RENAME SPACE DIALOG ══════════ -->
+    <Dialog v-model:open="renameSpaceOpen">
+      <DialogContent class="sm:max-w-sm" aria-describedby="rename-space-desc">
+        <DialogHeader><DialogTitle>{{ $t('assetLibrary.editSpace') }}</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="rename-space-desc">{{ $t('assetLibrary.editSpace') }}</div></VisuallyHidden>
+        <div class="py-2">
+          <Input
+            v-model="renameSpaceName"
+            :placeholder="$t('assetLibrary.spaceNamePlaceholder')"
+            @keyup.enter="handleRenameSpace"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="renameSpaceOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button :disabled="!renameSpaceName.trim() || renameSpaceBusy" @click="handleRenameSpace">
+            <Loader2 v-if="renameSpaceBusy" class="mr-1 h-4 w-4 animate-spin" />
+            {{ $t('assetLibrary.save') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ DELETE SPACE CONFIRMATION ══════════ -->
+    <Dialog v-model:open="deleteSpaceOpen">
+      <DialogContent class="sm:max-w-sm" aria-describedby="delete-space-desc">
+        <DialogHeader><DialogTitle>{{ $t('assetLibrary.deleteSpace') }}</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="delete-space-desc">{{ $t('assetLibrary.confirmDeleteSpace') }}</div></VisuallyHidden>
+        <div class="py-2">
+          <p class="text-sm text-muted-foreground">{{ $t('assetLibrary.confirmDeleteSpace') }}</p>
+          <p v-if="deleteSpaceTarget" class="mt-2 text-sm font-medium">{{ deleteSpaceTarget?.name }}</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" :disabled="deleteSpaceBusy" @click="deleteSpaceOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button variant="destructive" :disabled="deleteSpaceBusy" @click="handleDeleteSpace">
+            <Loader2 v-if="deleteSpaceBusy" class="mr-1 h-4 w-4 animate-spin" />
+            {{ $t('assetLibrary.delete') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ MOVE ASSET DIALOG ══════════ -->
+    <Dialog v-model:open="moveAssetOpen">
+      <DialogContent class="sm:max-w-sm" aria-describedby="move-asset-desc">
+        <DialogHeader><DialogTitle>{{ $t('assetLibrary.moveTo') }}</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="move-asset-desc">{{ $t('assetLibrary.moveTo') }}</div></VisuallyHidden>
+        <div class="py-4">
+          <p v-if="moveAssetTarget" class="text-sm font-medium mb-3 truncate">{{ moveAssetTarget?.fileName }}</p>
+          <div class="space-y-2">
+            <label class="text-xs text-muted-foreground">{{ $t('assetLibrary.selectTargetSpace') }}</label>
+            <Select v-model="moveAssetSpaceId">
+              <SelectTrigger><SelectValue :placeholder="$t('assetLibrary.selectTargetSpace')" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="sp in spaces.filter(s => s.id !== selectedSpace?.id)"
+                  :key="sp.id"
+                  :value="sp.id"
+                >{{ sp.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" :disabled="moveAssetBusy" @click="moveAssetOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button :disabled="moveAssetSpaceId == null || moveAssetBusy" @click="handleMoveAsset">
+            <Loader2 v-if="moveAssetBusy" class="mr-1 h-4 w-4 animate-spin" />
+            {{ $t('assetLibrary.moveAsset') }}
           </Button>
         </DialogFooter>
       </DialogContent>

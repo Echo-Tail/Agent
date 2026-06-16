@@ -30,6 +30,7 @@ const router = createRouter({
         { path: 'agents/plaza', name: 'AgentPlaza', component: () => import('@/views/agent/AgentPlaza.vue') },
         { path: 'agents/image', name: 'ImageGeneration', component: () => import('@/views/image/ImageGenerationView.vue') },
         { path: 'agents/assets', name: 'PublicAssets', component: () => import('@/views/assets/AssetLibraryView.vue') },
+        { path: 'agents/prompts', name: 'PromptLibrary', component: () => import('@/views/prompts/PromptLibraryView.vue') },
         { path: 'agents/create', name: 'AgentCreate', component: () => import('@/views/agent/AgentCreate.vue') },
         { path: 'agents/edit/:id', name: 'AgentEdit', component: () => import('@/views/agent/AgentCreate.vue') },
         { path: 'chat', name: 'Chat', component: () => import('@/views/chat/DirectChatView.vue') },

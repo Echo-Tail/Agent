@@ -206,6 +206,23 @@ public class AssetService {
     }
 
     @Transactional
+    public ApiResponse<PublicAsset> moveAsset(Long id, Long spaceId, Long userId) {
+        PublicAsset asset = publicAssetRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材不存在"));
+        if (!asset.getUploadedBy().equals(userId) && !isAdmin(userId)) {
+            return ApiResponse.error(403, "没有权限移动此素材");
+        }
+        AssetSpace targetSpace = null;
+        if (spaceId != null) {
+            targetSpace = assetSpaceRepository.findById(spaceId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "目标素材空间不存在"));
+        }
+        asset.setSpace(targetSpace);
+        publicAssetRepository.save(asset);
+        return ApiResponse.success("移动成功", asset);
+    }
+
+    @Transactional
     public ApiResponse<Void> deleteAsset(Long id, Long userId) {
         PublicAsset asset = publicAssetRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "素材不存在"));

@@ -65,6 +65,11 @@ public class AssetController {
         return assetService.uploadAsset(file, spaceId, userId);
     }
 
+    @PutMapping("/{id}/move")
+    public ApiResponse<PublicAsset> moveAsset(@PathVariable Long id, @RequestBody Map<String, Long> body, @CurrentUserId Long userId) {
+        return assetService.moveAsset(id, body.get("spaceId"), userId);
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteAsset(@PathVariable Long id, @CurrentUserId Long userId) {
         return assetService.deleteAsset(id, userId);

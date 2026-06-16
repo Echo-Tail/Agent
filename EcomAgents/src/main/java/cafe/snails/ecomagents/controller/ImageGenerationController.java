@@ -5,6 +5,7 @@ import cafe.snails.ecomagents.model.ImageGenerationRecord;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.ImageGenerationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,6 +21,7 @@ import java.util.Map;
  * 图片生成控制器 — 文生图、图生图、历史记录。
  * <p>独立于 Agent 体系，所有用户可用。</p>
  */
+@Slf4j
 @RestController
 @RequestMapping("/v1/images")
 @RequiredArgsConstructor
@@ -38,7 +40,11 @@ public class ImageGenerationController {
         String size = body.get("size");
         String quality = body.get("quality");
         int n = parseIntOrDefault(body.get("n"), 1);
+        log.info("[文生图] userId={} prompt=\"{}\" size={} quality={} n={}",
+                userId, truncate(prompt, 120), size, quality, n);
         var result = imageGenerationService.generate(prompt, size, quality, n, userId);
+        log.info("[文生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
+                userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
     }
 
@@ -54,7 +60,14 @@ public class ImageGenerationController {
             @RequestParam(value = "mask", required = false) MultipartFile mask,
             @RequestParam(value = "n", required = false, defaultValue = "1") int n,
             @CurrentUserId Long userId) {
+        log.info("[图生图] userId={} prompt=\"{}\" size={} quality={} images={} mask={} n={}",
+                userId, truncate(prompt, 120), size, quality,
+                images != null ? images.size() : 0,
+                mask != null ? mask.getOriginalFilename() : "null",
+                n);
         var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId);
+        log.info("[图生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
+                userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
     }
 
@@ -68,6 +81,13 @@ public class ImageGenerationController {
         } catch (NumberFormatException e) {
             return defaultValue;
         }
+    }
+
+    /** 截断长字符串（含省略号），防止日志输出过长。 */
+    private static String truncate(String s, int maxLen) {
+        if (s == null) return "null";
+        if (s.length() <= maxLen) return s;
+        return s.substring(0, maxLen) + "...";
     }
 
     /**
