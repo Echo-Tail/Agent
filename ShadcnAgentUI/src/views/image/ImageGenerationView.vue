@@ -31,6 +31,8 @@ const { t } = useI18n()
 // ── Model availability ──
 const hasModel = ref(false)
 const modelLoading = ref(true)
+const imageModels = ref<{ id: number; name: string }[]>([])
+const selectedModelId = ref<number | undefined>(undefined)
 
 // ── Mode ──
 const activeMode = ref<'generate' | 'edit'>('generate')
@@ -135,6 +137,10 @@ onMounted(async () => {
   try {
     const models = await getImageModelsApi()
     hasModel.value = models.length > 0
+    imageModels.value = models
+    if (models.length > 0 && !selectedModelId.value) {
+      selectedModelId.value = models[0].id
+    }
   } catch {
     hasModel.value = false
   } finally {
@@ -191,7 +197,7 @@ async function handleGenerate() {
   result.value = null
   startTimer()
   try {
-    result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value)
+    result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value, selectedModelId.value)
     if (result.value.failedCount > 0) {
       toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
     } else {
@@ -212,7 +218,7 @@ async function handleEdit() {
   result.value = null
   startTimer()
   try {
-    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value)
+    result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value, selectedModelId.value)
     if (result.value.failedCount > 0) {
       toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
     } else {
@@ -537,8 +543,19 @@ function formatDateTime(dateStr: string): string {
             </div>
           </TabsContent>
 
-          <!-- Common params: size + quality + count + button (同一行) -->
+          <!-- Common params: model + size + quality + count + button -->
           <div class="flex items-end gap-1">
+            <div v-if="imageModels.length > 1" class="space-y-2">
+              <span class="text-sm font-medium">生图模型</span>
+              <Select v-model="selectedModelId">
+                <SelectTrigger class="min-w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="m in imageModels" :key="m.id" :value="m.id">{{ m.name }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div class="space-y-2">
               <span class="text-sm font-medium">{{ $t('imageGen.size') }}</span>
               <Select v-model="size">

@@ -90,6 +90,10 @@ public class ImageGenerationService {
     private record SingleGenerateResult(String savedPath, String revisedPrompt) {}
 
     public ImageGenerationResult generate(String prompt, String size, String quality, int n, Long userId) {
+        return generate(prompt, size, quality, n, userId, null);
+    }
+
+    public ImageGenerationResult generate(String prompt, String size, String quality, int n, Long userId, Long modelId) {
         if (prompt == null || prompt.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "图片描述不能为空");
         }
@@ -97,7 +101,7 @@ public class ImageGenerationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "生成张数必须在 1~10 之间");
         }
 
-        AiModel model = getImageModel();
+        AiModel model = modelId != null ? getImageModelById(modelId) : getImageModel();
         String finalSize = (size != null && !size.isBlank()) ? size : DEFAULT_SIZE;
         String finalQuality = (quality != null && !quality.isBlank()) ? quality : DEFAULT_QUALITY;
         long overallStart = System.currentTimeMillis();
@@ -248,6 +252,10 @@ public class ImageGenerationService {
      * @return 生成结果
      */
     public ImageGenerationResult edit(String prompt, String size, String quality, List<MultipartFile> images, MultipartFile mask, int n, Long userId) {
+        return edit(prompt, size, quality, images, mask, n, userId, null);
+    }
+
+    public ImageGenerationResult edit(String prompt, String size, String quality, List<MultipartFile> images, MultipartFile mask, int n, Long userId, Long modelId) {
         if (prompt == null || prompt.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "修改描述不能为空");
         }
@@ -261,7 +269,7 @@ public class ImageGenerationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "生成张数必须在 1~10 之间");
         }
 
-        AiModel model = getImageModel();
+        AiModel model = modelId != null ? getImageModelById(modelId) : getImageModel();
         String finalSize = (size != null && !size.isBlank()) ? size : DEFAULT_SIZE;
         String finalQuality = (quality != null && !quality.isBlank()) ? quality : DEFAULT_QUALITY;
         long overallStart = System.currentTimeMillis();
@@ -491,6 +499,12 @@ public class ImageGenerationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "管理员未配置图片生成模型，请联系管理员设置");
         }
         return models.get(0);
+    }
+
+    private AiModel getImageModelById(Long modelId) {
+        return aiModelRepository.findById(modelId)
+                .filter(m -> "IMAGE".equals(m.getModelType()) && m.getEnabled())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片生成模型不存在或未启用"));
     }
 
     /**

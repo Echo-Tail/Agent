@@ -40,9 +40,10 @@ public class ImageGenerationController {
         String size = body.get("size");
         String quality = body.get("quality");
         int n = parseIntOrDefault(body.get("n"), 1);
-        log.info("[文生图] userId={} prompt=\"{}\" size={} quality={} n={}",
-                userId, truncate(prompt, 120), size, quality, n);
-        var result = imageGenerationService.generate(prompt, size, quality, n, userId);
+        Long modelId = body.get("modelId") != null ? Long.parseLong(body.get("modelId")) : null;
+        log.info("[文生图] userId={} prompt=\"{}\" size={} quality={} n={} modelId={}",
+                userId, truncate(prompt, 120), size, quality, n, modelId);
+        var result = imageGenerationService.generate(prompt, size, quality, n, userId, modelId);
         log.info("[文生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
                 userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
@@ -59,13 +60,14 @@ public class ImageGenerationController {
             @RequestParam("image") List<MultipartFile> images,
             @RequestParam(value = "mask", required = false) MultipartFile mask,
             @RequestParam(value = "n", required = false, defaultValue = "1") int n,
+            @RequestParam(value = "modelId", required = false) Long modelId,
             @CurrentUserId Long userId) {
-        log.info("[图生图] userId={} prompt=\"{}\" size={} quality={} images={} mask={} n={}",
+        log.info("[图生图] userId={} prompt=\"{}\" size={} quality={} images={} mask={} n={} modelId={}",
                 userId, truncate(prompt, 120), size, quality,
                 images != null ? images.size() : 0,
                 mask != null ? mask.getOriginalFilename() : "null",
-                n);
-        var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId);
+                n, modelId);
+        var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId, modelId);
         log.info("[图生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
                 userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
