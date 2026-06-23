@@ -4,7 +4,11 @@ import { toast } from 'sonner'
 import App from './App.vue'
 import router from './router'
 import i18n from './locales'
+import { setupGlobalErrorLogging } from './utils/logger'
 import './style.css'
+
+// Initialize frontend logging (catches unhandled errors + promise rejections)
+setupGlobalErrorLogging()
 
 const app = createApp(App)
 const { t } = i18n.global

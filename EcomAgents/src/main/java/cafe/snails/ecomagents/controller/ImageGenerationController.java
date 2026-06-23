@@ -3,6 +3,10 @@ package cafe.snails.ecomagents.controller;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.ImageGenerationRecord;
 import cafe.snails.ecomagents.security.CurrentUserId;
+import cafe.snails.ecomagents.model.ImageExpressionCache;
+import cafe.snails.ecomagents.repository.ImageExpressionCacheRepository;
+import cafe.snails.ecomagents.service.BrightDataService;
+import cafe.snails.ecomagents.service.ImageAnalysisService;
 import cafe.snails.ecomagents.service.ImageGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +32,9 @@ import java.util.Map;
 public class ImageGenerationController {
 
     private final ImageGenerationService imageGenerationService;
+    private final ImageAnalysisService imageAnalysisService;
+    private final BrightDataService brightDataService;
+    private final ImageExpressionCacheRepository expressionCacheRepository;
 
     /**
      * 文生图：根据文字描述生成图片。
@@ -40,9 +47,10 @@ public class ImageGenerationController {
         String size = body.get("size");
         String quality = body.get("quality");
         int n = parseIntOrDefault(body.get("n"), 1);
-        log.info("[文生图] userId={} prompt=\"{}\" size={} quality={} n={}",
-                userId, truncate(prompt, 120), size, quality, n);
-        var result = imageGenerationService.generate(prompt, size, quality, n, userId);
+        Long modelId = body.get("modelId") != null ? Long.parseLong(body.get("modelId")) : null;
+        log.info("[文生图] userId={} prompt=\"{}\" size={} quality={} n={} modelId={}",
+                userId, truncate(prompt, 120), size, quality, n, modelId);
+        var result = imageGenerationService.generate(prompt, size, quality, n, userId, modelId);
         log.info("[文生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
                 userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
@@ -59,13 +67,14 @@ public class ImageGenerationController {
             @RequestParam("image") List<MultipartFile> images,
             @RequestParam(value = "mask", required = false) MultipartFile mask,
             @RequestParam(value = "n", required = false, defaultValue = "1") int n,
+            @RequestParam(value = "modelId", required = false) Long modelId,
             @CurrentUserId Long userId) {
-        log.info("[图生图] userId={} prompt=\"{}\" size={} quality={} images={} mask={} n={}",
+        log.info("[图生图] userId={} prompt=\"{}\" size={} quality={} images={} mask={} n={} modelId={}",
                 userId, truncate(prompt, 120), size, quality,
                 images != null ? images.size() : 0,
                 mask != null ? mask.getOriginalFilename() : "null",
-                n);
-        var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId);
+                n, modelId);
+        var result = imageGenerationService.edit(prompt, size, quality, images, mask, n, userId, modelId);
         log.info("[图生图完成] userId={} timeCost={}ms recordId={} failedCount={}",
                 userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
@@ -107,11 +116,85 @@ public class ImageGenerationController {
     }
 
     /**
+     * 分析图片表达结构 — 使用本地 codex exec 进行多模态视觉分析。
+     */
+    @PostMapping("/analyze-expression")
+    public ApiResponse<String> analyzeImageExpression(@RequestParam String imageUrl) {
+        return ApiResponse.success("分析完成", imageAnalysisService.analyzeImageExpression(imageUrl));
+    }
+
+    /**
      * 删除一条历史记录。
      */
     @DeleteMapping("/records/{id}")
     public ApiResponse<Void> deleteRecord(@PathVariable("id") Long id, @CurrentUserId Long userId) {
         imageGenerationService.deleteRecord(id, userId);
         return ApiResponse.success("删除成功", null);
+    }
+
+    /**
+     * 根据 ASIN 获取商品图片 URL 列表（优先查 bright_data_records 缓存）。
+     */
+    @PostMapping("/collect-asin-images")
+    public ApiResponse<List<String>> collectAsinImages(
+            @RequestParam String asin, @CurrentUserId Long userId) {
+        List<String> urls = brightDataService.getImageUrlsByAsin(asin.trim(), userId);
+        return ApiResponse.success("获取到 " + urls.size() + " 张图片", urls);
+    }
+
+    /**
+     * 分析图片表达结构（带缓存：已分析过的图片直接返回上次结果）。
+     */
+    @PostMapping("/analyze-expression-cached")
+    public ApiResponse<String> analyzeExpressionCached(
+            @RequestParam String imageUrl) {
+        String hash = md5(imageUrl);
+        // Check cache
+        var cached = expressionCacheRepository.findByImageUrlHash(hash);
+        if (cached.isPresent()) {
+            log.info("[表达分析] 缓存命中: urlHash={}", hash);
+            return ApiResponse.success("缓存命中", cached.get().getExpressionJson());
+        }
+        // Run analysis
+        String result = imageAnalysisService.analyzeImageExpression(imageUrl);
+        // Save to cache
+        ImageExpressionCache cache = ImageExpressionCache.builder()
+                .imageUrlHash(hash).imageUrl(imageUrl).expressionJson(result).build();
+        expressionCacheRepository.save(cache);
+        log.info("[表达分析] 已分析并缓存: urlHash={}", hash);
+        return ApiResponse.success("分析完成", result);
+    }
+
+    /**
+     * 上传本地图片，返回服务端 URL。
+     */
+    @PostMapping("/upload-local")
+    public ApiResponse<String> uploadLocalImage(
+            @RequestParam MultipartFile file,
+            @CurrentUserId Long userId) {
+        // Save file to uploads/workbench/ directory
+        try {
+            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            java.nio.file.Path targetDir = java.nio.file.Paths.get("uploads", "workbench");
+            java.nio.file.Files.createDirectories(targetDir);
+            java.nio.file.Path target = targetDir.resolve(fileName);
+            file.transferTo(target.toFile());
+            String url = "/uploads/workbench/" + fileName;
+            return ApiResponse.success("上传成功", url);
+        } catch (Exception e) {
+            return ApiResponse.error(500, "上传失败: " + e.getMessage());
+        }
+    }
+
+    private static String md5(String text) {
+        try {
+            var md = java.security.MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("MD5 error", e);
+        }
     }
 }

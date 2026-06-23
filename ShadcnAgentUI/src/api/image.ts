@@ -46,9 +46,13 @@ export interface RecordQuery {
  * 文生图 — 根据文字描述生成图片。
  * @param n 生成张数（1~10），默认 1
  */
-export function generateImage(prompt: string, size?: string, quality?: string, n: number = 1) {
-  return api.post<ImageGenerationResult>('/images/generate', { prompt, size, quality, n: String(n) }, {
-    timeout: 600_000, // 10 minutes for image generation
+export function generateImage(prompt: string, size?: string, quality?: string, n: number = 1, modelId?: number) {
+  const body: Record<string, string> = { prompt, n: String(n) }
+  if (size) body.size = size
+  if (quality) body.quality = quality
+  if (modelId) body.modelId = String(modelId)
+  return api.post<ImageGenerationResult>('/images/generate', body, {
+    timeout: 600_000,
   })
 }
 
@@ -57,12 +61,13 @@ export function generateImage(prompt: string, size?: string, quality?: string, n
  * @param mask 可选遮罩图（PNG，透明区域=重绘区域，作用于第一张参考图）
  * @param n 生成张数（1~10），默认 1
  */
-export function editImage(prompt: string, images: File[], size?: string, quality?: string, mask?: File, n: number = 1) {
+export function editImage(prompt: string, images: File[], size?: string, quality?: string, mask?: File, n: number = 1, modelId?: number) {
   const formData = new FormData()
   formData.append('prompt', prompt)
   if (size) formData.append('size', size)
   if (quality) formData.append('quality', quality)
   formData.append('n', String(n))
+  if (modelId) formData.append('modelId', String(modelId))
   images.forEach(file => formData.append('image', file))
   if (mask) formData.append('mask', mask)
   return api.post<ImageGenerationResult>('/images/edit', formData, {
@@ -91,4 +96,33 @@ export function listImageRecords(query?: RecordQuery) {
  */
 export function deleteImageRecord(id: number) {
   return api.delete(`/images/records/${id}`)
+}
+
+export function analyzeImageExpression(imageUrl: string) {
+  return api.post<string>('/images/analyze-expression', null, {
+    params: { imageUrl },
+    timeout: 360_000,
+  })
+}
+
+export function collectAsinImages(asin: string) {
+  return api.post<string[]>('/images/collect-asin-images', null, {
+    params: { asin },
+    timeout: 120_000,
+  })
+}
+
+export function analyzeExpressionCached(imageUrl: string) {
+  return api.post<string>('/images/analyze-expression-cached', null, {
+    params: { imageUrl },
+    timeout: 360_000,
+  })
+}
+
+export function uploadLocalImage(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post<string>('/images/upload-local', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }

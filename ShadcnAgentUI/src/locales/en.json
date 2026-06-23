@@ -1,4 +1,4 @@
-{
+﻿{
   "nav": {
     "myAgents": "My Agents",
     "chat": "Chat",
@@ -18,7 +18,10 @@
     "messages": "Messages",
     "settings": "Settings",
     "publicAssets": "Assets",
-    "promptLibrary": "Prompt Library"
+    "promptLibrary": "Prompt Library",
+    "productProfiles": "Product Profiles",
+    "imageHistory": "History",
+    "amazonImageWorkbench": "Amazon Image Workbench"
   },
   "pageTitle": {
     "myAgents": "My Agents",
@@ -48,7 +51,13 @@
     "publicAssets": "Assets",
     "publicAssetsDesc": "Upload and manage public image assets",
     "promptLibrary": "Prompt Library",
-    "promptLibraryDesc": "Share and manage prompts"
+    "promptLibraryDesc": "Share and manage prompts",
+    "productProfiles": "Product Profiles",
+    "amazonImageWorkbench": "Amazon Image Workbench",
+    "productProfilesDesc": "Maintain own product archives and default product images",
+    "imageHistory": "History",
+    "imageHistoryDesc": "View text-to-image and image-to-image generation history",
+    "amazonImageWorkbenchDesc": "Manage Amazon US car stereo secondary image and A+ image workflows"
   },
   "pageDesc": {
     "logs": "View and export system operation logs",
@@ -463,7 +472,7 @@
     "dropToUpload": "Release to upload",
     "uploadFormats": "Supports TXT, MD, PDF, DOCX, XLSX, CSV, JSON, XML and other formats",
     "docList": "Documents ({count})",
-    "uploadSuccess": "「{name}」uploaded successfully",
+    "uploadSuccess": "銆寋name}銆島ploaded successfully",
     "uploadSuccessBatch": "{count} files uploaded successfully",
     "kbNameRequired": "Please enter a knowledge base name",
     "searchPlaceholder": "Search document content...",
@@ -502,7 +511,7 @@
       "completeConfirm": "Are you sure you want to mark this ticket as completed?",
       "changeHistory": "Change History",
       "changedBy": "{name} changed {field}",
-      "fromTo": "{oldVal} → {newVal}"
+      "fromTo": "{oldVal} 鈫?{newVal}"
     }
   },
   "myTickets": {
@@ -625,7 +634,7 @@
     "apiKeyConfig": "API Key Configuration",
     "enableTool": "Enable",
     "disableTool": "Disable",
-    "toggleConfirm": "Are you sure you want to {toggle} 「{name}」?",
+    "toggleConfirm": "Are you sure you want to {toggle} 銆寋name}銆?",
     "toggleEnable": "enable",
     "toggleDisable": "disable",
     "searchNoResult": "No matching tools",
@@ -710,8 +719,8 @@
     },
     "urlImport": {
       "supportedFormats": "Supported URL formats:",
-      "repoRoot": "Repository root — https://github.com/{owner}/{repo} (scans all SKILL.md files)",
-      "subtree": "Subtree path — https://github.com/{owner}/{repo}/tree/main/skills/{name} (imports a single skill)"
+      "repoRoot": "Repository root 鈥?https://github.com/{owner}/{repo} (scans all SKILL.md files)",
+      "subtree": "Subtree path 鈥?https://github.com/{owner}/{repo}/tree/main/skills/{name} (imports a single skill)"
     },
     "confirmDelete": "Are you sure you want to delete this skill?",
     "uploadResult": "Upload Result",

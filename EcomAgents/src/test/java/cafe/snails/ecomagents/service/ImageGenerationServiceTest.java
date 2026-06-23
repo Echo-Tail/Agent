@@ -288,7 +288,7 @@ class ImageGenerationServiceTest {
         // generate 会先尝试调 PackyAPI（localhost:1 连接被拒），再走 fallback
         // fallback 地址也是 localhost:1，同样连接失败
         var ex = assertThrows(BusinessException.class,
-                () -> service.generate("test prompt", "1024x1024", "standard", 1L));
+                () -> service.generate("test prompt", "1024x1024", "standard", 1, 1L));
         // 验证异常消息包含 fallback 相关字样（说明 fallback 被触发了）
         assertTrue(ex.getMessage().contains("备用接口") || ex.getMessage().contains("失败"),
                 "应触发 fallback, 消息: " + ex.getMessage());
@@ -315,7 +315,7 @@ class ImageGenerationServiceTest {
                 "image", "test.png", "image/png", "fake-png-bytes".getBytes());
 
         var ex = assertThrows(BusinessException.class,
-                () -> service.edit("edit this", "1024x1024", "standard", List.of(image), 1L));
+                () -> service.edit("edit this", "1024x1024", "standard", List.of(image), null, 1, 1L));
         assertTrue(ex.getMessage().contains("备用接口") || ex.getMessage().contains("失败"),
                 "应触发 fallback, 消息: " + ex.getMessage());
     }

@@ -1,4 +1,4 @@
-{
+﻿{
   "nav": {
     "myAgents": "我的 Agent",
     "chat": "对话",
@@ -18,7 +18,10 @@
     "messages": "消息",
     "settings": "设置",
     "publicAssets": "素材库",
-    "promptLibrary": "提示词库"
+    "promptLibrary": "提示词库",
+    "productProfiles": "产品资料",
+    "imageHistory": "生成历史",
+    "amazonImageWorkbench": "Amazon 图像工作台"
   },
   "pageTitle": {
     "myAgents": "我的 Agent",
@@ -48,7 +51,13 @@
     "publicAssets": "素材库",
     "publicAssetsDesc": "上传和管理公共图片素材",
     "promptLibrary": "提示词库",
-    "promptLibraryDesc": "分享和管理提示词"
+    "promptLibraryDesc": "分享和管理提示词",
+    "productProfiles": "产品资料",
+    "productProfilesDesc": "维护自有产品档案和默认产品图片",
+    "amazonImageWorkbench": "Amazon 图像工作台",
+    "imageHistory": "生成历史",
+    "imageHistoryDesc": "查看文生图与图生图的历史记录",
+    "amazonImageWorkbenchDesc": "管理 Amazon US car stereo 副图与 A+ 图生图流程"
   },
   "pageDesc": {
     "logs": "查看和导出系统运行日志",
