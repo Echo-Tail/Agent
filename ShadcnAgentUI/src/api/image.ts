@@ -97,3 +97,32 @@ export function listImageRecords(query?: RecordQuery) {
 export function deleteImageRecord(id: number) {
   return api.delete(`/images/records/${id}`)
 }
+
+export function analyzeImageExpression(imageUrl: string) {
+  return api.post<string>('/images/analyze-expression', null, {
+    params: { imageUrl },
+    timeout: 360_000,
+  })
+}
+
+export function collectAsinImages(asin: string) {
+  return api.post<string[]>('/images/collect-asin-images', null, {
+    params: { asin },
+    timeout: 120_000,
+  })
+}
+
+export function analyzeExpressionCached(imageUrl: string) {
+  return api.post<string>('/images/analyze-expression-cached', null, {
+    params: { imageUrl },
+    timeout: 360_000,
+  })
+}
+
+export function uploadLocalImage(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post<string>('/images/upload-local', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

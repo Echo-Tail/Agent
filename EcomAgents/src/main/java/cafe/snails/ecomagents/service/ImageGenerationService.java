@@ -357,7 +357,7 @@ public class ImageGenerationService {
         if (quality != null && !quality.isBlank()) {
             appendMultipartField(byteOut, boundary, "quality", quality);
         }
-        appendMultipartField(byteOut, boundary, "input_fidelity", "high");
+        // appendMultipartField(byteOut, boundary, "input_fidelity", "high");
         appendMultipartField(byteOut, boundary, "output_format", "png");
 
         for (MultipartFile imageFile : images) {
@@ -993,17 +993,25 @@ public class ImageGenerationService {
             if (error.isMissingNode()) return null;
             String code = error.path("code").asText("");
             String message = error.path("message").asText("");
-            // 模型下架：渠道不可用
-            if ("model_not_found".equals(code) && message.contains("无可用渠道")) {
-                return "图片生成功能暂不可用：底层模型渠道已下架，请联系管理员";
+            // 模型下架/不可用
+            if ("model_not_found".equals(code)) {
+                return "图片生成失败：模型不可用（" + (message.length() > 80 ? message.substring(0, 80) + "..." : message) + "）";
+            }
+            // 不支持的参数
+            if (code.contains("input_fidelity")) {
+                return "图片生成失败：当前模型不支持 input_fidelity 参数";
             }
             // 余额不足
-            if ("insufficient_quota".equals(code) || message.contains("余额不足")) {
+            if ("insufficient_quota".equals(code) || message.contains("余额不足") || message.contains("insufficient")) {
                 return "图片生成功能暂不可用：API 余额不足";
             }
             // 超时
             if (message.contains("timeout") || message.contains("超时")) {
                 return "图片生成超时，请稍后重试";
+            }
+            // 其他已知错误，直接返回原文
+            if (!message.isBlank()) {
+                return "图片生成失败：" + (message.length() > 120 ? message.substring(0, 120) + "..." : message);
             }
         } catch (Exception ignored) {
             // 解析失败则使用默认错误消息

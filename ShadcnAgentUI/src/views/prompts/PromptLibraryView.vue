@@ -750,7 +750,7 @@ function imageUrl(path: string): string {
           <div v-if="detailTarget.coverPath" class="w-full rounded-md overflow-hidden bg-muted/30">
             <img :src="imageUrl(detailTarget.coverPath)" class="w-full max-h-72 object-contain" alt="" />
           </div>
-          <div>
+          <div class="max-h-52 overflow-y-auto rounded-md border p-3 bg-muted/20">
             <p class="text-sm whitespace-pre-wrap leading-relaxed">{{ detailTarget.prompt }}</p>
           </div>
           <div class="flex flex-wrap gap-2 items-center">

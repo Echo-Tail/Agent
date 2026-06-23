@@ -26,4 +26,8 @@ public interface BrightDataRecordRepository extends JpaRepository<BrightDataReco
 
     /** 按用户 + 类型查询 */
     List<BrightDataRecord> findByUserIdAndTypeOrderByCreatedAtDesc(Long userId, String type);
+
+    /** 按 ASIN 查找最近的成功记录（用于去重） */
+    List<BrightDataRecord> findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(
+            String asinPart, String status, String type);
 }

@@ -34,6 +34,7 @@ import {
   Mail,
   Image,
   ImagePlus,
+  PanelsTopLeft,
   ScrollText,
 } from 'lucide-vue-next'
 
@@ -75,6 +76,7 @@ const pageTitleKey: Record<string, string> = {
   KnowledgeBase: 'pageTitle.knowledgeBase',
   PublicAssets: 'pageTitle.publicAssets',
   PromptLibrary: 'pageTitle.promptLibrary',
+  AmazonImageWorkbench: 'pageTitle.amazonImageWorkbench',
   Logs: 'pageTitle.logs',
   Settings: 'pageTitle.settings',
 }
@@ -101,6 +103,9 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
     { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
+    { translationKey: 'nav.productProfiles', key: 'ProductProfileList', icon: FileText },
+    { translationKey: 'nav.amazonImageWorkbench', key: 'AmazonImageWorkbench', icon: PanelsTopLeft },
+    { translationKey: 'nav.imageHistory', key: 'ImageHistory', icon: History },
     { translationKey: 'nav.publicAssets', key: 'PublicAssets', icon: ImagePlus },
     { translationKey: 'nav.promptLibrary', key: 'PromptLibrary', icon: ScrollText },
   ],

@@ -128,7 +128,8 @@ const visiblePages = computed(() => {
 const resultImageUrl = (url: string) => {
   if (!url) return ''
   if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url
-  const normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
+  let normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
+  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
   return normalized.startsWith('/') ? normalized : '/' + normalized
 }
 

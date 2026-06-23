@@ -22,6 +22,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -70,13 +71,21 @@ public class BrightDataService {
         record.setRequestParams(toJson(body));
 
         try {
+            String requestUrl = brightDataConfig.getBaseUrl() + "/datasets/v3/scrape?dataset_id=" + datasetId
+                    + "&include_errors=" + (req.getIncludeErrors() != null ? req.getIncludeErrors() : true)
+                    + "&format=" + (req.getFormat() != null ? req.getFormat() : "json")
+                    + (req.getCustomOutputFields() != null ? "&custom_output_fields=" + req.getCustomOutputFields() : "");
+            String bodyJson = toJson(body);
+            String bodyPreview = bodyJson.length() > 500 ? bodyJson.substring(0, 500) + "..." : bodyJson;
+            log.info("[BrightData] >>> scrape request: url={}, input={}, bodyPreview={}",
+                    requestUrl,
+                    req.getInput() != null ? req.getInput().stream().map(m -> m.get("url")).toList() : "[]",
+                    bodyPreview);
+
             // 调用 Bright Data API
             String responseBody = webClientBuilder.build()
                     .post()
-                    .uri(brightDataConfig.getBaseUrl() + "/datasets/v3/scrape?dataset_id=" + datasetId
-                            + "&include_errors=" + (req.getIncludeErrors() != null ? req.getIncludeErrors() : true)
-                            + "&format=" + (req.getFormat() != null ? req.getFormat() : "json")
-                            + (req.getCustomOutputFields() != null ? "&custom_output_fields=" + req.getCustomOutputFields() : ""))
+                    .uri(requestUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
@@ -123,8 +132,9 @@ public class BrightDataService {
             )));
             record = recordRepository.save(record);
 
-            log.info("[BrightData] scrape success, userId={}, records={}, costMs={}",
-                    userId, records.size(), costMs);
+            String responsePreview = responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody;
+            log.info("[BrightData] <<< scrape response: userId={}, records={}, costMs={}, responsePreview={}",
+                    userId, records.size(), costMs, responsePreview);
 
             return ApiResponse.success(BrightDataScrapeResponse.builder()
                     .records(records)
@@ -189,6 +199,8 @@ public class BrightDataService {
             if (req.getEndpoint() != null) {
                 urlBuilder.append("&endpoint=").append(req.getEndpoint());
             }
+            log.info("[BrightData] >>> trigger request: url={}, input={}",
+                    urlBuilder, requestBodyJson.length() > 300 ? requestBodyJson.substring(0, 300) + "..." : requestBodyJson);
 
             // 调用 Bright Data API
             String responseBody = webClientBuilder.build()
@@ -241,6 +253,7 @@ public class BrightDataService {
      * 查询快照进度：调用 Bright Data GET /datasets/v3/progress/{snapshotId}。
      */
     public ApiResponse<BrightDataSnapshotStatus> getProgress(String snapshotId) {
+        log.info("[BrightData] >>> getProgress: snapshotId={}", snapshotId);
         try {
             String responseBody = webClientBuilder.build()
                     .get()
@@ -267,6 +280,8 @@ public class BrightDataService {
                 });
             }
 
+            log.info("[BrightData] <<< getProgress: snapshotId={}, status={}",
+                    snapshotId, status.getStatus());
             return ApiResponse.success(status);
 
         } catch (Exception e) {
@@ -280,6 +295,7 @@ public class BrightDataService {
      */
     public ApiResponse<Object> downloadSnapshot(String snapshotId, String format) {
         long start = System.currentTimeMillis();
+        log.info("[BrightData] >>> downloadSnapshot: snapshotId={}, format={}", snapshotId, format);
 
         try {
             String fmt = (format != null) ? format : "json";
@@ -317,7 +333,10 @@ public class BrightDataService {
                 recordRepository.save(record);
             });
 
-            log.info("[BrightData] downloadSnapshot success, snapshotId={}, costMs={}", snapshotId, costMs);
+            String resultPreview = result != null ? toJson(result).length() > 300 ?
+                    toJson(result).substring(0, 300) + "..." : toJson(result) : "null";
+            log.info("[BrightData] downloadSnapshot success, snapshotId={}, costMs={}, size={}",
+                    snapshotId, costMs, resultPreview);
 
             return ApiResponse.success(result);
 
@@ -332,6 +351,7 @@ public class BrightDataService {
      * 取消快照：调用 Bright Data POST /datasets/v3/snapshot/{snapshotId}/cancel。
      */
     public ApiResponse<Void> cancelSnapshot(String snapshotId) {
+        log.info("[BrightData] >>> cancelSnapshot: snapshotId={}", snapshotId);
         try {
             webClientBuilder.build()
                     .post()
@@ -374,6 +394,7 @@ public class BrightDataService {
             if (limit != null) {
                 urlBuilder.append("&limit=").append(limit);
             }
+            log.info("[BrightData] >>> listSnapshots: datasetId={}, status={}, limit={}", resolvedDatasetId, status, limit);
 
             String responseBody = webClientBuilder.build()
                     .get()
@@ -391,6 +412,79 @@ public class BrightDataService {
             log.error("[BrightData] listSnapshots failed, error={}", e.getMessage(), e);
             return ApiResponse.error(500, "列出快照失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 根据 ASIN 获取商品图片 URL 列表（优先查缓存）。
+     */
+    public List<String> getImageUrlsByAsin(String asin, Long userId) {
+        // Check cache first
+        BrightDataScrapeResponse cached = findRecentByAsin(asin, userId);
+        if (cached != null && cached.getRecords() != null) {
+            List<String> urls = new ArrayList<>();
+            for (Map<String, Object> record : cached.getRecords()) {
+                if (record.containsKey("images") && record.get("images") instanceof List) {
+                    for (Object img : (List<?>) record.get("images")) {
+                        if (img instanceof String s && !urls.contains(s)) urls.add(s);
+                    }
+                }
+                if (record.containsKey("image_url") && record.get("image_url") instanceof String s
+                        && !urls.contains(s)) urls.add(s);
+            }
+            if (!urls.isEmpty()) return urls;
+        }
+        // Not cached, call Bright Data API
+        BrightDataScrapeRequest req = new BrightDataScrapeRequest();
+        req.setInput(List.of(Map.of("url", "https://www.amazon.com/dp/" + asin)));
+        ApiResponse<BrightDataScrapeResponse> res = scrape(req, userId);
+        if (res.getCode() == 200 && res.getData() != null && res.getData().getRecords() != null) {
+            List<String> urls = new ArrayList<>();
+            for (Map<String, Object> record : res.getData().getRecords()) {
+                if (record.containsKey("images") && record.get("images") instanceof List) {
+                    for (Object img : (List<?>) record.get("images")) {
+                        if (img instanceof String s && !urls.contains(s)) urls.add(s);
+                    }
+                }
+            }
+            return urls;
+        }
+        return List.of();
+    }
+
+    /**
+     * 查找最近对该 ASIN 的成功采集记录，避免重复调用 Bright Data API。
+     * @return 缓存的 BrightDataScrapeResponse，如果无缓存返回 null
+     */
+    @SuppressWarnings("unchecked")
+    public BrightDataScrapeResponse findRecentByAsin(String asin, Long userId) {
+        try {
+            var cached = recordRepository
+                    .findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(asin, "success", "scrape");
+            for (BrightDataRecord r : cached) {
+                // Verify the ASIN is actually in this record's asinList
+                if (r.getAsinList() != null && r.getAsinList().contains(asin)) {
+                    if (r.getResultSummary() != null) {
+                        // Reconstruct scrape response from cached result
+                        var summary = objectMapper.readTree(r.getResultSummary());
+                        List<Map<String, Object>> records = new ArrayList<>();
+                        if (summary.has("preview") && !summary.get("preview").isNull()) {
+                            records.add(objectMapper.convertValue(summary.get("preview"), Map.class));
+                        }
+                        log.info("[BrightData] cache hit for ASIN={}, recordId={}, createdAt={}",
+                                asin, r.getId(), r.getCreatedAt());
+                        return BrightDataScrapeResponse.builder()
+                                .records(records)
+                                .timeCostMs(r.getTimeCostMs())
+                                .recordId(r.getId())
+                                .message("cached (record #" + r.getId() + ")")
+                                .build();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[BrightData] cache lookup failed for ASIN={}: {}", asin, e.getMessage());
+        }
+        return null;
     }
 
     /**
