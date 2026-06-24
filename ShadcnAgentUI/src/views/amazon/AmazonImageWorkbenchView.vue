@@ -53,7 +53,8 @@ const copiedResultIdx = ref<number | null>(null)
 
 function imageUrl(path: string): string {
   if (!path) return ''
-  if (/^https?:\/\//i.test(path)) return path
+  // blob: URLs (local file previews) and http/https URLs pass through as-is
+  if (/^blob:/i.test(path) || /^https?:\/\//i.test(path)) return path
   let normalized = path.replace(/\\/g, '/')
   normalized = normalized.replace(/^\.\//, '')
   normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
