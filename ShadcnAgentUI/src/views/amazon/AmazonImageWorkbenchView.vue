@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { toast } from 'sonner'
 import PageHeader from '@/components/PageHeader.vue'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,10 @@ const showAddDialog = ref(false)
 const addMethod = ref<'url' | 'file' | 'asin'>('url')
 const addUrlInput = ref('')
 const addAsinInput = ref('')
+const addedFileNames = ref<string[]>([])
+
+// Reset file names list when dialog closes
+watch(showAddDialog, (v) => { if (!v) addedFileNames.value = [] })
 
 // --- Generate params ---
 const genPrompt = ref('')
@@ -77,6 +81,7 @@ function handleFileSelect(e: Event) {
     for (const f of Array.from(input.files)) {
       const url = URL.createObjectURL(f)
       images.value.push({ url, file: f })
+      addedFileNames.value.push(f.name)
     }
   }
   input.value = ''
@@ -384,6 +389,15 @@ getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.v
           </div>
 
           <div v-if="addMethod==='file'" class="space-y-3">
+            <div v-if="addedFileNames.length > 0" class="flex flex-wrap gap-2">
+              <div v-for="(name, i) in addedFileNames" :key="i"
+                class="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+                <span class="max-w-[180px] truncate">{{ name }}</span>
+              </div>
+            </div>
+            <div v-else class="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+              点击下方按钮选择图片文件
+            </div>
             <Input type="file" accept="image/*" multiple @change="handleFileSelect" />
           </div>
 
