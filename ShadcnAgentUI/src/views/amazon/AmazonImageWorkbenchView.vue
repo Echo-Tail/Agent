@@ -59,11 +59,9 @@ const copiedResultIdx = ref<number | null>(null)
 
 function imageUrl(path: string): string {
   if (!path) return ''
-  // blob: URLs (local file previews) and http/https URLs pass through as-is
   if (/^blob:/i.test(path) || /^https?:\/\//i.test(path)) return path
-  let normalized = path.replace(/\\/g, '/')
-  normalized = normalized.replace(/^\.\//, '')
-  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
+  let normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  // Backend now returns paths starting with /uploads/ — ensure this
   if (!normalized.startsWith('/')) normalized = '/' + normalized
   return normalized
 }
@@ -419,7 +417,7 @@ async function pickAsset(asset: PublicAsset) {
           <div class="flex items-center gap-3 flex-wrap mb-4">
             <select v-model="pickerSpaceId" @change="loadPickerAssets"
               class="rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[160px]">
-              <option :value="null">全部空间</option>
+              <option :value="null" disabled hidden>选择空间</option>
               <option v-for="sp in pickerSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</option>
             </select>
             <Input v-model="pickerKeyword" placeholder="搜索..." class="h-8 text-sm flex-1 min-w-[200px]" @keyup.enter="loadPickerAssets" />

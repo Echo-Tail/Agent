@@ -38,12 +38,7 @@ const modeLabels: Record<string, string> = {
 function imageUrl(path: string): string {
   if (!path) return ''
   if (/^https?:\/\//i.test(path)) return path
-  let normalized = path.replace(/\\/g, '/')
-  // Remove leading ./ or .\
-  normalized = normalized.replace(/^\.\//, '')
-  // Remove double /uploads/ prefix if it somehow got doubled
-  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
-  // Ensure single leading /
+  let normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
   if (!normalized.startsWith('/')) normalized = '/' + normalized
   return normalized
 }
