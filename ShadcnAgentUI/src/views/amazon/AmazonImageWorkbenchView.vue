@@ -215,6 +215,8 @@ const pickerLoading = ref(false)
 const pickerSpaceId = ref<number | null>(null)
 const pickerKeyword = ref('')
 const pickerSpaces = ref<AssetSpace[]>([])
+const pickerPreviewAsset = ref<PublicAsset | null>(null)
+const pickerPreviewOpen = ref(false)
 
 async function openAssetPicker() {
   assetPickerOpen.value = true
@@ -236,6 +238,17 @@ async function loadPickerAssets() {
     pickerAssets.value = res.content ?? []
   } catch { /* ignore */ }
   finally { pickerLoading.value = false }
+}
+
+function showPickerPreview(asset: PublicAsset) {
+  pickerPreviewAsset.value = asset
+  pickerPreviewOpen.value = true
+}
+
+function selectPickerPreview() {
+  if (pickerPreviewAsset.value) pickAsset(pickerPreviewAsset.value)
+  pickerPreviewOpen.value = false
+  pickerPreviewAsset.value = null
 }
 
 async function pickAsset(asset: PublicAsset) {
@@ -422,12 +435,27 @@ async function pickAsset(asset: PublicAsset) {
           <div v-else class="grid grid-cols-6 gap-3">
             <div v-for="asset in pickerAssets" :key="asset.id"
               class="relative aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer border border-border hover:border-primary/50 transition-colors group"
-              @click="pickAsset(asset)">
+              @click="showPickerPreview(asset)">
               <img :src="imageUrl(asset.filePath)" class="w-full h-full object-cover" alt="" loading="lazy" />
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                 <span class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 px-2 py-1 rounded">选择</span>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Asset preview dialog -->
+    <Teleport to="body">
+      <div v-if="pickerPreviewOpen && pickerPreviewAsset" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/50" @click.self="pickerPreviewOpen = false">
+        <div class="relative max-w-[50vw] max-h-[85vh] rounded-lg overflow-hidden bg-background/95 p-4 shadow-lg">
+          <button class="absolute top-2 right-2 z-10 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70" @click="pickerPreviewOpen = false">
+            <X class="h-4 w-4" />
+          </button>
+          <img :src="imageUrl(pickerPreviewAsset.filePath)" class="max-h-[65vh] w-auto object-contain rounded" alt="" />
+          <div class="mt-3 flex justify-center">
+            <Button size="sm" @click="selectPickerPreview">选择此图片</Button>
           </div>
         </div>
       </div>
