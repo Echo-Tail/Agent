@@ -128,9 +128,8 @@ const visiblePages = computed(() => {
 const resultImageUrl = (url: string) => {
   if (!url) return ''
   if (url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url
-  let normalized = url.replace(/\\/g, '/').replace(/^\.\//, '')
-  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
-  return normalized.startsWith('/') ? normalized : '/' + normalized
+  // Backend now returns paths starting with /uploads/ — ensure consistency
+  return url.replace(/\\/g, '/')
 }
 
 // ── Lifecycle ──
@@ -372,8 +371,10 @@ function selectPickerPreview() {
 
 function imageUrl(path: string): string {
   if (!path) return ''
-  const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
-  return '/uploads/' + n
+  if (path.startsWith('blob:') || path.startsWith('http://') || path.startsWith('https://')) return path
+  let normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (!normalized.startsWith('/uploads/')) normalized = '/uploads/' + normalized
+  return normalized
 }
 
 // ── Delete record ──
