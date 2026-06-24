@@ -184,7 +184,7 @@ public class AssetService {
 
             PublicAsset asset = PublicAsset.builder()
                     .fileName(originalName)
-                    .filePath(subDir + "/" + storedName)
+                    .filePath("/uploads/" + subDir + "/" + storedName)
                     .fileSize(file.getSize())
                     .mimeType(mimeType)
                     .space(space)
@@ -230,7 +230,9 @@ public class AssetService {
             return ApiResponse.error(403, "没有权限删除此素材");
         }
         try {
-            Path filePath = Paths.get(uploadDir, asset.getFilePath()).toAbsolutePath().normalize();
+            // filePath is now /uploads/... — strip leading / for local path
+            String relativePath = asset.getFilePath().replaceFirst("^/", "");
+            Path filePath = Paths.get(uploadDir, relativePath).toAbsolutePath().normalize();
             Files.deleteIfExists(filePath);
         } catch (IOException e) {
             log.warn("Failed to delete asset file: {}", e.getMessage());
@@ -283,7 +285,7 @@ public class AssetService {
 
             PublicAsset asset = PublicAsset.builder()
                     .fileName(name)
-                    .filePath(subDir + "/" + storedName)
+                    .filePath("/uploads/" + subDir + "/" + storedName)
                     .fileSize(Files.size(targetPath))
                     .mimeType("image/png")
                     .space(space)
