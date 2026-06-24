@@ -75,7 +75,6 @@ public class ImageGenerationRecord {
     @JsonGetter("resultPath")
     public String getResultPathNormalized() {
         if (resultPath == null || resultPath.isBlank()) return resultPath;
-        // resultPath 可能有多行（多张图用换行分隔），每行单独处理
         String[] lines = resultPath.split("\n");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < lines.length; i++) {
@@ -83,6 +82,8 @@ public class ImageGenerationRecord {
             String line = lines[i].trim();
             if (line.isBlank()) continue;
             String normalized = line.replace("\\", "/");
+            // Remove any ./ pattern and ensure clean path
+            normalized = normalized.replaceAll("\\./", "");
             if (!normalized.startsWith("/")) normalized = "/" + normalized;
             if (!normalized.startsWith("/uploads/")) normalized = "/uploads" + normalized;
             sb.append(normalized);

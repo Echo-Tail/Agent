@@ -59,6 +59,7 @@ public class PublicAsset {
     public String getFilePathNormalized() {
         if (filePath == null || filePath.isBlank()) return filePath;
         String normalized = filePath.replace("\\", "/");
+        normalized = normalized.replaceAll("\\./", "");
         if (!normalized.startsWith("/")) normalized = "/" + normalized;
         if (!normalized.startsWith("/uploads/")) normalized = "/uploads" + normalized;
         return normalized;
