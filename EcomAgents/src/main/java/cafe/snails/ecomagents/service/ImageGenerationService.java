@@ -166,7 +166,7 @@ public class ImageGenerationService {
         recordImageUsage(model, userId, true, null);
 
         List<String> urls = resultPaths.stream()
-                .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
+                .map(p -> p.replace("\\", "/").replace("./", ""))
                 .toList();
         return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
     }
@@ -336,7 +336,7 @@ public class ImageGenerationService {
         recordImageUsage(model, userId, true, null);
 
         List<String> urls = resultPaths.stream()
-                .map(p -> "/" + p.replace("\\", "/").replace("./", ""))
+                .map(p -> p.replace("\\", "/").replace("./", ""))
                 .toList();
         return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
     }
@@ -607,7 +607,7 @@ public class ImageGenerationService {
         Files.write(targetPath, imageBytes);
 
         log.info("Base64 image saved: {} -> {} ({} bytes)", fileName, targetPath, imageBytes.length);
-        return Paths.get(uploadDir, subDir, fileName).toString();
+        return normalizePath(Paths.get(uploadDir, subDir, fileName).toString());
     }
 
     /**
@@ -661,7 +661,16 @@ public class ImageGenerationService {
         Files.write(targetPath, imageBytes);
         log.info("Image downloaded: {} -> {} ({} bytes)", imageUrl, targetPath, imageBytes.length);
 
-        return Paths.get(uploadDir, subDir, fileName).toString();
+        return normalizePath(Paths.get(uploadDir, subDir, fileName).toString());
+    }
+
+    /**
+     * 统一规范化图片路径：替换反斜杠，确保以 /uploads/ 开头。
+     */
+    private String normalizePath(String raw) {
+        String normalized = raw.replace("\\", "/");
+        if (!normalized.startsWith("/")) normalized = "/" + normalized;
+        return normalized;
     }
 
     /**
@@ -793,7 +802,7 @@ public class ImageGenerationService {
             recordImageUsage(model, userId, true, null);
 
             return new ImageGenerationResult(
-                    List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
+                    List.of(resultPath.replace("\\", "/").replace("./", "")),
                     content, timeCostMs, record.getId(), 0);
 
             } finally {
@@ -919,7 +928,7 @@ public class ImageGenerationService {
                 recordImageUsage(model, userId, true, null);
 
                 return new ImageGenerationResult(
-                        List.of("/" + resultPath.replace("\\", "/").replace("./", "")),
+                        List.of(resultPath.replace("\\", "/").replace("./", "")),
                         content, timeCostMs, record.getId(), 0);
 
             } finally {

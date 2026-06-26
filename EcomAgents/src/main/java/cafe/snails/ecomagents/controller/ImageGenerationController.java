@@ -143,25 +143,25 @@ public class ImageGenerationController {
     }
 
     /**
-     * 分析图片表达结构（带缓存：已分析过的图片直接返回上次结果）。
+     * 分析图片表达结构 — 每次调用都重新分析，结果持久化到数据库（1:N：同图多次分析）。
      */
     @PostMapping("/analyze-expression-cached")
     public ApiResponse<String> analyzeExpressionCached(
             @RequestParam String imageUrl) {
-        String hash = md5(imageUrl);
-        // Check cache
-        var cached = expressionCacheRepository.findByImageUrlHash(hash);
-        if (cached.isPresent()) {
-            log.info("[表达分析] 缓存命中: urlHash={}", hash);
-            return ApiResponse.success("缓存命中", cached.get().getExpressionJson());
-        }
-        // Run analysis
+        // Run analysis (always re-analyze, no cache-first lookup)
         String result = imageAnalysisService.analyzeImageExpression(imageUrl);
-        // Save to cache
-        ImageExpressionCache cache = ImageExpressionCache.builder()
-                .imageUrlHash(hash).imageUrl(imageUrl).expressionJson(result).build();
-        expressionCacheRepository.save(cache);
-        log.info("[表达分析] 已分析并缓存: urlHash={}", hash);
+        // Save a new record (1:N — same URL can accumulate multiple records)
+        String promptHash = md5(imageAnalysisService.getAnalysisPrompt());
+        String imageUrlHash = md5(imageUrl);
+        ImageExpressionCache record = ImageExpressionCache.builder()
+                .imageUrlHash(imageUrlHash)
+                .imageUrl(imageUrl)
+                .promptHash(promptHash)
+                .expressionJson(result)
+                .build();
+        expressionCacheRepository.save(record);
+        log.info("[表达分析] 已分析并持久化: imageUrlHash={}, promptHash={}, id={}",
+                imageUrlHash, promptHash, record.getId());
         return ApiResponse.success("分析完成", result);
     }
 

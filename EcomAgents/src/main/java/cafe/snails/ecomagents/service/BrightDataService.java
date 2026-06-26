@@ -107,16 +107,22 @@ public class BrightDataService {
                 record.setResultSummary(toJson(responseMap));
                 record = recordRepository.save(record);
 
-                log.info("[BrightData] scrape timeout (202), snapshotId={}, userId={}, costMs={}",
+                log.info("[BrightData] scrape returned 202, wait 5s before polling, snapshotId={}, userId={}, costMs={}",
                         snapshotId, userId, costMs);
 
-                return new ApiResponse<>(202, "请求超时，请通过 snapshotId 轮询结果",
-                        BrightDataScrapeResponse.builder()
-                                .snapshotId(snapshotId)
-                                .timeCostMs(costMs)
-                                .recordId(record.getId())
-                                .message("Your request is still in progress. Use the snapshot_id to poll via progress endpoint.")
-                                .build());
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+
+                List<Map<String, Object>> records = pollSnapshot(snapshotId, record, req.getFormat(), start, userId);
+                return ApiResponse.success(BrightDataScrapeResponse.builder()
+                        .records(records)
+                        .timeCostMs(System.currentTimeMillis() - start)
+                        .recordId(record.getId())
+                        .message("success (polled snapshot)")
+                        .build());
             }
 
             // 正常 200 响应 —— 解析为 JSON 数组
@@ -379,6 +385,94 @@ public class BrightDataService {
         }
     }
 
+    // ==================== 快照轮询 ====================
+
+    /**
+     * 轮询快照进度，ready 后自动下载数据。
+     * <p>指数退避：2s → 4s → 8s → … → 30s，最多 30 次（约 5 分钟）。</p>
+     *
+     * @return 成功返回 records 列表，失败抛出 BusinessException
+     */
+    private List<Map<String, Object>> pollSnapshot(String snapshotId, BrightDataRecord record,
+                                                     String format, long startTime, Long userId) {
+        int maxRetries = 30;
+        long pollInterval = 2000;
+        long maxPollInterval = 30_000;
+        String snapshotStatus = null;
+        int attempt = 0;
+
+        while (attempt < maxRetries) {
+            try {
+                Thread.sleep(pollInterval);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+
+            ApiResponse<BrightDataSnapshotStatus> progressResp = getProgress(snapshotId);
+            if (progressResp.getCode() == 200 && progressResp.getData() != null) {
+                snapshotStatus = progressResp.getData().getStatus();
+                log.info("[BrightData] poll snapshotId={}, attempt={}, status={}",
+                        snapshotId, attempt + 1, snapshotStatus);
+
+                if ("ready".equals(snapshotStatus) || "failed".equals(snapshotStatus)) {
+                    break;
+                }
+            }
+
+            attempt++;
+            pollInterval = Math.min(pollInterval * 2, maxPollInterval);
+        }
+
+        long costMs = System.currentTimeMillis() - startTime;
+
+        if ("ready".equals(snapshotStatus)) {
+            // 尝试下载快照（返回 List 才是真数据，String 说明还在 building，继续轮询）
+            ApiResponse<Object> downloadResp = downloadSnapshot(snapshotId, format);
+            if (downloadResp.getCode() == 200 && downloadResp.getData() instanceof List<?>) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> records = (List<Map<String, Object>>) downloadResp.getData();
+
+                record.setStatus("success");
+                record.setTimeCostMs(costMs);
+                record.setDatasetSize(records.size());
+                record.setResultSummary(toJson(Map.of(
+                        "recordCount", records.size(),
+                        "preview", records.isEmpty() ? null : records.get(0)
+                )));
+                recordRepository.save(record);
+
+                log.info("[BrightData] poll done, snapshotId={}, userId={}, records={}, costMs={}",
+                        snapshotId, userId, records.size(), costMs);
+                return records;
+            }
+
+            // 快照尚未完全就绪（如 "try again in 30s"），继续轮询
+            if (downloadResp.getCode() == 200) {
+                log.info("[BrightData] download not ready yet, continue polling, snapshotId={}", snapshotId);
+            } else {
+                log.warn("[BrightData] download failed (code={}), continue polling, snapshotId={}",
+                        downloadResp.getCode(), snapshotId);
+            }
+        }
+
+        if ("failed".equals(snapshotStatus)) {
+            record.setStatus("failed");
+            record.setTimeCostMs(costMs);
+            record.setErrorMessage("snapshot processing failed on Bright Data side");
+            recordRepository.save(record);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "Bright Data 快照处理失败");
+        }
+
+        // 轮询超时
+        record.setStatus("running");
+        record.setTimeCostMs(costMs);
+        record.setErrorMessage("polling timed out after " + maxRetries + " retries");
+        recordRepository.save(record);
+        throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                "Bright Data 快照轮询超时, snapshotId=" + snapshotId);
+    }
+
     /**
      * 列出 Bright Data 侧历史快照。
      */
@@ -430,6 +524,13 @@ public class BrightDataService {
                 }
                 if (record.containsKey("image_url") && record.get("image_url") instanceof String s
                         && !urls.contains(s)) urls.add(s);
+                // A+ 图：product_description[].url
+                if (record.containsKey("product_description") && record.get("product_description") instanceof List) {
+                    for (Object item : (List<?>) record.get("product_description")) {
+                        if (item instanceof Map<?, ?> m && m.get("url") instanceof String s
+                                && !urls.contains(s)) urls.add(s);
+                    }
+                }
             }
             if (!urls.isEmpty()) return urls;
         }
@@ -443,6 +544,13 @@ public class BrightDataService {
                 if (record.containsKey("images") && record.get("images") instanceof List) {
                     for (Object img : (List<?>) record.get("images")) {
                         if (img instanceof String s && !urls.contains(s)) urls.add(s);
+                    }
+                }
+                // A+ 图：product_description[].url
+                if (record.containsKey("product_description") && record.get("product_description") instanceof List) {
+                    for (Object item : (List<?>) record.get("product_description")) {
+                        if (item instanceof Map<?, ?> m && m.get("url") instanceof String s
+                                && !urls.contains(s)) urls.add(s);
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package cafe.snails.ecomagents.model;
 
+import com.fasterxml.jackson.annotation.JsonGetter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -66,4 +67,27 @@ public class ImageGenerationRecord {
     /** 创建时间 */
     @Column(nullable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * 返回规范化后的 resultPath（始终以 /uploads/ 开头）。
+     * 兼容旧数据（uploads/edit/xxx.png）和新数据（/uploads/edit/xxx.png）。
+     */
+    @JsonGetter("resultPath")
+    public String getResultPathNormalized() {
+        if (resultPath == null || resultPath.isBlank()) return resultPath;
+        String[] lines = resultPath.split("\n");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) sb.append("\n");
+            String line = lines[i].trim();
+            if (line.isBlank()) continue;
+            String normalized = line.replace("\\", "/");
+            // Remove any ./ pattern and ensure clean path
+            normalized = normalized.replaceAll("\\./", "");
+            if (!normalized.startsWith("/")) normalized = "/" + normalized;
+            if (!normalized.startsWith("/uploads/")) normalized = "/uploads" + normalized;
+            sb.append(normalized);
+        }
+        return sb.toString();
+    }
 }

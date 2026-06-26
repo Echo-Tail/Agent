@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { toast } from 'sonner'
 import PageHeader from '@/components/PageHeader.vue'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,8 @@ import {
   generateImage, editImage, type ImageGenerationResult,
   collectAsinImages, analyzeExpressionCached,
 } from '@/api/image'
+import { listSpaces, listAssets } from '@/api/assets'
+import type { AssetSpace, PublicAsset } from '@/api/assets'
 import {
   Plus, Loader2, Trash2, WandSparkles, Search, ImagePlus, X,
   Download, Copy, Check, ZoomIn,
@@ -32,6 +34,10 @@ const showAddDialog = ref(false)
 const addMethod = ref<'url' | 'file' | 'asin'>('url')
 const addUrlInput = ref('')
 const addAsinInput = ref('')
+const addedFileNames = ref<string[]>([])
+
+// Reset file names list when dialog closes
+watch(showAddDialog, (v) => { if (!v) addedFileNames.value = [] })
 
 // --- Generate params ---
 const genPrompt = ref('')
@@ -53,10 +59,9 @@ const copiedResultIdx = ref<number | null>(null)
 
 function imageUrl(path: string): string {
   if (!path) return ''
-  if (/^https?:\/\//i.test(path)) return path
-  let normalized = path.replace(/\\/g, '/')
-  normalized = normalized.replace(/^\.\//, '')
-  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
+  if (/^blob:/i.test(path) || /^https?:\/\//i.test(path)) return path
+  let normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  // Backend now returns paths starting with /uploads/ — ensure this
   if (!normalized.startsWith('/')) normalized = '/' + normalized
   return normalized
 }
@@ -76,6 +81,7 @@ function handleFileSelect(e: Event) {
     for (const f of Array.from(input.files)) {
       const url = URL.createObjectURL(f)
       images.value.push({ url, file: f })
+      addedFileNames.value.push(f.name)
     }
   }
   input.value = ''
@@ -199,6 +205,62 @@ import { getImageModelsApi } from '@/api/model'
 import type { AiModel } from '@/types/api'
 const models = ref<AiModel[]>([])
 getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.value = m[0].id }).catch(() => {})
+
+// --- Asset picker ---
+const assetPickerOpen = ref(false)
+const pickerAssets = ref<PublicAsset[]>([])
+const pickerLoading = ref(false)
+const pickerSpaceId = ref<number | null>(null)
+const pickerKeyword = ref('')
+const pickerSpaces = ref<AssetSpace[]>([])
+const pickerPreviewAsset = ref<PublicAsset | null>(null)
+const pickerPreviewOpen = ref(false)
+
+async function openAssetPicker() {
+  assetPickerOpen.value = true
+  try {
+    const spaces = await listSpaces()
+    pickerSpaces.value = spaces
+  } catch {}
+  await loadPickerAssets()
+}
+
+async function loadPickerAssets() {
+  pickerLoading.value = true
+  try {
+    const res = await listAssets({
+      spaceId: pickerSpaceId.value ?? undefined,
+      keyword: pickerKeyword.value || undefined,
+      page: 0, size: 50,
+    })
+    pickerAssets.value = res.content ?? []
+  } catch { /* ignore */ }
+  finally { pickerLoading.value = false }
+}
+
+function showPickerPreview(asset: PublicAsset) {
+  pickerPreviewAsset.value = asset
+  pickerPreviewOpen.value = true
+}
+
+function selectPickerPreview() {
+  if (pickerPreviewAsset.value) pickAsset(pickerPreviewAsset.value)
+  pickerPreviewOpen.value = false
+  pickerPreviewAsset.value = null
+}
+
+async function pickAsset(asset: PublicAsset) {
+  try {
+    const resp = await fetch(imageUrl(asset.filePath))
+    const blob = await resp.blob()
+    const file = new File([blob], asset.fileName, { type: blob.type })
+    genReferenceFiles.value.push(file)
+    toast.success('已添加参考图')
+    assetPickerOpen.value = false
+  } catch {
+    toast.error('加载图片失败')
+  }
+}
 </script>
 
 <template>
@@ -223,15 +285,24 @@ getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.v
             <div
               v-for="(img, i) in images"
               :key="i"
-              :class="['relative overflow-hidden rounded-md border bg-card cursor-pointer transition-colors group',
-                selectedImageUrl === img.url ? 'ring-2 ring-primary' : 'hover:bg-accent/50']"
-              @click="selectedImageUrl = img.url"
+              :class="['overflow-hidden rounded-md border bg-card transition-colors group',
+                selectedImageUrl === img.url ? 'ring-2 ring-primary' : '']"
             >
-              <div class="aspect-square">
+              <!-- 点击图片选择素材 -->
+              <div class="aspect-square cursor-pointer" @click="selectedImageUrl = img.url">
                 <img :src="imageUrl(img.url)" class="h-full w-full object-cover" alt="" />
               </div>
-              <Button variant="destructive" size="icon" class="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100"
-                @click.stop="removeImage(i)"><Trash2 class="h-3 w-3" /></Button>
+              <!-- 底部操作栏 -->
+              <div class="flex items-center justify-center gap-1 border-t bg-muted/20 p-1">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click.stop="openLightbox(img.url)"
+                  title="放大查看">
+                  <ZoomIn class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive hover:text-destructive" @click.stop="removeImage(i)"
+                  title="删除">
+                  <Trash2 class="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
           <div class="mt-3 flex gap-2">
@@ -294,7 +365,17 @@ getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.v
             </div>
             <div>
               <label class="text-xs font-medium">参考图（可选，上传后走图生图）</label>
-              <Input class="mt-1" type="file" accept="image/*" multiple @change="handleRefFiles" />
+              <div class="mt-1 flex gap-2">
+                <Input type="file" accept="image/*" multiple @change="handleRefFiles" class="flex-1" />
+                <Button variant="outline" size="sm" @click="openAssetPicker">从素材库选择</Button>
+              </div>
+              <div v-if="genReferenceFiles.length > 0" class="mt-2 flex flex-wrap gap-2">
+                <div v-for="(f, i) in genReferenceFiles" :key="i"
+                  class="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+                  <span class="max-w-[120px] truncate">{{ f.name }}</span>
+                  <button class="text-muted-foreground hover:text-destructive" @click="genReferenceFiles.splice(i, 1)"><X class="h-3 w-3" /></button>
+                </div>
+              </div>
               <p class="mt-1 text-xs text-muted-foreground">不上传参考图时走文生图</p>
             </div>
           </CardContent>
@@ -333,6 +414,59 @@ getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.v
         </Card>
       </div>
     </div>
+
+    <!-- Asset picker dialog -->
+    <Teleport to="body">
+      <div v-if="assetPickerOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="assetPickerOpen = false">
+        <div class="w-full max-w-[900px] max-h-[85vh] overflow-y-auto rounded-lg border bg-background p-6 shadow-lg">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">选择素材图片</h3>
+            <Button variant="ghost" size="icon" @click="assetPickerOpen = false"><X class="h-4 w-4" /></Button>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap mb-4">
+            <select v-model="pickerSpaceId" @change="loadPickerAssets"
+              class="rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[160px]">
+              <option :value="null" disabled hidden>选择空间</option>
+              <option v-for="sp in pickerSpaces" :key="sp.id" :value="sp.id">{{ sp.name }}</option>
+            </select>
+            <Input v-model="pickerKeyword" placeholder="搜索..." class="h-8 text-sm flex-1 min-w-[200px]" @keyup.enter="loadPickerAssets" />
+            <Button variant="outline" size="sm" @click="loadPickerAssets">搜索</Button>
+          </div>
+          <div v-if="pickerLoading" class="flex justify-center py-16">
+            <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="pickerAssets.length === 0" class="py-16 text-center text-sm text-muted-foreground">
+            <ImagePlus class="h-12 w-12 mx-auto mb-2 opacity-40" />
+            <p>暂无素材</p>
+          </div>
+          <div v-else class="grid grid-cols-6 gap-3">
+            <div v-for="asset in pickerAssets" :key="asset.id"
+              class="relative aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer border border-border hover:border-primary/50 transition-colors group"
+              @click="showPickerPreview(asset)">
+              <img :src="imageUrl(asset.filePath)" class="w-full h-full object-cover" alt="" loading="lazy" />
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <span class="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 px-2 py-1 rounded">选择</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Asset preview dialog -->
+    <Teleport to="body">
+      <div v-if="pickerPreviewOpen && pickerPreviewAsset" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/50" @click.self="pickerPreviewOpen = false">
+        <div class="relative max-w-[50vw] max-h-[85vh] rounded-lg overflow-hidden bg-background/95 p-4 shadow-lg">
+          <button class="absolute top-2 right-2 z-10 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70" @click="pickerPreviewOpen = false">
+            <X class="h-4 w-4" />
+          </button>
+          <img :src="imageUrl(pickerPreviewAsset.filePath)" class="max-h-[65vh] w-auto object-contain rounded" alt="" />
+          <div class="mt-3 flex justify-center">
+            <Button size="sm" @click="selectPickerPreview">选择此图片</Button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Lightbox -->
     <Teleport to="body">
@@ -383,6 +517,15 @@ getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.v
           </div>
 
           <div v-if="addMethod==='file'" class="space-y-3">
+            <div v-if="addedFileNames.length > 0" class="flex flex-wrap gap-2">
+              <div v-for="(name, i) in addedFileNames" :key="i"
+                class="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs">
+                <span class="max-w-[180px] truncate">{{ name }}</span>
+              </div>
+            </div>
+            <div v-else class="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+              点击下方按钮选择图片文件
+            </div>
             <Input type="file" accept="image/*" multiple @change="handleFileSelect" />
           </div>
 

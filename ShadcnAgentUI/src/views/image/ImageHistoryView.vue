@@ -5,12 +5,17 @@ import PageHeader from '@/components/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { VisuallyHidden } from 'reka-ui'
 import {
   listImageRecords, deleteImageRecord, type ImageRecord,
 } from '@/api/image'
+import { createPrompt as createPromptApi, setCoverRef } from '@/api/prompts'
 import {
-  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X,
+  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus,
 } from 'lucide-vue-next'
 
 const records = ref<ImageRecord[]>([])
@@ -30,6 +35,18 @@ const panY = ref(0)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalElements.value / pageSize)))
 
+const categories = [
+  { value: '车载主机', label: '车载主机' },
+  { value: '扬声器', label: '扬声器' },
+  { value: '低音炮', label: '低音炮' },
+  { value: '功放', label: '功放' },
+  { value: 'DSP', label: 'DSP' },
+  { value: '显示屏', label: '显示屏' },
+  { value: '摄像头', label: '摄像头' },
+  { value: '线材配件', label: '线材配件' },
+  { value: '安装支架', label: '安装支架' },
+]
+
 const modeLabels: Record<string, string> = {
   GENERATE: '文生图',
   EDIT: '图生图',
@@ -38,12 +55,7 @@ const modeLabels: Record<string, string> = {
 function imageUrl(path: string): string {
   if (!path) return ''
   if (/^https?:\/\//i.test(path)) return path
-  let normalized = path.replace(/\\/g, '/')
-  // Remove leading ./ or .\
-  normalized = normalized.replace(/^\.\//, '')
-  // Remove double /uploads/ prefix if it somehow got doubled
-  normalized = normalized.replace(/^\/uploads\/uploads\//, '/uploads/')
-  // Ensure single leading /
+  let normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
   if (!normalized.startsWith('/')) normalized = '/' + normalized
   return normalized
 }
@@ -121,6 +133,56 @@ function handleWheel(e: WheelEvent) {
   zoomLevel.value = Math.max(0.5, Math.min(5, zoomLevel.value + delta))
 }
 
+// ── 保存到提示词库 ──
+const saveDialogOpen = ref(false)
+const saveTarget = ref<ImageRecord | null>(null)
+const saveCategory = ref('车载主机')
+const saveTags = ref('')
+const saveBusy = ref(false)
+
+function openSaveDialog(record: ImageRecord) {
+  saveTarget.value = record
+  saveCategory.value = '车载主机'
+  saveTags.value = ''
+  saveBusy.value = false
+  saveDialogOpen.value = true
+}
+
+/** 取 resultPath 第一张图，清理为相对路径（去掉 /uploads/ 前缀） */
+function firstImagePathClean(record: ImageRecord): string {
+  const raw = record.resultPath?.split('\n').filter(Boolean)[0] || ''
+  return raw.replace(/\\/g, '/')
+    .replace(/^\/uploads\//, '')
+    .replace(/^\.\/uploads\//, '')
+    .replace(/^\.\//, '')
+}
+
+async function handleSaveToLibrary() {
+  if (!saveTarget.value || !saveCategory.value || saveBusy.value) return
+  saveBusy.value = true
+  try {
+    const record = saveTarget.value
+    const fd = new FormData()
+    fd.append('prompt', record.prompt)
+    fd.append('category', saveCategory.value)
+    if (saveTags.value.trim()) fd.append('tags', saveTags.value.trim())
+
+    const created = await createPromptApi(fd)
+    if (created?.id) {
+      const coverPath = firstImagePathClean(record)
+      if (coverPath) {
+        await setCoverRef(created.id, coverPath)
+      }
+    }
+    toast.success('已保存到提示词库')
+    saveDialogOpen.value = false
+  } catch {
+    toast.error('保存失败')
+  } finally {
+    saveBusy.value = false
+  }
+}
+
 function setPage(p: number) {
   page.value = p
   loadRecords()
@@ -185,7 +247,11 @@ onMounted(loadRecords)
                 <Check v-if="copiedRecordId === record.id" class="h-3 w-3 text-green-500" />
                 <Copy v-else class="h-3 w-3" />复制
               </Button>
-              <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-destructive ml-auto"
+              <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-primary"
+                @click.stop="openSaveDialog(record)">
+                <Plus class="h-3 w-3 mr-0.5" />保存
+              </Button>
+              <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-destructive"
                 @click.stop="handleDelete(record)">
                 <Trash2 class="h-3 w-3" />
               </Button>
@@ -251,5 +317,58 @@ onMounted(loadRecords)
         />
       </div>
     </Teleport>
+    <!-- ══════════ 保存到提示词库 dialog ══════════ -->
+    <Dialog v-model:open="saveDialogOpen">
+      <DialogContent class="sm:max-w-[480px]" aria-describedby="save-prompt-desc">
+        <DialogHeader><DialogTitle>保存到提示词库</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="save-prompt-desc">将当前生成记录保存为提示词模板</div></VisuallyHidden>
+        <div class="space-y-4 py-2">
+          <!-- Cover preview -->
+          <div v-if="saveTarget" class="flex justify-center">
+            <div class="w-40 h-30 rounded-md overflow-hidden bg-muted/30">
+              <img
+                :src="imageUrl(firstImagePath(saveTarget))"
+                class="w-full h-full object-cover" alt=""
+              />
+            </div>
+          </div>
+
+          <!-- Prompt (readonly) -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium">提示词</label>
+            <Textarea
+              :model-value="saveTarget?.prompt ?? ''"
+              readonly
+              rows="3"
+              class="max-h-[100px] overflow-y-auto text-xs"
+            />
+          </div>
+
+          <!-- Category -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium">品类</label>
+            <Select v-model="saveCategory">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- Tags -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium">标签 <span class="text-muted-foreground">（可选）</span></label>
+            <Input v-model="saveTags" placeholder="输入标签，多个用逗号分隔" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" :disabled="saveBusy" @click="saveDialogOpen = false">取消</Button>
+          <Button :disabled="!saveCategory || saveBusy" @click="handleSaveToLibrary">
+            <Loader2 v-if="saveBusy" class="mr-1 h-4 w-4 animate-spin" />
+            确定保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
