@@ -53,6 +53,8 @@ public class ProductProfileService {
     private static final String STATUS_CONFIRMED = "CONFIRMED";
     private static final String STATUS_PARSE_FAILED = "PARSE_FAILED";
     private static final String DEFAULT_CATEGORY = "car stereo";
+    private static final String SOURCE_TYPE_MARKDOWN = "MARKDOWN";
+    private static final String SOURCE_TYPE_BRIGHT_DATA_ASIN = "BRIGHT_DATA_ASIN";
 
     private final ProductProfileRepository profileRepository;
     private final ProductProfileVersionRepository versionRepository;
@@ -87,6 +89,7 @@ public class ProductProfileService {
                 .productName(productName.trim())
                 .category(DEFAULT_CATEGORY)
                 .markdownContent(markdownContent)
+                .sourceType(SOURCE_TYPE_MARKDOWN)
                 .status(STATUS_PENDING_PARSE)
                 .build();
         profile = profileRepository.save(profile);
@@ -94,6 +97,7 @@ public class ProductProfileService {
         String factsJson = parseWithLlm("markdown", markdownContent);
         if (factsJson != null) {
             profile.setProductFactsJson(factsJson);
+            applyFactsToProfile(profile, factsJson);
             profile.setStatus(STATUS_PENDING_CONFIRM);
             checkSkuModelDuplicate(profile);
         } else {
@@ -121,9 +125,8 @@ public class ProductProfileService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "ASIN 不能为空");
         }
         asin = asin.trim().toUpperCase();
-        if (profileRepository.existsByProductName("ASIN-" + asin) &&
-            profileRepository.findBySku(asin).isPresent()) {
-            throw new BusinessException(ErrorCode.CONFLICT, "ASIN '" + asin + "' 已存在");
+        if (profileRepository.findBySku(asin).isPresent()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "ASIN already exists: " + asin);
         }
 
         // Build Amazon URL for Bright Data
@@ -136,6 +139,8 @@ public class ProductProfileService {
                 .productName("ASIN-" + asin)
                 .brand("")
                 .sku(asin)
+                .sourceType(SOURCE_TYPE_BRIGHT_DATA_ASIN)
+                .sourceAsin(asin)
                 .category(DEFAULT_CATEGORY)
                 .status(STATUS_PENDING_PARSE)
                 .build();
@@ -155,15 +160,11 @@ public class ProductProfileService {
             // Convert scrape response to JSON string for LLM parsing
             String brightDataJson = objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(scrapeResponse.getData());
+            profile.setSourceRawJson(brightDataJson);
             String factsJson = parseWithLlm("bright_data", brightDataJson);
             if (factsJson != null) {
                 profile.setProductFactsJson(factsJson);
-                String title = extractTitleFromBrightData(scrapeResponse.getData());
-                if (!isBlank(title)) {
-                    if (!profileRepository.existsByProductName(title)) {
-                        profile.setProductName(title);
-                    }
-                }
+                applyFactsToProfile(profile, factsJson);
                 profile.setStatus(STATUS_PENDING_CONFIRM);
                 checkSkuModelDuplicate(profile);
             } else {
@@ -181,15 +182,19 @@ public class ProductProfileService {
     @Transactional
     public ProductProfile reparse(Long id, Long userId) {
         ProductProfile profile = get(id, userId);
-        if (profile.getMarkdownContent() == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "没有可重新解析的 Markdown 内容");
+        String sourceType = profile.getSourceType();
+        String parseSourceType = SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(sourceType) ? "bright_data" : "markdown";
+        String parseContent = SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(sourceType) ? profile.getSourceRawJson() : profile.getMarkdownContent();
+        if (isBlank(parseContent)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "No original product profile source is available for reparsing");
         }
         profile.setStatus(STATUS_PENDING_PARSE);
         profile = profileRepository.save(profile);
 
-        String factsJson = parseWithLlm("markdown", profile.getMarkdownContent());
+        String factsJson = parseWithLlm(parseSourceType, parseContent);
         if (factsJson != null) {
             profile.setProductFactsJson(factsJson);
+            applyFactsToProfile(profile, factsJson);
             profile.setStatus(STATUS_PENDING_CONFIRM);
             profile.setParseError(null);
             checkSkuModelDuplicate(profile);
@@ -204,6 +209,7 @@ public class ProductProfileService {
     public ProductProfile updateFacts(Long id, String productFactsJson, Long userId) {
         ProductProfile profile = get(id, userId);
         profile.setProductFactsJson(productFactsJson);
+        applyFactsToProfile(profile, productFactsJson);
         return profileRepository.save(profile);
     }
 
@@ -240,12 +246,15 @@ public class ProductProfileService {
 
         // Save old markdown to history, set new markdown, re-parse
         profile.setMarkdownContent(markdownContent);
+        profile.setSourceType(SOURCE_TYPE_MARKDOWN);
+        profile.setSourceRawJson(null);
         profile.setStatus(STATUS_PENDING_PARSE);
         profile = profileRepository.save(profile);
 
         String factsJson = parseWithLlm("markdown", markdownContent);
         if (factsJson != null) {
             profile.setProductFactsJson(factsJson);
+            applyFactsToProfile(profile, factsJson);
             profile.setStatus(STATUS_PENDING_CONFIRM);
             profile.setParseError(null);
         } else {
@@ -432,32 +441,27 @@ public class ProductProfileService {
 
     private static final String JSON_STRUCTURE_TEMPLATE =
             "{ \"identity\": { \"product_name\": \"\", \"brand\": \"\", \"manufacturer\": \"\", \"model_number\": \"\", \"sku\": \"\", \"target_asin\": \"\", \"category\": \"car stereo\" },"
-            + " \"physical_specs\": { \"screen_size\": \"\", \"form_factor\": \"\", \"product_dimensions\": \"\", \"color\": \"\", \"material\": \"\" },"
-            + " \"technical_specs\": { \"controller_type\": \"\", \"connectivity\": [], \"connector_types\": [], \"control_methods\": [] },"
-            + " \"features\": { \"carplay\": \"\", \"android_auto\": \"\", \"bluetooth\": \"\", \"wifi\": \"\", \"backup_camera\": \"\", \"gps_navigation\": \"\", \"steering_wheel_control\": \"\", \"fm_am_radio\": \"\" },"
-            + " \"compatibility\": { \"compatible_devices\": [], \"vehicle_fitment\": [], \"unsupported_or_unknown\": [] },"
-            + " \"included_items\": [], \"warranty\": \"\" }";
+            + " \"amazon_listing\": { \"title\": \"\", \"bullet_points\": [], \"product_description\": \"\", \"product_details\": {}, \"technical_details\": {}, \"included_components_raw\": [], \"important_information\": \"\" },"
+            + " \"physical_specs\": {}, \"technical_specs\": {}, \"features\": {},"
+            + " \"compatibility\": { \"vehicle_fitment\": [], \"compatible_devices\": [], \"not_compatible\": [], \"unsupported_or_unknown\": [], \"fitment_notes\": \"\" },"
+            + " \"included_items\": [], \"warranty\": \"\", \"selling_points\": [], \"claims_to_avoid\": [],"
+            + " \"review\": { \"status\": \"needs_human_review\", \"missing_fields\": [], \"low_confidence_fields\": [], \"notes\": \"\" } }";
 
-    /**
-     * 调用模型管理中的文本模型解析输入内容为 car stereo 产品参数 JSON。
-     * 没有可用模型时自动降级到正则提取。
-     */
     private String parseWithLlm(String sourceType, String content) {
         if (isBlank(content)) return null;
 
+        String normalizedInput = normalizeInputForLlm(sourceType, content);
         AiModel model = findTextModel();
         if (model == null) {
-            log.info("No enabled TEXT model in model management, using regex fallback");
-            return "markdown".equals(sourceType) ? fallbackParseMarkdown(content) : null;
+            log.info("No enabled TEXT model in model management, using local product profile fallback");
+            return fallbackParse(sourceType, normalizedInput);
         }
 
-        String systemPrompt = "你是一个 car stereo 产品参数提取专家。请从以下"
-                + ("markdown".equals(sourceType) ? "Markdown 文档" : "Bright Data 商品数据")
-                + "中提取产品参数，返回严格的 JSON 格式，不要包含任何其他文字。";
+        String systemPrompt = "You are an Amazon US car stereo product data extraction expert. Use only the input, preserve title, bullet_points, description, and product details, and return valid JSON only.";
 
-        String userPrompt = "请提取以下 car stereo 产品参数，严格按以下 JSON 结构返回：\n"
+        String userPrompt = "Extract car stereo product facts. bullet_points must preserve the original list length and wording; do not assume exactly 5 bullets. Use this JSON schema:\n"
                 + JSON_STRUCTURE_TEMPLATE
-                + "\n输入内容：\n" + truncate(content, 8000);
+                + "\nNormalized input:\n" + normalizedInput;
 
         try {
             // Build request body as HashMap to ensure clean JSON serialization
@@ -492,11 +496,11 @@ public class ProductProfileService {
                     .timeout(Duration.ofSeconds(60))
                     .block();
 
-            if (resp == null) return fallbackParseMarkdown(content);
+            if (resp == null) return fallbackParse(sourceType, normalizedInput);
 
             JsonNode root = objectMapper.readTree(resp);
             String text = root.path("choices").get(0).path("message").path("content").asText();
-            if (isBlank(text)) return fallbackParseMarkdown(content);
+            if (isBlank(text)) return fallbackParse(sourceType, normalizedInput);
 
             text = text.replaceAll("(?s)```\\w*\\s*", "").trim();
             int js = text.indexOf('{'), je = text.lastIndexOf('}');
@@ -506,8 +510,8 @@ public class ProductProfileService {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(
                     objectMapper.readTree(text));
         } catch (Exception e) {
-            log.warn("LLM call failed for {}: {}, using regex fallback", sourceType, e.getMessage());
-            return "markdown".equals(sourceType) ? fallbackParseMarkdown(content) : null;
+            log.warn("LLM call failed for {}: {}, using local fallback", sourceType, e.getMessage());
+            return fallbackParse(sourceType, normalizedInput);
         }
     }
 
@@ -566,6 +570,139 @@ public class ProductProfileService {
         } catch (Exception e) {
             log.warn("Regex fallback failed: {}", e.getMessage());
             return null;
+        }
+    }
+
+
+    private String normalizeInputForLlm(String sourceType, String content) {
+        try {
+            if (!"bright_data".equals(sourceType)) {
+                ObjectNode n = objectMapper.createObjectNode();
+                n.put("source_type", "markdown");
+                n.put("content", truncate(content, 20000));
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(n);
+            }
+            JsonNode root = objectMapper.readTree(content);
+            JsonNode record = root.path("records").isArray() && root.path("records").size() > 0 ? root.path("records").get(0)
+                    : root.isArray() && root.size() > 0 ? root.get(0) : root;
+            ObjectNode n = objectMapper.createObjectNode();
+            n.put("source_type", "bright_data");
+            copyText(n, record, "asin", "asin", "ASIN");
+            copyText(n, record, "title", "title", "product_title", "name");
+            copyText(n, record, "brand", "brand", "Brand");
+            copyText(n, record, "manufacturer", "manufacturer", "Manufacturer");
+            copyText(n, record, "model_number", "model_number", "model", "Model", "Model Number", "part_number");
+            copyText(n, record, "description", "description", "product_description", "Product Description");
+            copyArray(n, record, "bullet_points", "bullet_points", "bullets", "feature_bullets", "about_this_item", "highlights");
+            copyObject(n, record, "product_details", "product_details", "details", "Product details", "product_information");
+            copyObject(n, record, "technical_details", "technical_details", "technical_information", "specifications", "tech_specs");
+            copyArray(n, record, "included_components", "included_components", "included_items", "package_includes", "components");
+            copyArray(n, record, "images", "images", "image_urls", "product_images");
+            copyText(n, record, "warranty", "warranty", "Warranty");
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(n);
+        } catch (Exception e) {
+            log.warn("Failed to normalize product input: {}", e.getMessage());
+            return truncate(content, 20000);
+        }
+    }
+
+    private void copyText(ObjectNode target, JsonNode source, String targetName, String... names) {
+        JsonNode value = firstField(source, names);
+        if (value != null && !value.isNull()) target.put(targetName, truncate(value.asText(value.toString()), 6000));
+    }
+
+    private void copyArray(ObjectNode target, JsonNode source, String targetName, String... names) {
+        JsonNode value = firstField(source, names);
+        if (value == null || value.isNull()) return;
+        ArrayNode out = target.putArray(targetName);
+        if (value.isArray()) {
+            for (int i = 0; i < value.size() && i < 20; i++) out.add(truncate(value.get(i).asText(value.get(i).toString()), 1200));
+        } else {
+            out.add(truncate(value.asText(value.toString()), 1200));
+        }
+    }
+
+    private void copyObject(ObjectNode target, JsonNode source, String targetName, String... names) {
+        JsonNode value = firstField(source, names);
+        if (value != null && value.isObject()) target.set(targetName, value);
+    }
+
+    private JsonNode firstField(JsonNode source, String... names) {
+        for (String name : names) {
+            JsonNode v = source.get(name);
+            if (v != null && !v.isNull()) return v;
+        }
+        return null;
+    }
+
+    private String fallbackParse(String sourceType, String normalizedInput) {
+        if (!"bright_data".equals(sourceType)) return fallbackParseMarkdown(normalizedInput);
+        try {
+            JsonNode input = objectMapper.readTree(normalizedInput);
+            ObjectNode root = objectMapper.createObjectNode();
+            ObjectNode id = root.putObject("identity");
+            String title = input.path("title").asText("");
+            id.put("product_name", title);
+            id.put("brand", input.path("brand").asText(""));
+            id.put("manufacturer", input.path("manufacturer").asText(""));
+            id.put("model_number", input.path("model_number").asText(""));
+            id.put("sku", input.path("asin").asText(""));
+            id.put("target_asin", input.path("asin").asText(""));
+            id.put("category", DEFAULT_CATEGORY);
+            ObjectNode listing = root.putObject("amazon_listing");
+            listing.put("title", title);
+            listing.set("bullet_points", input.path("bullet_points").isArray() ? input.path("bullet_points") : objectMapper.createArrayNode());
+            listing.put("product_description", input.path("description").asText(""));
+            listing.set("product_details", input.path("product_details").isObject() ? input.path("product_details") : objectMapper.createObjectNode());
+            listing.set("technical_details", input.path("technical_details").isObject() ? input.path("technical_details") : objectMapper.createObjectNode());
+            listing.set("included_components_raw", input.path("included_components").isArray() ? input.path("included_components") : objectMapper.createArrayNode());
+            listing.put("important_information", "");
+            root.putObject("physical_specs");
+            root.putObject("technical_specs");
+            ObjectNode features = root.putObject("features");
+            String all = (title + " " + listing.path("product_description").asText("") + " " + listing.path("bullet_points").toString()).toLowerCase();
+            if (all.contains("carplay")) features.put("carplay", all.contains("wireless") ? "wireless Apple CarPlay" : "Apple CarPlay");
+            if (all.contains("android auto")) features.put("android_auto", all.contains("wireless") ? "wireless Android Auto" : "Android Auto");
+            if (all.contains("bluetooth")) features.put("bluetooth", "Bluetooth");
+            if (all.contains("wifi") || all.contains("wi-fi")) features.put("wifi", "WiFi");
+            if (all.contains("backup camera")) features.put("backup_camera", "backup camera support");
+            if (all.contains("gps")) features.put("gps_navigation", "GPS navigation");
+            ObjectNode compat = root.putObject("compatibility");
+            ArrayNode fitment = compat.putArray("vehicle_fitment");
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)Ford\\s*F[- ]?150[^.,;\\n]{0,120}").matcher(all);
+            java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+            while (m.find()) seen.add(m.group().trim());
+            seen.forEach(fitment::add);
+            compat.putArray("compatible_devices"); compat.putArray("not_compatible"); compat.putArray("unsupported_or_unknown"); compat.put("fitment_notes", "");
+            root.putArray("included_items");
+            root.put("warranty", input.path("warranty").asText(""));
+            ArrayNode selling = root.putArray("selling_points");
+            for (JsonNode b : listing.path("bullet_points")) selling.add(truncate(b.asText(), 240));
+            root.putArray("claims_to_avoid");
+            ObjectNode review = root.putObject("review");
+            review.put("status", "needs_human_review"); review.putArray("missing_fields"); review.putArray("low_confidence_fields"); review.put("notes", "Parsed by local fallback; please verify before confirming.");
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        } catch (Exception e) {
+            log.warn("Bright Data fallback failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void applyFactsToProfile(ProductProfile profile, String factsJson) {
+        if (profile == null || isBlank(factsJson)) return;
+        try {
+            JsonNode root = objectMapper.readTree(factsJson);
+            JsonNode id = root.path("identity");
+            String productName = id.path("product_name").asText("");
+            if (isBlank(productName)) productName = root.path("amazon_listing").path("title").asText("");
+            if (!isBlank(productName) && (profile.getProductName().startsWith("ASIN-") || !profileRepository.existsByProductName(productName))) profile.setProductName(truncate(productName, 200));
+            if (!isBlank(id.path("brand").asText(""))) profile.setBrand(id.path("brand").asText());
+            if (!isBlank(id.path("sku").asText(""))) profile.setSku(id.path("sku").asText());
+            if (!isBlank(id.path("model_number").asText(""))) profile.setModelNumber(id.path("model_number").asText());
+            if (!isBlank(id.path("target_asin").asText(""))) profile.setTargetAsin(id.path("target_asin").asText());
+            if (!isBlank(id.path("category").asText(""))) profile.setCategory(id.path("category").asText());
+        } catch (Exception e) {
+            log.warn("Failed to apply facts to profile: {}", e.getMessage());
         }
     }
 
