@@ -11,6 +11,9 @@ export interface ProductProfile {
   targetAsin: string | null
   category: string
   markdownContent: string | null
+  sourceType: string | null
+  sourceAsin: string | null
+  sourceRawJson: string | null
   productFactsJson: string | null
   status: string
   parseError: string | null

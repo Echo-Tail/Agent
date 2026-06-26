@@ -38,6 +38,15 @@ public class ProductProfile {
     @Column(name = "markdown_content", columnDefinition = "TEXT")
     private String markdownContent;
 
+    @Column(name = "source_type", length = 30)
+    private String sourceType;
+
+    @Column(name = "source_asin", length = 32)
+    private String sourceAsin;
+
+    @Column(name = "source_raw_json", columnDefinition = "TEXT")
+    private String sourceRawJson;
+
     @Column(name = "product_facts_json", columnDefinition = "TEXT")
     private String productFactsJson;
 
