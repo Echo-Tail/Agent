@@ -132,6 +132,11 @@ const resultImageUrl = (url: string) => {
   return url.replace(/\\/g, '/')
 }
 
+/** 取 resultPath 的第一张图（多图时按 \n 分隔） */
+function firstResultPath(record: { resultPath: string }): string {
+  return record.resultPath?.split('\n').filter(Boolean)[0] || ''
+}
+
 // ── Lifecycle ──
 onMounted(async () => {
   try {
@@ -739,11 +744,11 @@ function formatDateTime(dateStr: string): string {
           v-for="record in records"
           :key="record.id"
           class="overflow-hidden group cursor-pointer hover:shadow-md transition-shadow rounded-t-none"
-          @click="openLightbox(record.resultPath)"
+          @click="openLightbox(firstResultPath(record))"
         >
           <div class="relative aspect-[4/3] bg-muted/30 -mt-4">
             <img
-              :src="resultImageUrl(record.resultPath)"
+              :src="resultImageUrl(firstResultPath(record))"
               class="w-full h-full object-cover"
               :alt="record.prompt?.slice(0, 60) || 'generated image'"
               loading="lazy"
@@ -764,7 +769,7 @@ function formatDateTime(dateStr: string): string {
                 class="h-6 text-xs text-muted-foreground hover:text-foreground gap-1 px-1.5"
                 as-child
               >
-                <a :href="resultImageUrl(record.resultPath)" download target="_blank" @click.stop>
+                <a :href="resultImageUrl(firstResultPath(record))" download target="_blank" @click.stop>
                   <Download class="h-3 w-3" />
                   {{ $t('imageGen.download') }}
                 </a>

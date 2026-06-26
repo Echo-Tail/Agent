@@ -285,15 +285,24 @@ async function pickAsset(asset: PublicAsset) {
             <div
               v-for="(img, i) in images"
               :key="i"
-              :class="['relative overflow-hidden rounded-md border bg-card cursor-pointer transition-colors group',
-                selectedImageUrl === img.url ? 'ring-2 ring-primary' : 'hover:bg-accent/50']"
-              @click="selectedImageUrl = img.url"
+              :class="['overflow-hidden rounded-md border bg-card transition-colors group',
+                selectedImageUrl === img.url ? 'ring-2 ring-primary' : '']"
             >
-              <div class="aspect-square">
+              <!-- 点击图片选择素材 -->
+              <div class="aspect-square cursor-pointer" @click="selectedImageUrl = img.url">
                 <img :src="imageUrl(img.url)" class="h-full w-full object-cover" alt="" />
               </div>
-              <Button variant="destructive" size="icon" class="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100"
-                @click.stop="removeImage(i)"><Trash2 class="h-3 w-3" /></Button>
+              <!-- 底部操作栏 -->
+              <div class="flex items-center justify-center gap-1 border-t bg-muted/20 p-1">
+                <Button variant="ghost" size="icon" class="h-7 w-7" @click.stop="openLightbox(img.url)"
+                  title="放大查看">
+                  <ZoomIn class="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" class="h-7 w-7 text-destructive hover:text-destructive" @click.stop="removeImage(i)"
+                  title="删除">
+                  <Trash2 class="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
           <div class="mt-3 flex gap-2">

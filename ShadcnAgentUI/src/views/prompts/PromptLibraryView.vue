@@ -173,7 +173,7 @@ function selectAssetCover(asset: any) {
   if (createCoverPreview.value) URL.revokeObjectURL(createCoverPreview.value)
   // Store the coverFile as undefined — we'll set it via cover-ref
   createCoverFile.value = undefined
-  createCoverPreview.value = '/uploads/' + asset.filePath.replace(/\\/g, '/').replace(/^\.\//, '')
+  createCoverPreview.value = imageUrl(asset.filePath)
   // For create: store path to be set after creation
   // Actually for create we need to handle this differently...
   // For now in create mode via multipart we need a file. Let's just close and handle it.
@@ -194,10 +194,13 @@ const pickedCoverPath = ref<string | null>(null)
 // and call setCoverRef after creation
 
 // ── Cover source: from generation history ──
-/** 清理 resultPath：去除前导 ./uploads/ 避免路径双拼 */
+/** 清理 resultPath：去除前导 ./uploads/ 或 /uploads/ 避免路径双拼 */
 function cleanResultPath(p: string | null | undefined): string {
   if (!p) return ''
-  return p.replace(/\\/g, '/').replace(/^\.\/uploads\//, '').replace(/^\.\//, '')
+  return p.replace(/\\/g, '/')
+    .replace(/^\/uploads\//, '')
+    .replace(/^\.\/uploads\//, '')
+    .replace(/^\.\//, '')
 }
 
 async function openHistoryPicker() {
@@ -230,7 +233,7 @@ function selectHistoryCover(record: any) {
   if (createCoverPreview.value) URL.revokeObjectURL(createCoverPreview.value)
   createCoverFile.value = undefined
   const path = cleanResultPath(record.resultPath)
-  createCoverPreview.value = '/uploads/' + path
+  createCoverPreview.value = imageUrl(record.resultPath)
   pickedCoverPath.value = path
   historyPickerOpen.value = false
   toast.success(t('promptLibrary.coverSelected'))
@@ -316,7 +319,7 @@ async function openEditHistoryPicker() {
 function selectEditAssetCover(asset: any) {
   const path = asset.filePath?.replace(/\\/g, '/').replace(/^\.\//, '')
   editCoverFile.value = undefined
-  editCoverPreview.value = '/uploads/' + path
+  editCoverPreview.value = imageUrl(asset.filePath ?? '')
   assetPickerOpen.value = false
   editPickedCoverPath.value = path
   if (editTarget.value) {
@@ -331,7 +334,7 @@ function selectEditAssetCover(asset: any) {
 function selectEditHistoryCover(record: any) {
   const path = cleanResultPath(record.resultPath)
   editCoverFile.value = undefined
-  editCoverPreview.value = '/uploads/' + path
+  editCoverPreview.value = imageUrl(record.resultPath)
   historyPickerOpen.value = false
   editPickedCoverPath.value = path
   if (editTarget.value) {
@@ -435,6 +438,7 @@ function goToPage(p: number) {
 function imageUrl(path: string): string {
   if (!path) return ''
   const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (n.startsWith('/uploads/')) return n
   return '/uploads/' + n
 }
 </script>
@@ -641,7 +645,7 @@ function imageUrl(path: string): string {
               class="aspect-square rounded-md overflow-hidden bg-muted/30 cursor-pointer hover:ring-2 hover:ring-primary transition-all"
               @click="editOpen ? selectEditAssetCover(a) : selectAssetCover(a)"
             >
-              <img :src="'/uploads/' + (a.filePath?.replace(/\\/g, '/').replace(/^\.\//, '') ?? '')" class="w-full h-full object-cover" alt="" loading="lazy" />
+              <img :src="imageUrl(a.filePath ?? '')" class="w-full h-full object-cover" alt="" loading="lazy" />
             </div>
             <div v-if="!assetList.length" class="col-span-4 text-center text-sm text-muted-foreground py-8">
               {{ $t('assetLibrary.noAssets') }}
@@ -674,7 +678,7 @@ function imageUrl(path: string): string {
               @click="editOpen ? selectEditHistoryCover(r) : selectHistoryCover(r)"
             >
               <img
-                :src="'/uploads/' + cleanResultPath(r.resultPath)"
+                :src="imageUrl(r.resultPath)"
                 class="w-full h-full object-cover" alt="" loading="lazy"
               />
             </div>
