@@ -593,7 +593,7 @@ public class ProductProfileService {
             copyText(n, record, "manufacturer", "manufacturer", "Manufacturer");
             copyText(n, record, "model_number", "model_number", "model", "Model", "Model Number", "part_number");
             copyText(n, record, "description", "description", "product_description", "Product Description");
-            copyArray(n, record, "bullet_points", "bullet_points", "bullets", "feature_bullets", "about_this_item", "highlights");
+            copyArray(n, record, "bullet_points", "bullet_points", "bullets", "feature_bullets", "features", "about_this_item", "highlights");
             copyObject(n, record, "product_details", "product_details", "details", "Product details", "product_information");
             copyObject(n, record, "technical_details", "technical_details", "technical_information", "specifications", "tech_specs");
             copyArray(n, record, "included_components", "included_components", "included_items", "package_includes", "components");
@@ -624,7 +624,21 @@ public class ProductProfileService {
 
     private void copyObject(ObjectNode target, JsonNode source, String targetName, String... names) {
         JsonNode value = firstField(source, names);
-        if (value != null && value.isObject()) target.set(targetName, value);
+        if (value == null || value.isNull()) return;
+        if (value.isObject()) {
+            target.set(targetName, value);
+            return;
+        }
+        if (value.isArray()) {
+            ObjectNode out = objectMapper.createObjectNode();
+            for (JsonNode item : value) {
+                if (!item.isObject()) continue;
+                String key = firstNonBlankText(item, "type", "name", "key", "label");
+                String itemValue = firstNonBlankText(item, "value", "text", "content");
+                if (!isBlank(key) && !isBlank(itemValue)) out.put(key.trim(), truncate(itemValue.trim(), 4000));
+            }
+            target.set(targetName, out);
+        }
     }
 
     private JsonNode firstField(JsonNode source, String... names) {
@@ -633,6 +647,13 @@ public class ProductProfileService {
             if (v != null && !v.isNull()) return v;
         }
         return null;
+    }
+
+    private String firstNonBlankText(JsonNode source, String... names) {
+        JsonNode value = firstField(source, names);
+        if (value == null || value.isNull()) return "";
+        String text = value.asText("");
+        return text == null ? "" : text.trim();
     }
 
     private String fallbackParse(String sourceType, String normalizedInput) {
@@ -669,13 +690,20 @@ public class ProductProfileService {
             if (all.contains("gps")) features.put("gps_navigation", "GPS navigation");
             ObjectNode compat = root.putObject("compatibility");
             ArrayNode fitment = compat.putArray("vehicle_fitment");
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)Ford\\s*F[- ]?150[^.,;\\n]{0,120}").matcher(all);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)(Ford\\s*F[- ]?150|Dodge\\s*RAM\\s*(?:1500|2500|3500)(?:\\s*/\\s*(?:1500|2500|3500))*)[^.,;\\n]{0,120}").matcher(all);
             java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
             while (m.find()) seen.add(m.group().trim());
             seen.forEach(fitment::add);
             compat.putArray("compatible_devices"); compat.putArray("not_compatible"); compat.putArray("unsupported_or_unknown"); compat.put("fitment_notes", "");
-            root.putArray("included_items");
-            root.put("warranty", input.path("warranty").asText(""));
+            ArrayNode includedItems = root.putArray("included_items");
+            for (JsonNode component : listing.path("included_components_raw")) includedItems.add(component.asText());
+            if (includedItems.isEmpty()) {
+                String builtInMedia = listing.path("product_details").path("Built-In Media").asText("");
+                if (!isBlank(builtInMedia)) includedItems.add(builtInMedia);
+            }
+            String warranty = input.path("warranty").asText("");
+            if (isBlank(warranty)) warranty = listing.path("product_details").path("Warranty Description").asText("");
+            root.put("warranty", warranty);
             ArrayNode selling = root.putArray("selling_points");
             for (JsonNode b : listing.path("bullet_points")) selling.add(truncate(b.asText(), 240));
             root.putArray("claims_to_avoid");
