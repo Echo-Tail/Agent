@@ -114,6 +114,27 @@ class ProductProfileServiceParseTest {
     }
 
     @Test
+    void createFromAsin_shouldExtractBrightDataArrayProductDetailsAndFeatures() throws Exception {
+        String asin = "B0FY2ZRS14";
+        when(profileRepository.findBySku(asin)).thenReturn(Optional.empty());
+        when(brightDataService.scrape(any(), eq(7L))).thenReturn(ApiResponse.success(BrightDataScrapeResponse.builder()
+                .records(List.of(brightDataArrayDetailsRecord(asin)))
+                .recordId(56L)
+                .message("success")
+                .build()));
+
+        ProductProfile profile = service.createFromAsin(asin, 7L);
+
+        JsonNode facts = objectMapper.readTree(profile.getProductFactsJson());
+        assertEquals(2, facts.at("/amazon_listing/bullet_points").size(), "Bright Data features must be preserved as bullet_points");
+        assertEquals("2 USB, Bluetooth 5.4, WiFi-6", facts.at("/amazon_listing/product_details/Connectivity Technology").asText());
+        assertEquals("1 year", facts.at("/amazon_listing/product_details/Warranty Description").asText());
+        assertEquals("1 year", facts.path("warranty").asText());
+        assertTrue(facts.at("/included_items/0").asText().contains("AHD 1080P Backup Camera"));
+        assertTrue(facts.at("/compatibility/vehicle_fitment").toString().contains("dodge ram"));
+    }
+
+    @Test
     void createFromAsin_shouldRejectDuplicateSkuEvenWhenProductNameChanged() {
         String asin = "B0TEST1234";
         when(profileRepository.findBySku(asin)).thenReturn(Optional.of(ProductProfile.builder()
@@ -127,6 +148,23 @@ class ProductProfileServiceParseTest {
 
         assertThrows(BusinessException.class, () -> service.createFromAsin(asin, 7L));
         verify(brightDataService, never()).scrape(any(), any());
+    }
+
+    private Map<String, Object> brightDataArrayDetailsRecord(String asin) {
+        return Map.of(
+                "asin", asin,
+                "title", "Car Stereo for Dodge RAM 1500 2500 3500 2013-2018 with Wireless CarPlay and Android Auto",
+                "brand", "Kissound",
+                "manufacturer", "Kissound",
+                "description", "Custom-designed for Dodge RAM 1500 / 2500 / 3500 / 2013-2018 Manual AC only.",
+                "features", List.of(
+                        "Applicable Models: custom-designed for Dodge RAM 1500 / 2500 / 3500 / 2013-2018 Manual AC only.",
+                        "Wireless CarPlay and Android Auto with Bluetooth, Wi-Fi and GPS navigation."),
+                "product_details", List.of(
+                        Map.of("type", "Connectivity Technology", "value", "2 USB, Bluetooth 5.4, WiFi-6"),
+                        Map.of("type", "Warranty Description", "value", "1 year"),
+                        Map.of("type", "Built-In Media", "value", "AHD 1080P Backup Camera with 19.7ft Cable, GPS Antenna, Head Unit, Two USB Cables, User Manual"))
+        );
     }
 
     private Map<String, Object> sampleRecord(String asin, int bulletCount) {
