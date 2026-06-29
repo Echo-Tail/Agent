@@ -39,6 +39,9 @@ public class LlmService {
     /** 当前服务日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(LlmService.class);
 
+    /** 默认最大输出 token 数，避免模型返回过长文本。 */
+    public static final int DEFAULT_MAX_TOKENS = 256000;
+
     /** AgentScope Model 实例，由 AgentScopeConfig 注入 */
     private final Model model;
     /** LLM 全局配置（API key、默认模型等） */
@@ -85,8 +88,17 @@ public class LlmService {
      */
     public String streamChat(String systemPrompt, List<Map<String, String>> history,
                              SseEmitter emitter, GenerateOptions optionsOverride) {
-        boolean hasPerModelKey = optionsOverride != null
-                && optionsOverride.getApiKey() != null
+        if (optionsOverride == null) {
+            optionsOverride = GenerateOptions.builder()
+                    .temperature(llmConfig.getTemperature())
+                    .maxTokens(DEFAULT_MAX_TOKENS)
+                    .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
+                            .timeout(java.time.Duration.ofSeconds(llmConfig.getStreamTimeout()))
+                            .maxAttempts(1)
+                            .build())
+                    .build();
+        }
+        boolean hasPerModelKey = optionsOverride.getApiKey() != null
                 && !optionsOverride.getApiKey().isBlank();
         if (!hasPerModelKey && "sk-placeholder".equals(llmConfig.getApiKey())) {
             log.warn("LLM API key not configured (placeholder detected), throwing");
@@ -96,16 +108,8 @@ public class LlmService {
 
         List<Msg> messages = buildMessages(systemPrompt, history);
         long streamTimeout = llmConfig.getStreamTimeout();
-        GenerateOptions options = optionsOverride != null ? optionsOverride : GenerateOptions.builder()
-                .temperature(llmConfig.getTemperature())
-                .maxTokens(llmConfig.getMaxTokens())
-                .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
-                        .timeout(java.time.Duration.ofSeconds(streamTimeout))
-                        .maxAttempts(1)
-                        .build())
-                .build();
 
-        String modelName = options.getModelName() != null ? options.getModelName() : llmConfig.getModel();
+        String modelName = optionsOverride.getModelName() != null ? optionsOverride.getModelName() : llmConfig.getModel();
         String apiKeyMask = (hasPerModelKey || llmConfig.getApiKey() != null)
                 ? maskApiKey(hasPerModelKey ? optionsOverride.getApiKey() : llmConfig.getApiKey())
                 : "none";
@@ -135,7 +139,7 @@ public class LlmService {
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
         AtomicBoolean emitterDead = new AtomicBoolean(false);
 
-        var disposable = effectiveModel.stream(messages, List.of(), options)
+        var disposable = effectiveModel.stream(messages, List.of(), optionsOverride)
                 .subscribe(
                         response -> emitToken(response, fullText, emitter, emitterDead),
                         error -> {
@@ -214,18 +218,20 @@ public class LlmService {
      */
     public String syncChat(String systemPrompt, List<Map<String, String>> history,
                             GenerateOptions optionsOverride) {
+        if (optionsOverride == null) {
+            optionsOverride = GenerateOptions.builder()
+                    .temperature(llmConfig.getTemperature())
+                    .maxTokens(DEFAULT_MAX_TOKENS)
+                    .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
+                            .timeout(java.time.Duration.ofSeconds(30))
+                            .maxAttempts(1)
+                            .build())
+                    .build();
+        }
         List<Msg> messages = buildMessages(systemPrompt, history);
-        GenerateOptions options = optionsOverride != null ? optionsOverride : GenerateOptions.builder()
-                .temperature(llmConfig.getTemperature())
-                .maxTokens(256)
-                .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
-                        .timeout(java.time.Duration.ofSeconds(30))
-                        .maxAttempts(1)
-                        .build())
-                .build();
 
         Model effectiveModel = model;
-        if (optionsOverride != null && optionsOverride.getApiKey() != null && optionsOverride.getBaseUrl() != null) {
+        if (optionsOverride.getApiKey() != null && optionsOverride.getBaseUrl() != null) {
             effectiveModel = OpenAIChatModel.builder()
                     .apiKey(optionsOverride.getApiKey())
                     .modelName(optionsOverride.getModelName() != null ? optionsOverride.getModelName() : llmConfig.getModel())
@@ -236,7 +242,7 @@ public class LlmService {
         }
 
         StringBuilder fullText = new StringBuilder();
-        effectiveModel.stream(messages, List.of(), options)
+        effectiveModel.stream(messages, List.of(), optionsOverride)
                 .doOnNext(response -> {
                     String text = extractText(response);
                     if (text != null) fullText.append(text);

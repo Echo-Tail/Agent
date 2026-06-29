@@ -142,8 +142,7 @@ public class AiModelService {
                             .baseUrl(model.getApiUrl())
                             .endpointPath(buildEndpointPath(model))
                             .temperature(model.getTemperature())
-                            .maxTokens(model.getMaxTokens() != null && model.getMaxTokens() > 0
-                                    ? model.getMaxTokens() : llmConfig.getMaxTokens())
+                            .maxTokens(model.getMaxTokens())
                             .executionConfig(execConfig)
                             .build();
                 })

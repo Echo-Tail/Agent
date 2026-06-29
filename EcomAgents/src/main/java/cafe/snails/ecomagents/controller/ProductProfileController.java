@@ -1,11 +1,16 @@
 package cafe.snails.ecomagents.controller;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
+import cafe.snails.ecomagents.dto.VisualStrategyGenerateRequest;
 import cafe.snails.ecomagents.model.ProductProfile;
 import cafe.snails.ecomagents.model.ProductProfileImage;
 import cafe.snails.ecomagents.model.ProductProfileVersion;
+import cafe.snails.ecomagents.model.ProductSellingPointCognitionVersion;
+import cafe.snails.ecomagents.model.ProductVisualStrategyVersion;
 import cafe.snails.ecomagents.security.CurrentUserId;
 import cafe.snails.ecomagents.service.ProductProfileService;
+import cafe.snails.ecomagents.service.SellingPointCognitionService;
+import cafe.snails.ecomagents.service.VisualStrategyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +26,8 @@ import java.util.List;
 public class ProductProfileController {
 
     private final ProductProfileService productProfileService;
+    private final SellingPointCognitionService sellingPointCognitionService;
+    private final VisualStrategyService visualStrategyService;
 
     @GetMapping
     public ApiResponse<Page<ProductProfile>> list(
@@ -92,6 +99,85 @@ public class ProductProfileController {
     @GetMapping("/versions/{versionId}")
     public ApiResponse<ProductProfileVersion> getVersion(@PathVariable Long versionId) {
         return ApiResponse.success(productProfileService.getVersion(versionId));
+    }
+
+    @PostMapping("/{id}/selling-point-cognitions/generate")
+    public ApiResponse<ProductSellingPointCognitionVersion> generateSellingPointCognitions(
+            @PathVariable Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success("卖点认知草稿已生成", sellingPointCognitionService.generate(id, userId));
+    }
+
+    @GetMapping("/{id}/selling-point-cognitions/current")
+    public ApiResponse<ProductSellingPointCognitionVersion> getCurrentSellingPointCognition(
+            @PathVariable Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(sellingPointCognitionService.getCurrent(id, userId));
+    }
+
+    @GetMapping("/{id}/selling-point-cognitions/versions")
+    public ApiResponse<List<ProductSellingPointCognitionVersion>> getSellingPointCognitionVersions(
+            @PathVariable Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(sellingPointCognitionService.listVersions(id, userId));
+    }
+
+    @PutMapping("/{id}/selling-point-cognitions/{versionId}")
+    public ApiResponse<ProductSellingPointCognitionVersion> updateSellingPointCognition(
+            @PathVariable Long id,
+            @PathVariable Long versionId,
+            @RequestBody String cognitionJson,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success("卖点认知草稿已保存", sellingPointCognitionService.update(id, versionId, cognitionJson, userId));
+    }
+
+    @PostMapping("/{id}/selling-point-cognitions/{versionId}/confirm")
+    public ApiResponse<ProductSellingPointCognitionVersion> confirmSellingPointCognition(
+            @PathVariable Long id,
+            @PathVariable Long versionId,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success("卖点认知版本已确认", sellingPointCognitionService.confirm(id, versionId, userId));
+    }
+
+    @PostMapping("/{id}/visual-strategies/generate")
+    public ApiResponse<ProductVisualStrategyVersion> generateVisualStrategy(
+            @PathVariable Long id,
+            @RequestBody(required = false) VisualStrategyGenerateRequest request,
+            @CurrentUserId Long userId) {
+        Long cognitionVersionId = request != null ? request.cognitionVersionId() : null;
+        List<String> contentScope = request != null ? request.contentScope() : null;
+        return ApiResponse.success("视觉策略草稿已生成", visualStrategyService.generate(id, cognitionVersionId, contentScope, userId));
+    }
+
+    @GetMapping("/{id}/visual-strategies/current")
+    public ApiResponse<ProductVisualStrategyVersion> getCurrentVisualStrategy(
+            @PathVariable Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(visualStrategyService.getCurrent(id, userId));
+    }
+
+    @GetMapping("/{id}/visual-strategies/versions")
+    public ApiResponse<List<ProductVisualStrategyVersion>> getVisualStrategyVersions(
+            @PathVariable Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(visualStrategyService.listVersions(id, userId));
+    }
+
+    @PutMapping("/{id}/visual-strategies/{versionId}")
+    public ApiResponse<ProductVisualStrategyVersion> updateVisualStrategy(
+            @PathVariable Long id,
+            @PathVariable Long versionId,
+            @RequestBody String strategyJson,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success("视觉策略草稿已保存", visualStrategyService.update(id, versionId, strategyJson, userId));
+    }
+
+    @PostMapping("/{id}/visual-strategies/{versionId}/confirm")
+    public ApiResponse<ProductVisualStrategyVersion> confirmVisualStrategy(
+            @PathVariable Long id,
+            @PathVariable Long versionId,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success("视觉策略版本已确认", visualStrategyService.confirm(id, versionId, userId));
     }
 
     @GetMapping("/{id}/images")

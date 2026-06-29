@@ -467,7 +467,7 @@ public class ProductProfileService {
             // Build request body as HashMap to ensure clean JSON serialization
             Map<String, Object> bodyMap = new java.util.HashMap<>();
             bodyMap.put("model", model.getModelName());
-            int maxTokens = model.getMaxTokens() != null ? Math.min(model.getMaxTokens(), 8192) : 4096;
+            int maxTokens = model.getMaxTokens();
             bodyMap.put("max_tokens", maxTokens);
             bodyMap.put("temperature", 0.3);
             List<Map<String, String>> msgs = new ArrayList<>();
