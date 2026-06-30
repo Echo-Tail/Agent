@@ -5,6 +5,7 @@ import cafe.snails.ecomagents.dto.BrightDataScrapeResponse;
 import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.model.ProductProfile;
 import cafe.snails.ecomagents.repository.AiModelRepository;
+import cafe.snails.ecomagents.repository.BrightDataRecordRepository;
 import cafe.snails.ecomagents.repository.ProductProfileImageRepository;
 import cafe.snails.ecomagents.repository.ProductProfileRepository;
 import cafe.snails.ecomagents.repository.ProductProfileVersionRepository;
@@ -34,6 +35,7 @@ class ProductProfileServiceParseTest {
     @Mock private ProductProfileImageRepository imageRepository;
     @Mock private AiModelRepository aiModelRepository;
     @Mock private BrightDataService brightDataService;
+    @Mock private BrightDataRecordRepository brightDataRecordRepository;
     @Mock private WebClient.Builder webClientBuilder;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -43,7 +45,7 @@ class ProductProfileServiceParseTest {
     void setUp() {
         service = new ProductProfileService(
                 profileRepository, versionRepository, imageRepository,
-                aiModelRepository, brightDataService, webClientBuilder, objectMapper);
+                aiModelRepository, brightDataService, brightDataRecordRepository, webClientBuilder, objectMapper);
         lenient().when(aiModelRepository.findByIsDefaultTrue()).thenReturn(Optional.empty());
         lenient().when(aiModelRepository.findByModelTypeAndEnabled("TEXT", true)).thenReturn(List.of());
         lenient().when(profileRepository.existsByProductName(any())).thenReturn(false);

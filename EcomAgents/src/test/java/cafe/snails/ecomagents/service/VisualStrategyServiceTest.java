@@ -64,7 +64,7 @@ class VisualStrategyServiceTest {
         assertTrue(strategy.path("global_constraints").toString().contains("Manual AC"));
         assertTrue(strategy.path("claims_to_avoid").toString().contains("automatic AC"));
         assertTrue(strategy.at("/gallery_strategy/images/0/text_overlays_en/headline").asText().length() > 0);
-        assertTrue(strategy.at("/gallery_strategy/images/0/prompt_en").asText().contains("Amazon premium"));
+        assertTrue(strategy.at("/gallery_strategy/images/0/prompt_en").asText().contains("dashboard comparison"));
     }
 
     @Test
@@ -202,10 +202,10 @@ class VisualStrategyServiceTest {
                   "category": "car_stereo",
                   "category_strategy_version": "car_stereo_v1",
                   "buyer_cognitions": [
-                    {"id":"compatibility","enabled":true,"priority":1,"type":"compatibility","visual_model":"infographic","buyer_cognition_cn":"确认车型和 Manual AC 后再购买","buyer_cognition_en":"Confirm vehicle fitment and Manual AC before purchase.","evidence":[{"source_path":"compatibility.vehicle_fitment","source_text":"Dodge RAM 2013-2018 Manual AC only"}]},
-                    {"id":"wireless_carplay","enabled":true,"priority":2,"type":"connection","visual_model":"connection","buyer_cognition_cn":"上车连接手机应用","buyer_cognition_en":"Connect phone apps to the dashboard screen.","evidence":[{"source_path":"amazon_listing.bullet_points[1]","source_text":"Wireless CarPlay and Android Auto"}]},
-                    {"id":"qled_screen","enabled":true,"priority":3,"type":"display","visual_model":"scenario","buyer_cognition_cn":"大屏导航更清晰","buyer_cognition_en":"A clearer touchscreen makes navigation easier.","evidence":[{"source_path":"amazon_listing.bullet_points[2]","source_text":"9 inch QLED touchscreen"}]},
-                    {"id":"backup_camera","enabled":true,"priority":4,"type":"safety","visual_model":"scenario","buyer_cognition_cn":"倒车更安心","buyer_cognition_en":"Rear view support makes parking feel safer.","evidence":[{"source_path":"amazon_listing.bullet_points[3]","source_text":"Supports backup camera input"}]}
+                    {"id":"compatibility","enabled":true,"priority":1,"type":"兼容性","visual_model":"infographic","buyer_cognition_cn":"确认车型和 Manual AC 后再购买","buyer_cognition_en":"Confirm vehicle fitment and Manual AC before purchase.","evidence":[{"source_path":"compatibility.vehicle_fitment","source_text":"Dodge RAM 2013-2018 Manual AC only"}]},
+                    {"id":"wireless_carplay","enabled":true,"priority":2,"type":"连接方式","visual_model":"connection","buyer_cognition_cn":"上车连接手机应用","buyer_cognition_en":"Connect phone apps to the dashboard screen.","evidence":[{"source_path":"amazon_listing.bullet_points[1]","source_text":"Wireless CarPlay and Android Auto"}]},
+                    {"id":"qled_screen","enabled":true,"priority":3,"type":"屏幕显示","visual_model":"scenario","buyer_cognition_cn":"大屏导航更清晰","buyer_cognition_en":"A clearer touchscreen makes navigation easier.","evidence":[{"source_path":"amazon_listing.bullet_points[2]","source_text":"9 inch QLED touchscreen"}]},
+                    {"id":"backup_camera","enabled":true,"priority":4,"type":"安全保障","visual_model":"scenario","buyer_cognition_cn":"倒车更安心","buyer_cognition_en":"Rear view support makes parking feel safer.","evidence":[{"source_path":"amazon_listing.bullet_points[3]","source_text":"Supports backup camera input"}]}
                   ],
                   "global_constraints": ["Only show Manual AC compatibility."],
                   "claims_to_avoid": ["Do not claim automatic AC compatibility."]

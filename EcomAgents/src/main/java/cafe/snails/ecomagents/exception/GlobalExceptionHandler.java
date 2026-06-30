@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.exception;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException e) {
         log.debug("SSE client disconnected: {}", e.getMessage());
+    }
+
+    /**
+     * 处理 HTTP 响应写入失败（客户端提前断开连接），记录 DEBUG 而非 ERROR。
+     */
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public void handleHttpMessageNotWritable(HttpMessageNotWritableException e) {
+        log.debug("Client disconnected before response could be written: {}", e.getMessage());
     }
 
     /**

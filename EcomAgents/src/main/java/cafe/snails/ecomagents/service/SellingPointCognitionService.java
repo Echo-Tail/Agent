@@ -21,12 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -137,9 +140,12 @@ public class SellingPointCognitionService {
             ArrayNode claimsToAvoid = root.putArray("claims_to_avoid");
             Set<String> seen = new HashSet<>();
 
+            // 先收集所有需要 LLM 生成文案的 items，批量处理一次（减少 DeepSeek 请求频率）
+            Map<String, CognitionTexts> batchResults = batchGenerateAllCognitionTexts(facts);
+
             addCompatibilityCognitions(facts, cognitions, globalConstraints, claimsToAvoid, seen);
-            addBulletCognitions(facts, cognitions, seen);
-            addProductDetailCognitions(facts, cognitions, claimsToAvoid, seen);
+            addBulletCognitions(facts, cognitions, seen, batchResults);
+            addProductDetailCognitions(facts, cognitions, claimsToAvoid, seen, batchResults);
 
             ObjectNode review = root.putObject("review");
             review.put("status", "needs_human_review");
@@ -167,7 +173,7 @@ public class SellingPointCognitionService {
             String sourceText = text.toString();
             globalConstraints.add("Only show compatibility with: " + sourceText);
             addCognition(cognitions, seen, "compatibility", "infographic", "Vehicle Compatibility",
-                    "Help buyers quickly confirm whether this stereo fits their vehicle before purchase.",
+                    "帮助买家在购买前快速确认这款音响是否适合他们的车辆。",
                     "Help buyers quickly confirm whether this stereo fits their vehicle before purchase.",
                     "Avoid buying the wrong head unit for the dashboard or AC type.",
                     "Avoid buying the wrong head unit for the dashboard or AC type.",
@@ -187,18 +193,20 @@ public class SellingPointCognitionService {
         }
     }
 
-    private void addBulletCognitions(JsonNode facts, ArrayNode cognitions, Set<String> seen) {
+    private void addBulletCognitions(JsonNode facts, ArrayNode cognitions, Set<String> seen,
+                                      Map<String, CognitionTexts> batchResults) {
         JsonNode bullets = facts.path("amazon_listing").path("bullet_points");
         if (!bullets.isArray()) return;
         for (int i = 0; i < bullets.size() && cognitions.size() < MAX_COGNITIONS; i++) {
             String text = bullets.get(i).asText("").trim();
             if (isBlank(text)) continue;
             Classification c = classify(text);
-            addBulletCognitionItem(cognitions, seen, c, text, i);
+            addBulletCognitionItem(cognitions, seen, c, text, i, batchResults);
         }
     }
 
-    private void addProductDetailCognitions(JsonNode facts, ArrayNode cognitions, ArrayNode claimsToAvoid, Set<String> seen) {
+    private void addProductDetailCognitions(JsonNode facts, ArrayNode cognitions, ArrayNode claimsToAvoid,
+                                             Set<String> seen, Map<String, CognitionTexts> batchResults) {
         JsonNode details = facts.path("amazon_listing").path("product_details");
         if (!details.isObject()) return;
         details.properties().forEach(entry -> {
@@ -208,7 +216,7 @@ public class SellingPointCognitionService {
             if (isBlank(value)) return;
             String combined = key + ": " + value;
             Classification c = classify(combined);
-            addProductDetailCognitionItem(cognitions, seen, c, key, combined);
+            addProductDetailCognitionItem(cognitions, seen, c, key, combined, batchResults);
 
             String lower = combined.toLowerCase(Locale.ROOT);
             if (lower.contains("backup camera") && (lower.contains("support") || lower.contains("input"))
@@ -224,9 +232,11 @@ public class SellingPointCognitionService {
     /**
      * 处理单条 bullet point→cognition：先尝试 LLM 生成，失败回退到模板。
      */
-    private void addBulletCognitionItem(ArrayNode cognitions, Set<String> seen, Classification c, String sourceText, int index) {
+    private void addBulletCognitionItem(ArrayNode cognitions, Set<String> seen, Classification c, String sourceText,
+                                         int index, Map<String, CognitionTexts> batchResults) {
         String sourcePath = "amazon_listing.bullet_points[" + index + "]";
-        CognitionTexts ct = generateCognitionTexts(c.type(), c.visualModel(), c.feature(), sourceText);
+        CognitionTexts ct = lookupBatchResult(batchResults, sourceText);
+        if (ct == null) ct = generateCognitionTexts(c.type(), c.visualModel(), c.feature(), sourceText);
         addCognition(cognitions, seen, c.type(), c.visualModel(), c.feature(),
                 ct != null ? ct.buyerCognitionCn() : cognitionFor(c.feature(), sourceText),
                 ct != null ? ct.buyerCognitionEn() : cognitionFor(c.feature(), sourceText),
@@ -240,9 +250,11 @@ public class SellingPointCognitionService {
     /**
      * 处理单条 product detail→cognition：先尝试 LLM 生成，失败回退到模板。
      */
-    private void addProductDetailCognitionItem(ArrayNode cognitions, Set<String> seen, Classification c, String feature, String combined) {
+    private void addProductDetailCognitionItem(ArrayNode cognitions, Set<String> seen, Classification c, String feature,
+                                                String combined, Map<String, CognitionTexts> batchResults) {
         String sourcePath = "amazon_listing.product_details." + feature;
-        CognitionTexts ct = generateCognitionTexts(c.type(), c.visualModel(), feature, combined);
+        CognitionTexts ct = lookupBatchResult(batchResults, combined);
+        if (ct == null) ct = generateCognitionTexts(c.type(), c.visualModel(), feature, combined);
         addCognition(cognitions, seen, c.type(), c.visualModel(), feature,
                 ct != null ? ct.buyerCognitionCn() : cognitionFor(feature, combined),
                 ct != null ? ct.buyerCognitionEn() : cognitionFor(feature, combined),
@@ -266,8 +278,8 @@ public class SellingPointCognitionService {
         item.put("id", id);
         item.put("enabled", true);
         item.put("priority", priority);
-        item.put("type", type);
-        item.put("visual_model", visualModel);
+        item.put("type", typeToChinese(type));
+        item.put("visual_model", visualModelToChinese(visualModel));
         item.put("feature", truncate(feature, 120));
         item.put("feature_cn", truncate(feature, 120));
         item.put("buyer_cognition_cn", truncate(firstNonBlank(buyerCognitionCn, buyerCognitionEn), 500));
@@ -332,6 +344,31 @@ public class SellingPointCognitionService {
         if (lower.contains("gps") || lower.contains("navigation")) return "Navigate with maps directly on the dashboard screen.";
         if (lower.contains("install") || lower.contains("compatible") || lower.contains("fit")) return "Confirm fitment and installation details before purchase.";
         return "Turn this product feature into a clear buyer benefit: " + feature + ".";
+    }
+
+    /** 将英文 type 映射为中文展示。 */
+    private String typeToChinese(String type) {
+        return switch (type) {
+            case "compatibility" -> "兼容性";
+            case "connection" -> "连接方式";
+            case "display" -> "屏幕显示";
+            case "safety" -> "安全保障";
+            case "navigation" -> "导航功能";
+            case "audio" -> "音频娱乐";
+            case "performance" -> "性能配置";
+            case "installation" -> "安装服务";
+            default -> type;
+        };
+    }
+
+    /** 将英文 visualModel 映射为中文展示。 */
+    private String visualModelToChinese(String visualModel) {
+        return switch (visualModel) {
+            case "infographic" -> "信息图";
+            case "connection" -> "连接示意";
+            case "scenario" -> "场景图";
+            default -> visualModel;
+        };
     }
 
     private String painPointFor(String type) {
@@ -420,6 +457,9 @@ public class SellingPointCognitionService {
         return value == null || value.isBlank();
     }
 
+    /** 待批量处理的特征项。 */
+    private record BatchItem(String type, String visualModel, String feature, String sourceText) {}
+
     /** LLM 生成的认知文案结果。 */
     private record CognitionTexts(
             String buyerCognitionCn, String buyerCognitionEn,
@@ -428,6 +468,8 @@ public class SellingPointCognitionService {
 
     /**
      * 调用 LLM 生成认知文案，失败时返回 null（由调用方 fallback 到模板）。
+     * 注意：正常流程已走批量路径（batchGenerateAllCognitionTexts），此方法仅作为
+     * 未命中批量缓存时的兜底（理论上不会发生）。
      */
     private CognitionTexts generateCognitionTexts(String type, String visualModel, String feature, String sourceText) {
         if (llmService == null) return null;
@@ -477,6 +519,140 @@ public class SellingPointCognitionService {
     }
 
     /**
+     * 从 facts 中收集所有 bullet point + product detail，返回批量处理列表。
+     */
+    private List<BatchItem> collectBatchItems(JsonNode facts) {
+        List<BatchItem> items = new ArrayList<>();
+        JsonNode bullets = facts.path("amazon_listing").path("bullet_points");
+        if (bullets.isArray()) {
+            for (int i = 0; i < bullets.size() && items.size() < MAX_COGNITIONS; i++) {
+                String text = bullets.get(i).asText("").trim();
+                if (isBlank(text)) continue;
+                Classification c = classify(text);
+                items.add(new BatchItem(c.type(), c.visualModel(), c.feature(), text));
+            }
+        }
+        JsonNode details = facts.path("amazon_listing").path("product_details");
+        if (details.isObject()) {
+            for (var entry : details.properties()) {
+                if (items.size() >= MAX_COGNITIONS) break;
+                String key = entry.getKey();
+                String value = entry.getValue().asText("");
+                if (isBlank(value)) continue;
+                String combined = key + ": " + value;
+                Classification c = classify(combined);
+                items.add(new BatchItem(c.type(), c.visualModel(), key, combined));
+            }
+        }
+        return items;
+    }
+
+    /**
+     * 批量调用 LLM 生成所有 items 的认知文案（只发一次请求），
+     * 返回 Map&lt;sourceText, CognitionTexts&gt;。失败时返回空 Map，由调用方 fallback 到模板。
+     */
+    private Map<String, CognitionTexts> batchGenerateAllCognitionTexts(JsonNode facts) {
+        List<BatchItem> items = collectBatchItems(facts);
+        if (items.isEmpty() || llmService == null) return Collections.emptyMap();
+
+        io.agentscope.core.model.GenerateOptions modelOptions = buildDefaultModelOptions();
+        if (modelOptions == null) return Collections.emptyMap();
+
+        try {
+            // 构建包含所有 items 的 JSON prompt
+            StringBuilder itemsJson = new StringBuilder("[");
+            for (int i = 0; i < items.size(); i++) {
+                BatchItem item = items.get(i);
+                if (i > 0) itemsJson.append(",");
+                itemsJson.append("{\"index\":").append(i)
+                        .append(",\"type\":\"").append(escapeJson(item.type()))
+                        .append("\",\"visual_model\":\"").append(escapeJson(item.visualModel()))
+                        .append("\",\"feature\":\"").append(escapeJson(item.feature()))
+                        .append("\",\"source_text\":\"").append(escapeJson(truncate(item.sourceText(), 800)))
+                        .append("\"}");
+            }
+            itemsJson.append("]");
+
+            String systemPrompt = """
+                    你是一名 Amazon US car stereo 视觉营销策略师。
+                    根据以下产品特征的分类信息，为每个特征批量生成买家认知文案。
+                    只能使用输入事实，不允许发明功能。
+                    中英双语输出，JSON 格式，每个 item 包含字段：
+                    - index: 序号（与输入对应）
+                    - buyer_cognition_cn / buyer_cognition_en：买家认知核心主张
+                    - pain_point_cn / pain_point_en：该卖点解决的用户痛点
+                    - belief_cn / belief_en：买家看完后应建立的购买信念
+                    输出合法 JSON 数组，不要 markdown 包裹。""";
+
+            String userJson = "{\"items\": " + itemsJson + "}";
+            List<Map<String, String>> history = List.of(Map.of("role", "user", "content", userJson));
+
+            String response = llmService.syncChat(systemPrompt, history, modelOptions);
+            if (response == null || response.isBlank()) {
+                log.warn("Batch LLM returned empty response, falling back to per-item templates");
+                return Collections.emptyMap();
+            }
+
+            log.debug("Batch LLM cognition response length: {}", response.length());
+
+            JsonNode root = objectMapper.readTree(response);
+            if (!root.isArray()) {
+                log.warn("Batch LLM response is not an array, falling back to templates");
+                return Collections.emptyMap();
+            }
+
+            Map<String, CognitionTexts> results = new java.util.LinkedHashMap<>();
+            for (JsonNode node : root) {
+                int idx = node.path("index").asInt(-1);
+                if (idx < 0 || idx >= items.size()) continue;
+                BatchItem item = items.get(idx);
+                CognitionTexts ct = new CognitionTexts(
+                        stringOrDefault(node, "buyer_cognition_cn"),
+                        stringOrDefault(node, "buyer_cognition_en"),
+                        stringOrDefault(node, "pain_point_cn"),
+                        stringOrDefault(node, "pain_point_en"),
+                        stringOrDefault(node, "belief_cn"),
+                        stringOrDefault(node, "belief_en"));
+                results.put(item.sourceText(), ct);
+            }
+
+            if (results.isEmpty()) {
+                log.warn("Batch LLM returned no parseable results, falling back to templates");
+                return Collections.emptyMap();
+            }
+
+            log.info("Batch cognition generation: {}/{} items succeeded", results.size(), items.size());
+            return results;
+        } catch (Exception e) {
+            log.warn("Batch LLM cognition generation failed, falling back to per-item: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * 从 batch 结果中按 sourceText 精确查找，返回 null 表示未命中。
+     */
+    private CognitionTexts lookupBatchResult(Map<String, CognitionTexts> batchResults, String sourceText) {
+        if (batchResults.isEmpty()) return null;
+        CognitionTexts ct = batchResults.get(sourceText);
+        if (ct != null) return ct;
+        // Fallback: 按截断后的文本匹配
+        return batchResults.get(truncate(sourceText, 800));
+    }
+
+    /**
+     * JSON 字符串转义（双引号、反斜线、换行等）。
+     */
+    private String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
+    /**
      * 从模型管理数据库中获取一个已启用的 TEXT 模型，构建 GenerateOptions。
      * 优先使用默认模型，无默认模型时取第一个已启用的 TEXT 模型。
      */
@@ -491,8 +667,7 @@ public class SellingPointCognitionService {
             return null;
         }
 
-        int resolvedMaxTokens = model.getMaxTokens() != null && model.getMaxTokens() > 0
-                ? Math.min(model.getMaxTokens(), 4096) : 4096;
+        int resolvedMaxTokens = model.getMaxTokens();
         double resolvedTemp = model.getTemperature() != null ? model.getTemperature() : 0.3;
 
         log.info("Using model: name={}, modelName={}, maxTokens={}, temperature={}",

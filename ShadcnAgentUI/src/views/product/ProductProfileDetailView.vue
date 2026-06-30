@@ -118,6 +118,10 @@ const canParse = computed(() =>
   loaded.value && (profile.value.status === 'PARSE_FAILED' || profile.value.status === 'PENDING_PARSE')
 )
 
+const hasSnapshot = computed(() =>
+  canParse.value && profile.value.snapshotExists === true
+)
+
 async function loadAll() {
   loading.value = true
   try {
@@ -221,7 +225,7 @@ async function handleReparse() {
     const updated = await reparseProductProfile(profileId)
     profile.value = updated
     editFactsJson.value = updated.productFactsJson || defaultFactsJson()
-    toast.success('重新解析完成')
+    toast.success(hasSnapshot.value ? '快照已重新下载并解析完成' : '重新解析完成')
   } finally {
     reparsing.value = false
   }
@@ -555,7 +559,7 @@ onMounted(loadAll)
             </div>
             <div class="flex items-center gap-2">
               <Button v-if="canParse" variant="outline" size="sm" :disabled="reparsing" @click="handleReparse">
-                <RefreshCw :class="['h-4 w-4 mr-1', reparsing ? 'animate-spin' : '']" />重新解析
+                <RefreshCw :class="['h-4 w-4 mr-1', reparsing ? 'animate-spin' : '']" />{{ hasSnapshot ? '重新下载快照' : '重新解析' }}
               </Button>
               <Button v-if="canConfirm" size="sm" :disabled="confirming" @click="handleConfirm">
                 <Loader2 v-if="confirming" class="h-4 w-4 mr-1 animate-spin" />

@@ -111,7 +111,7 @@ public class BrightDataService {
                         snapshotId, userId, costMs);
 
                 try {
-                    Thread.sleep(5_000);
+                    Thread.sleep(20_000);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                 }

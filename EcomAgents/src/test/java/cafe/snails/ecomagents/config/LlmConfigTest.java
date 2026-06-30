@@ -16,7 +16,7 @@ class LlmConfigTest {
         assertEquals("https://api.openai.com/v1/chat/completions", config.getApiUrl());
         assertEquals("sk-placeholder", config.getApiKey());
         assertEquals("gpt-4o-mini", config.getModel());
-        assertEquals(2048, config.getMaxTokens());
+        assertEquals(256000, config.getMaxTokens());
         assertEquals(0.7, config.getTemperature());
         assertEquals(60, config.getStreamTimeout());
         assertEquals(30, config.getConnectionTimeout());

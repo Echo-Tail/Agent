@@ -20,6 +20,7 @@ export interface ProductProfile {
   currentVersionId: number | null
   createdAt: string
   updatedAt: string
+  snapshotExists?: boolean
 }
 
 export interface ProductProfileVersion {
@@ -275,7 +276,9 @@ export function deleteProductProfile(id: number) {
 }
 
 export function generateSellingPointCognitions(id: number) {
-  return api.post<SellingPointCognitionVersion>(`/product-profiles/${id}/selling-point-cognitions/generate`)
+  return api.post<SellingPointCognitionVersion>(`/product-profiles/${id}/selling-point-cognitions/generate`, undefined, {
+    timeout: 120_000,
+  })
 }
 
 export function getCurrentSellingPointCognition(id: number) {
@@ -297,7 +300,9 @@ export function confirmSellingPointCognition(id: number, versionId: number) {
 }
 
 export function generateVisualStrategy(id: number, data?: { cognition_version_id?: number | null; cognitionVersionId?: number | null; content_scope?: string[]; contentScope?: string[] }) {
-  return api.post<VisualStrategyVersion>(`/product-profiles/${id}/visual-strategies/generate`, data ?? {})
+  return api.post<VisualStrategyVersion>(`/product-profiles/${id}/visual-strategies/generate`, data ?? {}, {
+    timeout: 120_000,
+  })
 }
 
 export function getCurrentVisualStrategy(id: number) {

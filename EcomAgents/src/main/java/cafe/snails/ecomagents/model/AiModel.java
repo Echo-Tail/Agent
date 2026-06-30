@@ -59,7 +59,7 @@ public class AiModel {
     /** 最大输出 token 数 */
     @Column(name = "max_tokens")
     @Builder.Default
-    private Integer maxTokens = 4096;
+    private Integer maxTokens = 256000;
 
     /** 生成温度，控制随机性 */
     @Builder.Default

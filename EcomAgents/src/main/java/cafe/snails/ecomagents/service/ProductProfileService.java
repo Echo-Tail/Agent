@@ -2,9 +2,11 @@ package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.BrightDataScrapeRequest;
+import cafe.snails.ecomagents.repository.BrightDataRecordRepository;
 import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.exception.ErrorCode;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.BrightDataRecord;
 import cafe.snails.ecomagents.model.ProductProfile;
 import cafe.snails.ecomagents.model.ProductProfileImage;
 import cafe.snails.ecomagents.model.ProductProfileVersion;
@@ -61,6 +63,7 @@ public class ProductProfileService {
     private final ProductProfileImageRepository imageRepository;
     private final AiModelRepository aiModelRepository;
     private final BrightDataService brightDataService;
+    private final BrightDataRecordRepository brightDataRecordRepository;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
 
@@ -183,6 +186,53 @@ public class ProductProfileService {
     public ProductProfile reparse(Long id, Long userId) {
         ProductProfile profile = get(id, userId);
         String sourceType = profile.getSourceType();
+
+        // 如果是 Bright Data 来源，先尝试用已有快照重新下载
+        if (SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(sourceType) && profile.getSourceAsin() != null) {
+            String asin = profile.getSourceAsin();
+            String snapshotId = brightDataRecordRepository
+                    .findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(asin, "running", "scrape")
+                    .stream().map(BrightDataRecord::getSnapshotId)
+                    .filter(id2 -> id2 != null && !id2.isBlank())
+                    .findFirst().orElseGet(() -> brightDataRecordRepository
+                            .findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(asin, "failed", "scrape")
+                            .stream().map(BrightDataRecord::getSnapshotId)
+                            .filter(id2 -> id2 != null && !id2.isBlank())
+                            .findFirst().orElse(null));
+            if (snapshotId != null) {
+                try {
+                    log.info("Re-downloading snapshot {} for profile {}", snapshotId, id);
+                    ApiResponse<Object> downloadResp = brightDataService.downloadSnapshot(snapshotId, "json");
+                    if (downloadResp.getCode() == 200 && downloadResp.getData() instanceof List<?> rawList
+                            && !rawList.isEmpty()) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> freshData = (List<Map<String, Object>>) rawList;
+                        String brightDataJson = objectMapper.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(freshData);
+                        profile.setSourceRawJson(brightDataJson);
+                        profile.setStatus(STATUS_PENDING_PARSE);
+                        profile = profileRepository.save(profile);
+
+                        String factsJson = parseWithLlm("bright_data", brightDataJson);
+                        if (factsJson != null) {
+                            profile.setProductFactsJson(factsJson);
+                            applyFactsToProfile(profile, factsJson);
+                            profile.setStatus(STATUS_PENDING_CONFIRM);
+                            profile.setParseError(null);
+                            checkSkuModelDuplicate(profile);
+                            log.info("Snapshot re-download + LLM parse succeeded for profile {}, status={}", id, profile.getStatus());
+                            return profileRepository.save(profile);
+                        }
+                        log.warn("parseWithLlm returned null for fresh snapshot data on profile {}, falling back to local reparse", id);
+                    }
+                } catch (Exception e) {
+                    log.warn("Snapshot re-download failed for profile {}, falling back to local reparse: {}",
+                            id, e.getMessage());
+                }
+            }
+        }
+
+        // 无可用快照或下载失败：重新解析已有 sourceRawJson / markdown
         String parseSourceType = SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(sourceType) ? "bright_data" : "markdown";
         String parseContent = SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(sourceType) ? profile.getSourceRawJson() : profile.getMarkdownContent();
         if (isBlank(parseContent)) {
@@ -315,6 +365,22 @@ public class ProductProfileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "产品资料不存在"));
         if (!profile.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该产品资料");
+        }
+        // 仅对失败/待解析状态检查是否存在可用的 Bright Data 快照
+        if (SOURCE_TYPE_BRIGHT_DATA_ASIN.equals(profile.getSourceType())
+                && (STATUS_PARSE_FAILED.equals(profile.getStatus()) || STATUS_PENDING_PARSE.equals(profile.getStatus()))
+                && profile.getSourceAsin() != null) {
+            String asin = profile.getSourceAsin();
+            String snapshotId = brightDataRecordRepository
+                    .findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(asin, "running", "scrape")
+                    .stream().map(BrightDataRecord::getSnapshotId)
+                    .filter(sid -> sid != null && !sid.isBlank())
+                    .findFirst().orElseGet(() -> brightDataRecordRepository
+                            .findTop3ByAsinListContainingAndStatusAndTypeOrderByCreatedAtDesc(asin, "failed", "scrape")
+                            .stream().map(BrightDataRecord::getSnapshotId)
+                            .filter(sid -> sid != null && !sid.isBlank())
+                            .findFirst().orElse(null));
+            profile.setSnapshotExists(snapshotId != null);
         }
         return profile;
     }
