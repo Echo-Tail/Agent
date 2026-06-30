@@ -59,6 +59,11 @@ public class ProductProfile {
     @Column(name = "current_version_id")
     private Long currentVersionId;
 
+    /** 该产品是否有可用的 Bright Data 快照（非持久化，仅用于前端展示） */
+    @Transient
+    @Builder.Default
+    private boolean snapshotExists = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

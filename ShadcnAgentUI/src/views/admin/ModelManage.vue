@@ -77,9 +77,10 @@ const apiTypeOptions = [
 ]
 
 const tokenOptions = [
-  { label: '128K', value: 131072 },
-  { label: '256K', value: 262144 },
-  { label: '1M', value: 1048576 },
+  { label: '128K', value: 128000 },
+  { label: '256K', value: 256000 },
+  { label: '512K', value: 512000 },
+  { label: '1M', value: 1000000 },
 ]
 
 const providerLabels: Record<string, string> = {
@@ -118,7 +119,7 @@ function openCreate() {
     apiUrl: providerDefaults.openai.apiUrl,
     apiType: 'openai',
     apiKey: '',
-    maxTokens: 131072,
+    maxTokens: 256000,
     temperature: 0.7,
     modelType: 'TEXT',
     isDefault: false,

@@ -18,7 +18,7 @@ public class LlmConfig {
     /** 模型名称 */
     private String model = "gpt-4o-mini";
     /** 最大输出 token 数 */
-    private int maxTokens = 2048;
+    private int maxTokens = 256000;
     /** 生成温度 */
     private double temperature = 0.7;
     /** LLM 流式调用超时时间（秒） */
