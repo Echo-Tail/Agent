@@ -346,6 +346,7 @@ function formatDate(dateStr: string): string {
 function imageUrl(path: string): string {
   if (!path) return ''
   const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (n.startsWith('/uploads/')) return n
   return '/uploads/' + n
 }
 </script>

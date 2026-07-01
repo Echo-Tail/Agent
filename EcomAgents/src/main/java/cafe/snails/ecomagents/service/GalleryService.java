@@ -181,7 +181,7 @@ public class GalleryService {
                 .negativePrompt(item.getNegativePrompt())
                 .status(item.getStatus())
                 .viewCount(item.getViewCount())
-                .imageUrl("/" + record.getResultPath().replace("\\", "/").replace("./", ""))
+                .imageUrl(record.getResultPath().replace("\\", "/").replace("./", ""))
                 .prompt(record.getPrompt())
                 .revisedPrompt(record.getRevisedPrompt())
                 .size(record.getSize())
