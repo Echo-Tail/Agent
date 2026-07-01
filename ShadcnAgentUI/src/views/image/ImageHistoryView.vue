@@ -13,9 +13,11 @@ import { VisuallyHidden } from 'reka-ui'
 import {
   listImageRecords, deleteImageRecord, type ImageRecord,
 } from '@/api/image'
+import { importFromRecord, listSpaces } from '@/api/assets'
+import type { AssetSpace } from '@/api/assets'
 import { createPrompt as createPromptApi, setCoverRef } from '@/api/prompts'
 import {
-  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus,
+  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus, Upload,
 } from 'lucide-vue-next'
 
 const records = ref<ImageRecord[]>([])
@@ -103,14 +105,58 @@ async function handleCopyPrompt(recordId: number, text: string) {
   }
 }
 
-async function handleDelete(record: ImageRecord) {
-  if (!window.confirm(`删除此条生成记录？`)) return
+// ── 删除确认 ──
+const deleteConfirmOpen = ref(false)
+const deleteTarget = ref<ImageRecord | null>(null)
+
+function openDeleteConfirm(record: ImageRecord) {
+  deleteTarget.value = record
+  deleteConfirmOpen.value = true
+}
+
+async function handleDelete() {
+  if (!deleteTarget.value) return
   try {
-    await deleteImageRecord(record.id)
+    await deleteImageRecord(deleteTarget.value.id)
     toast.success('已删除')
+    deleteConfirmOpen.value = false
+    deleteTarget.value = null
     await loadRecords()
   } catch {
     toast.error('删除失败')
+  }
+}
+
+// ── 上传到素材库 ──
+const uploadDialogOpen = ref(false)
+const uploadTarget = ref<ImageRecord | null>(null)
+const spaces = ref<AssetSpace[]>([])
+const selectedSpaceId = ref<number | undefined>(undefined)
+const uploadBusy = ref(false)
+
+async function openUploadDialog(record: ImageRecord) {
+  uploadTarget.value = record
+  selectedSpaceId.value = undefined
+  uploadBusy.value = false
+  try {
+    spaces.value = await listSpaces()
+  } catch {
+    spaces.value = []
+  }
+  uploadDialogOpen.value = true
+}
+
+async function handleUploadToAssets() {
+  if (!uploadTarget.value || uploadBusy.value) return
+  uploadBusy.value = true
+  try {
+    await importFromRecord(uploadTarget.value.id, selectedSpaceId.value)
+    toast.success('已上传到素材库')
+    uploadDialogOpen.value = false
+  } catch {
+    toast.error('上传失败')
+  } finally {
+    uploadBusy.value = false
   }
 }
 
@@ -251,8 +297,12 @@ onMounted(loadRecords)
                 @click.stop="openSaveDialog(record)">
                 <Plus class="h-3 w-3 mr-0.5" />保存
               </Button>
+              <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-primary"
+                @click.stop="openUploadDialog(record)">
+                <Upload class="h-3 w-3" />
+              </Button>
               <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-destructive"
-                @click.stop="handleDelete(record)">
+                @click.stop="openDeleteConfirm(record)">
                 <Trash2 class="h-3 w-3" />
               </Button>
             </div>
@@ -290,12 +340,10 @@ onMounted(loadRecords)
         @click="closeLightbox"
         @wheel.prevent="handleWheel"
       >
-        <button
-          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
-          @click.stop="closeLightbox"
-        >
+        <Button variant="ghost" size="icon" class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70"
+          @click.stop="closeLightbox">
           <X class="h-5 w-5" />
-        </button>
+        </Button>
 
         <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full px-3 py-1.5 text-white text-xs">
           <Button variant="ghost" size="sm" class="h-6 text-white hover:bg-white/20" @click.stop="zoomLevel = Math.max(0.5, zoomLevel - 0.2)">-</Button>
@@ -366,6 +414,52 @@ onMounted(loadRecords)
           <Button :disabled="!saveCategory || saveBusy" @click="handleSaveToLibrary">
             <Loader2 v-if="saveBusy" class="mr-1 h-4 w-4 animate-spin" />
             确定保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ 删除确认 dialog ══════════ -->
+    <Dialog v-model:open="deleteConfirmOpen">
+      <DialogContent class="sm:max-w-[380px]" aria-describedby="delete-confirm-desc">
+        <DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="delete-confirm-desc">确认删除此条生成记录</div></VisuallyHidden>
+        <p class="text-sm text-muted-foreground">删除此条生成记录？此操作不可恢复。</p>
+        <DialogFooter>
+          <Button variant="outline" @click="deleteConfirmOpen = false">取消</Button>
+          <Button variant="destructive" @click="handleDelete">删除</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ 上传到素材库 dialog ══════════ -->
+    <Dialog v-model:open="uploadDialogOpen">
+      <DialogContent class="sm:max-w-[420px]" aria-describedby="upload-asset-desc">
+        <DialogHeader><DialogTitle>上传到素材库</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="upload-asset-desc">将图片上传到指定的素材空间</div></VisuallyHidden>
+        <div class="space-y-4 py-2">
+          <div v-if="uploadTarget" class="flex justify-center">
+            <div class="w-40 h-30 rounded-md overflow-hidden bg-muted/30">
+              <img :src="imageUrl(firstImagePath(uploadTarget))" class="w-full h-full object-cover" alt="" />
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium">目标素材空间</label>
+            <Select v-if="spaces.length > 0" v-model="selectedSpaceId">
+              <SelectTrigger><SelectValue placeholder="选择空间（可选）" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="undefined">不指定空间</SelectItem>
+                <SelectItem v-for="s in spaces" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-else class="text-xs text-muted-foreground">暂无可用素材空间，将上传到默认空间</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" :disabled="uploadBusy" @click="uploadDialogOpen = false">取消</Button>
+          <Button :disabled="uploadBusy" @click="handleUploadToAssets">
+            <Loader2 v-if="uploadBusy" class="mr-1 h-4 w-4 animate-spin" />
+            确定上传
           </Button>
         </DialogFooter>
       </DialogContent>

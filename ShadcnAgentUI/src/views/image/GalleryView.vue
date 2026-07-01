@@ -357,12 +357,14 @@ onMounted(() => {
       >
         <h2 class="sr-only">{{ $t('gallery.desc') }}</h2>
 
-        <button
-          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+        <Button
+          variant="ghost"
+          size="icon"
+          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70"
           @click.stop="closeLightbox"
         >
           <X class="h-5 w-5" />
-        </button>
+        </Button>
 
         <div class="absolute top-4 left-4 z-10 flex items-center gap-2">
           <Badge variant="outline" class="bg-black/50 text-white border-white/20 text-xs">

@@ -263,27 +263,31 @@ function formatTime(timestamp: string) {
         </Button>
       </div>
       <div class="flex-1 overflow-y-auto py-1">
-        <button
-          class="flex items-center gap-2 w-full px-4 py-2 text-sm hover:bg-muted transition-colors"
+        <Button
+          variant="ghost"
+          size="sm"
+          class="flex items-center gap-2 w-full px-4 py-2 text-sm justify-start h-auto"
           :class="selectedFolderId === undefined ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'"
           @click="selectFolder(undefined)"
         >
           <FolderOpen class="h-4 w-4 shrink-0" />
           <span class="truncate">{{ $t('session.allSessions') }}</span>
-        </button>
+        </Button>
         <div
           v-for="folder in chat.folders"
           :key="folder.id"
           class="group flex items-center gap-1 px-2"
         >
-          <button
-            class="flex items-center gap-2 flex-1 px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+          <Button
+            variant="ghost"
+            size="sm"
+            class="flex items-center gap-2 flex-1 px-2 py-2 text-sm rounded-md justify-start h-auto"
             :class="selectedFolderId === folder.id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'"
             @click="selectFolder(folder.id)"
           >
             <Folder class="h-4 w-4 shrink-0" />
             <span class="truncate">{{ folder.name }}</span>
-          </button>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon" class="h-7 w-7 opacity-0 group-hover:opacity-100 shrink-0">
@@ -365,14 +369,16 @@ function formatTime(timestamp: string) {
           @click="selectMode ? toggleSelect(s.id) : (selectedSessionId = s.id)"
         >
           <div class="flex items-start gap-3">
-            <button
+            <Button
               v-if="selectMode"
-              class="mt-0.5 shrink-0"
+              variant="ghost"
+              size="sm"
+              class="mt-0.5 shrink-0 h-auto p-0"
               @click.stop="toggleSelect(s.id)"
             >
               <CheckSquare v-if="selectedIds.includes(s.id)" class="h-4 w-4 text-primary" />
               <Square v-else class="h-4 w-4 text-muted-foreground" />
-            </button>
+            </Button>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-sm font-medium truncate">{{ s.title }}</span>

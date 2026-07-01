@@ -488,18 +488,22 @@ function formatDateTime(dateStr: string): string {
                   class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border"
                 >
                   <img :src="url" class="w-full h-full object-cover" alt="reference" />
-                  <button
-                    class="absolute top-0.5 left-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="absolute top-0.5 left-0.5 opacity-0 group-hover:opacity-100 bg-black/50 text-white hover:bg-black/70 rounded-full h-6 w-6 transition-opacity"
                     @click.stop="openLightbox(url)"
                   >
                     <ZoomIn class="h-3 w-3" />
-                  </button>
-                  <button
-                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 text-white hover:bg-black/70 rounded-full h-6 w-6 transition-opacity"
                     @click="removeImage(idx)"
                   >
                     <Trash2 class="h-3 w-3" />
-                  </button>
+                  </Button>
                 </div>
                 <label
                   v-if="editImages.length < 4"
@@ -522,12 +526,14 @@ function formatDateTime(dateStr: string): string {
               <div class="flex flex-wrap gap-3 items-center">
                 <div v-if="maskPreviewUrl" class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border">
                   <img :src="maskPreviewUrl" class="w-full h-full object-cover" alt="mask" />
-                  <button
-                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 rounded-full p-1 text-white transition-opacity"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-black/50 text-white hover:bg-black/70 rounded-full h-6 w-6 transition-opacity"
                     @click="removeMask()"
                   >
                     <Trash2 class="h-3 w-3" />
-                  </button>
+                  </Button>
                 </div>
                 <label
                   v-if="!maskPreviewUrl"
@@ -695,20 +701,20 @@ function formatDateTime(dateStr: string): string {
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2">
           <label for="filter-start-date" class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterStartDate') }}</label>
-          <input
+          <Input
             id="filter-start-date"
             type="date"
             v-model="filterStartDate"
-            class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            class="h-9"
           />
         </div>
         <div class="flex items-center gap-2">
           <label for="filter-end-date" class="text-xs text-muted-foreground shrink-0">{{ $t('imageGen.filterEndDate') }}</label>
-          <input
+          <Input
             id="filter-end-date"
             type="date"
             v-model="filterEndDate"
-            class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            class="h-9"
           />
         </div>
         <div class="flex-1 min-w-[200px] flex items-center gap-2">
@@ -861,12 +867,14 @@ function formatDateTime(dateStr: string): string {
         <h2 class="sr-only">{{ $t('imageGen.preview') }}</h2>
 
         <!-- Close button -->
-        <button
-          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+        <Button
+          variant="ghost"
+          size="icon"
+          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
           @click.stop="closeLightbox"
         >
           <X class="h-5 w-5" />
-        </button>
+        </Button>
 
         <!-- Zoom info -->
         <div class="absolute top-4 left-4 z-10 flex items-center gap-2">
