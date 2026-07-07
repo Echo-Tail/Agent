@@ -2,6 +2,7 @@ import { api } from './request'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER, STREAM_TIMEOUT } from '@/constants'
 import type { Session, SessionSummary, SessionFolder, SseEvent } from '@/types/session'
 import i18n from '@/locales'
+import { logger } from '@/utils/logger'
 
 export function listSessionsApi(params?: { folderId?: number; agentId?: number }) {
   return api.get<SessionSummary[]>('/sessions', { params })
@@ -64,11 +65,15 @@ export async function streamChat(
   const { onToken, onDone, onError, onReasoning, onToolCall, onToolResult, onFile } = callbacks
   const token = localStorage.getItem(STORAGE_KEY_TOKEN)
 
+  const agentInfo = `agent=${agentId} session=${sessionId}`
+  logger.info('SSE', `→ stream start ${agentInfo}`, { contentLength: content.length })
+
   const timeoutController = new AbortController()
   let timedOut = false
   const timeoutId = setTimeout(() => {
     timedOut = true
     timeoutController.abort()
+    logger.warn('SSE', `timeout ${agentInfo} (${timeoutMs}ms)`)
     onError(i18n.global.t('error.requestTimeout'))
   }, timeoutMs)
 
@@ -90,6 +95,7 @@ export async function streamChat(
     if (!response.ok) {
       clearTimeout(timeoutId)
       if (response.status === 401) {
+        logger.warn('SSE', `401 unauthorized ${agentInfo}`)
         localStorage.removeItem(STORAGE_KEY_TOKEN)
         localStorage.removeItem(STORAGE_KEY_USER)
         if (!window.location.pathname.startsWith('/login')) {
@@ -97,6 +103,7 @@ export async function streamChat(
         }
         return
       }
+      logger.error('SSE', `HTTP error ${response.status} ${agentInfo}`)
       onError('HTTP ' + response.status)
       return
     }
@@ -104,6 +111,7 @@ export async function streamChat(
     const reader = response.body?.getReader()
     if (!reader) {
       clearTimeout(timeoutId)
+      logger.error('SSE', `no reader ${agentInfo}`)
       onError(i18n.global.t('error.operationFailed'))
       return
     }
@@ -132,10 +140,12 @@ export async function streamChat(
           } else if (event.type === 'done') {
             clearTimeout(timeoutId)
             completed = true
+            logger.info('SSE', `stream done ${agentInfo}`, { totalTokens: fullText.length })
             onDone(event.content || fullText)
           } else if (event.type === 'error') {
             clearTimeout(timeoutId)
             completed = true
+            logger.error('SSE', `stream error ${agentInfo}`, { message: event.message })
             onError(event.message)
           } else if (event.type === 'reasoning') {
             onReasoning?.(event.content)
@@ -160,6 +170,7 @@ export async function streamChat(
   } catch (e) {
     if (timedOut) return
     if (e instanceof DOMException && e.name === 'AbortError') return
+    logger.error('SSE', `stream exception ${agentInfo}`, { error: String(e) })
     throw e
   } finally {
     clearTimeout(timeoutId)

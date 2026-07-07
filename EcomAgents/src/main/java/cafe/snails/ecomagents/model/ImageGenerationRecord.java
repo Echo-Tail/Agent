@@ -64,6 +64,14 @@ public class ImageGenerationRecord {
     @Column
     private Integer height;
 
+    /** 参考图片路径（图生图模式）：多张以换行分隔 */
+    @Column(name = "reference_image_paths", columnDefinition = "TEXT")
+    private String referenceImagePaths;
+
+    /** 遮罩图路径（图生图模式） */
+    @Column(name = "mask_image_path", length = 500)
+    private String maskImagePath;
+
     /** 创建时间 */
     @Column(nullable = false)
     private LocalDateTime createdAt;

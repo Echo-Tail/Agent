@@ -45,6 +45,8 @@ import {
   Sparkles,
   Copy,
 } from 'lucide-vue-next'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from 'reka-ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -63,6 +65,9 @@ const uploading = ref(false)
 const editFactsJson = ref('')
 const selectedFile = ref<File | null>(null)
 const uploadTag = ref('other')
+
+const deleteConfirmOpen = ref(false)
+const deleteTarget = ref<number | null>(null)
 
 const cognitionVersion = ref<SellingPointCognitionVersion | null>(null)
 const cognitionVersions = ref<SellingPointCognitionVersion[]>([])
@@ -499,10 +504,16 @@ async function uploadImage() {
 }
 
 async function deleteImage(imageId: number) {
-  if (!window.confirm('确认删除该图片？')) return
-  await deleteProductProfileImage(imageId)
+  deleteTarget.value = imageId
+  deleteConfirmOpen.value = true
+}
+
+async function confirmDeleteImage() {
+  if (deleteTarget.value === null) return
+  await deleteProductProfileImage(deleteTarget.value)
   toast.success('图片已删除')
   images.value = await getProductProfileImages(profileId)
+  deleteTarget.value = null
 }
 
 function goBack() {
@@ -965,4 +976,17 @@ onMounted(loadAll)
       </Tabs>
     </template>
   </div>
+
+  <Dialog v-model:open="deleteConfirmOpen">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle><VisuallyHidden>删除确认</VisuallyHidden></DialogTitle>
+      </DialogHeader>
+      <div class="py-4 text-sm">确认删除该图片？</div>
+      <DialogFooter>
+        <Button variant="outline" @click="deleteConfirmOpen = false">取消</Button>
+        <Button variant="destructive" @click="confirmDeleteImage">确认删除</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

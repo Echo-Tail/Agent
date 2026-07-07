@@ -67,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v1/system-logs", "/v1/system-logs/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/v1/system-logs").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/v1/system-logs").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/v1/client-logs").authenticated()
                         // 鍏朵綑绔偣闇€璁よ瘉
                         .anyRequest().authenticated()
                 )

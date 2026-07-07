@@ -346,6 +346,7 @@ function formatDate(dateStr: string): string {
 function imageUrl(path: string): string {
   if (!path) return ''
   const n = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  if (n.startsWith('/uploads/')) return n
   return '/uploads/' + n
 }
 </script>
@@ -640,22 +641,26 @@ function imageUrl(path: string): string {
             class="max-h-[75vh] max-w-full object-contain rounded-lg p-6"
             :alt="assets[assetPreviewIndex]?.fileName ?? ''"
           />
-          <button
+          <Button
             v-if="assetPreviewUrls.length > 1"
-            class="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60 cursor-pointer transition-colors"
+            variant="ghost"
+            size="icon"
+            class="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60"
             @click="prevAssetPreview"
           >
             <ChevronLeft class="h-6 w-6" />
             <span class="sr-only">Previous</span>
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="assetPreviewUrls.length > 1"
-            class="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60 cursor-pointer transition-colors"
+            variant="ghost"
+            size="icon"
+            class="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60"
             @click="nextAssetPreview"
           >
             <ChevronRight class="h-6 w-6" />
             <span class="sr-only">Next</span>
-          </button>
+          </Button>
           <div class="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
             {{ assetPreviewIndex + 1 }} / {{ assetPreviewUrls.length }}
           </div>
@@ -771,22 +776,26 @@ function imageUrl(path: string): string {
             class="max-h-[75vh] max-w-full object-contain rounded-lg p-6"
             :alt="uploadFiles[previewIndex]?.name ?? ''"
           />
-          <button
+          <Button
             v-if="previewUrls.length > 1"
-            class="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60 cursor-pointer transition-colors"
+            variant="ghost"
+            size="icon"
+            class="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60"
             @click="prevPreview"
           >
             <ChevronLeft class="h-6 w-6" />
             <span class="sr-only">Previous</span>
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="previewUrls.length > 1"
-            class="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60 cursor-pointer transition-colors"
+            variant="ghost"
+            size="icon"
+            class="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-black/40 text-white hover:bg-black/60"
             @click="nextPreview"
           >
             <ChevronRight class="h-6 w-6" />
             <span class="sr-only">Next</span>
-          </button>
+          </Button>
           <div class="absolute bottom-3 left-1/2 -translate-x-1/2 text-xs text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
             {{ previewIndex + 1 }} / {{ previewUrls.length }}
           </div>

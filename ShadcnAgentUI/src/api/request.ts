@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import { STORAGE_KEY_TOKEN, STORAGE_KEY_USER, API_BASE_URL, API_TIMEOUT } from '@/constants'
 import type { ApiResponse } from '@/types/api'
 import i18n from '@/locales'
+import { logger } from '@/utils/logger'
+import { maskRequestInfo, maskResponseInfo } from '@/utils/mask'
 
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -23,31 +25,7 @@ axiosRetry(http, {
   },
 })
 
-/** 记录请求耗时，自动跳过 system-logs 自身避免循环 */
-function logApiCall(method: string | undefined, url: string | undefined, status: number, duration: number, errMsg?: string) {
-  if (!url || url.includes('/system-logs')) return
-  try {
-    const userStr = localStorage.getItem(STORAGE_KEY_USER)
-    const userId = userStr ? (JSON.parse(userStr) as Record<string, unknown>)?.id as number | undefined : undefined
-    const body: Record<string, unknown> = {
-      level: status >= 400 ? 'ERROR' : 'INFO',
-      category: 'API',
-      message: `${method?.toUpperCase()} ${url} → ${status}${errMsg ? `: ${errMsg}` : ''}`,
-      duration,
-      route: url,
-      userId,
-    }
-    if (errMsg) body.data = JSON.stringify({ error: errMsg })
-    // 静默提交，失败不处理
-    const token = localStorage.getItem(STORAGE_KEY_TOKEN)
-    fetch(`/v1/system-logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body),
-    }).catch(() => {})
-  } catch { /* ignore */ }
-}
-
+/** 记录耗时结构 */
 const startTimes = new WeakMap<InternalAxiosRequestConfig, number>()
 
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -56,6 +34,19 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`
   }
   startTimes.set(config, performance.now())
+
+  // 脱敏记录请求日志（跳过 client-logs 和 system-logs 自身避免循环）
+  if (!config.url?.includes('/client-logs') && !config.url?.includes('/system-logs')) {
+    const reqInfo = maskRequestInfo({
+      method: config.method,
+      url: config.url,
+      headers: config.headers as Record<string, unknown>,
+      data: config.data,
+    })
+    // 只记录关键信息到控制台，不会阻塞请求
+    logger.debug('HTTP', `→ ${reqInfo.method} ${reqInfo.url}`)
+  }
+
   return config
 })
 
@@ -64,7 +55,22 @@ http.interceptors.response.use(
     const start = startTimes.get(response.config)
     startTimes.delete(response.config)
     const duration = start ? Math.round(performance.now() - start) : 0
-    logApiCall(response.config.method, response.config.url, response.status, duration)
+
+    // 脱敏记录响应日志
+    if (!response.config.url?.includes('/client-logs') && !response.config.url?.includes('/system-logs')) {
+      const respInfo = maskResponseInfo({
+        status: response.status,
+        data: response.data,
+      })
+      logger.traceResponse(
+        response.config.method ?? 'GET',
+        response.config.url ?? '',
+        response.status,
+        duration,
+        respInfo.data,
+      )
+    }
+
     const body = response.data as ApiResponse<unknown>
     if (body.code === 200) {
       return body.data as any
@@ -77,7 +83,18 @@ http.interceptors.response.use(
     const start = error.config ? startTimes.get(error.config) : undefined
     if (error.config) startTimes.delete(error.config)
     const duration = start ? Math.round(performance.now() - start) : 0
-    logApiCall(error.config?.method, error.config?.url, error.response?.status ?? 0, duration, error.message)
+
+    // 脱敏记录错误响应日志
+    if (!error.config?.url?.includes('/client-logs') && !error.config?.url?.includes('/system-logs')) {
+      logger.traceResponse(
+        error.config?.method ?? 'GET',
+        error.config?.url ?? '',
+        error.response?.status ?? 0,
+        duration,
+        error.response?.data,
+      )
+    }
+
     if (error.response?.status === 401) {
       localStorage.removeItem(STORAGE_KEY_TOKEN)
       localStorage.removeItem(STORAGE_KEY_USER)

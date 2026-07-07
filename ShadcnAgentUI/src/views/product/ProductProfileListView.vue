@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from 'reka-ui'
 import {
   listProductProfiles,
   createProductProfile,
@@ -21,6 +22,26 @@ import { Plus, RefreshCw, Loader2, Trash2, Eye, FileText, Upload, Search } from 
 
 const router = useRouter()
 const profiles = ref<ProductProfile[]>([])
+const deleteConfirmOpen = ref(false)
+const deleteTarget = ref<ProductProfile | null>(null)
+
+function openDeleteConfirm(profile: ProductProfile) {
+  deleteTarget.value = profile
+  deleteConfirmOpen.value = true
+}
+
+async function handleDelete() {
+  if (!deleteTarget.value) return
+  try {
+    await deleteProductProfile(deleteTarget.value.id)
+    toast.success('已删除')
+    deleteConfirmOpen.value = false
+    deleteTarget.value = null
+    await loadProfiles()
+  } catch {
+    toast.error('删除失败')
+  }
+}
 const loading = ref(false)
 const totalElements = ref(0)
 const page = ref(0)
@@ -108,13 +129,6 @@ function handleFileSelect(event: Event) {
   createFile.value = input.files?.[0] || null
 }
 
-async function handleDelete(profile: ProductProfile) {
-  if (!window.confirm(`删除产品「${profile.productName}」？此操作不可恢复。`)) return
-  await deleteProductProfile(profile.id)
-  toast.success('已删除')
-  await loadProfiles()
-}
-
 function viewDetail(id: number) {
   router.push({ name: 'ProductProfileDetail', params: { id } })
 }
@@ -172,7 +186,7 @@ onMounted(loadProfiles)
               <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground" @click="viewDetail(profile.id)">
                 <Eye class="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive" @click="handleDelete(profile)">
+              <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive" @click="openDeleteConfirm(profile)">
                 <Trash2 class="h-4 w-4" />
               </Button>
             </div>
@@ -250,6 +264,19 @@ onMounted(loadProfiles)
           <Button :disabled="creating" @click="handleCreate">
             <Loader2 v-if="creating" class="h-4 w-4 mr-1 animate-spin" />{{ creating ? '正在解析...' : '创建' }}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ═══ 删除确认 ═══ -->
+    <Dialog v-model:open="deleteConfirmOpen">
+      <DialogContent class="sm:max-w-[380px]" aria-describedby="delete-profile-desc">
+        <DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader>
+        <VisuallyHidden><div id="delete-profile-desc">确认删除产品资料</div></VisuallyHidden>
+        <p class="text-sm text-muted-foreground">删除产品「{{ deleteTarget?.productName }}」？此操作不可恢复。</p>
+        <DialogFooter>
+          <Button variant="outline" @click="deleteConfirmOpen = false">取消</Button>
+          <Button variant="destructive" @click="handleDelete">删除</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

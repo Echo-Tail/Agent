@@ -20,6 +20,10 @@ export interface ImageRecord {
   timeCostMs: number
   width?: number
   height?: number
+  /** 参考图片路径（图生图模式），多张以换行分隔 */
+  referenceImagePaths?: string | null
+  /** 遮罩图路径（图生图模式） */
+  maskImagePath?: string | null
   createdAt: string
 }
 
@@ -89,6 +93,13 @@ export function listImageRecords(query?: RecordQuery) {
     if (query.prompt) params.prompt = query.prompt
   }
   return api.get<PageResponse<ImageRecord>>('/images/records', { params })
+}
+
+/**
+ * 查询单条图片生成记录详情（含参考图和遮罩图路径）。
+ */
+export function getImageRecordApi(id: number) {
+  return api.get<ImageRecord>(`/images/records/${id}`)
 }
 
 /**
