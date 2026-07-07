@@ -11,13 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { VisuallyHidden } from 'reka-ui'
 import {
-  listImageRecords, deleteImageRecord, type ImageRecord,
+  listImageRecords, deleteImageRecord, getImageRecordApi, type ImageRecord,
 } from '@/api/image'
 import { importFromRecord, listSpaces } from '@/api/assets'
 import type { AssetSpace } from '@/api/assets'
 import { createPrompt as createPromptApi, setCoverRef } from '@/api/prompts'
 import {
-  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus, Upload,
+  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus, Upload, Eye,
 } from 'lucide-vue-next'
 
 const records = ref<ImageRecord[]>([])
@@ -234,6 +234,44 @@ function setPage(p: number) {
   loadRecords()
 }
 
+// ── 查看详情 ──
+const detailDialogOpen = ref(false)
+const detailRecord = ref<ImageRecord | null>(null)
+const detailLoading = ref(false)
+const activeTab = ref<'result' | 'reference'>('result')
+
+async function openDetail(record: ImageRecord) {
+  detailLoading.value = true
+  detailDialogOpen.value = true
+  activeTab.value = 'result'
+  // 先用列表已有的数据显示
+  detailRecord.value = record
+  try {
+    // 再异步获取完整详情（含参考图/遮罩图路径）
+    detailRecord.value = await getImageRecordApi(record.id)
+  } catch {
+    // 静默失败，列表数据仍可用
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function closeDetail() {
+  detailDialogOpen.value = false
+  detailRecord.value = null
+}
+
+function splitImagePaths(paths: string | null | undefined): string[] {
+  if (!paths) return []
+  return paths.split('\n').filter(Boolean)
+}
+
+function formatDateTime(iso: string): string {
+  if (!iso) return '—'
+  // 2026-07-07T14:18:41.705533 → 2026-07-07 14:18:41
+  return iso.replace('T', ' ').split('.')[0] ?? iso
+}
+
 onMounted(loadRecords)
 </script>
 
@@ -280,10 +318,14 @@ onMounted(loadRecords)
           <div class="p-2 space-y-1.5">
             <div class="flex items-center gap-1">
               <Badge variant="secondary" class="text-[10px] px-1 py-0">{{ modeLabels[record.mode] || record.mode }}</Badge>
-              <span class="text-[10px] text-muted-foreground">{{ record.width }}×{{ record.height }}</span>
+              <span v-if="record.width && record.height" class="text-[10px] text-muted-foreground">{{ record.width }}×{{ record.height }}</span>
             </div>
             <p class="text-xs text-muted-foreground line-clamp-2">{{ record.prompt }}</p>
             <div class="flex items-center gap-1 pt-0.5">
+              <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-foreground"
+                @click.stop="openDetail(record)">
+                <Eye class="h-3 w-3 mr-0.5" />查看
+              </Button>
               <Button variant="ghost" size="sm" class="h-6 text-[10px] px-1 text-muted-foreground hover:text-foreground"
                 @click.stop="downloadImage(firstImagePath(record))">
                 <Download class="h-3 w-3 mr-0.5" />
@@ -461,6 +503,121 @@ onMounted(loadRecords)
             <Loader2 v-if="uploadBusy" class="mr-1 h-4 w-4 animate-spin" />
             确定上传
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ══════════ 查看详情 dialog ══════════ -->
+    <Dialog v-model:open="detailDialogOpen">
+      <DialogContent class="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" aria-describedby="detail-desc">
+        <DialogHeader>
+          <DialogTitle>
+            生成详情
+            <Badge v-if="detailRecord" variant="secondary" class="ml-2 align-middle">
+              {{ modeLabels[detailRecord.mode] || detailRecord.mode }}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+        <VisuallyHidden><div id="detail-desc">查看图片生成的完整信息，包括提示词、参考图和遮罩图</div></VisuallyHidden>
+
+        <div v-if="detailLoading" class="py-12 text-center text-sm text-muted-foreground">加载中...</div>
+
+        <template v-else-if="detailRecord">
+          <div class="space-y-4 py-2">
+
+            <!-- 生成结果图 -->
+            <div>
+              <label class="text-xs font-medium mb-1.5 block">生成结果</label>
+              <div class="flex items-center justify-center rounded-lg overflow-hidden bg-muted/20 max-h-[320px]">
+                <img
+                  :src="imageUrl(firstImagePath(detailRecord))"
+                  class="max-w-full max-h-[320px] object-contain cursor-zoom-in"
+                  alt="生成结果"
+                  @click="openLightbox(firstImagePath(detailRecord))"
+                />
+              </div>
+            </div>
+
+            <!-- 提示词 -->
+            <div class="space-y-1">
+              <label class="text-xs font-medium block">提示词</label>
+              <Textarea
+                :model-value="detailRecord.prompt"
+                readonly
+                rows="3"
+                class="text-xs max-h-[150px] overflow-y-auto"
+              />
+            </div>
+
+            <!-- 改写后提示词 -->
+            <div v-if="detailRecord.revisedPrompt" class="space-y-1">
+              <label class="text-xs font-medium block">API 改写后提示词</label>
+              <Textarea
+                :model-value="detailRecord.revisedPrompt"
+                readonly
+                rows="2"
+                class="text-xs max-h-[120px] overflow-y-auto text-muted-foreground"
+              />
+            </div>
+
+            <!-- 参数信息 -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <span class="text-muted-foreground">尺寸</span>
+                <p class="font-medium">{{ detailRecord.size }}</p>
+              </div>
+              <div>
+                <span class="text-muted-foreground">质量</span>
+                <p class="font-medium">{{ detailRecord.quality }}</p>
+              </div>
+              <div>
+                <span class="text-muted-foreground">分辨率</span>
+                <p class="font-medium">{{ detailRecord.width && detailRecord.height ? `${detailRecord.width}×${detailRecord.height}` : '—' }}</p>
+              </div>
+              <div>
+                <span class="text-muted-foreground">耗时</span>
+                <p class="font-medium">{{ (detailRecord.timeCostMs / 1000).toFixed(1) }}s</p>
+              </div>
+            </div>
+
+            <!-- 参考图 & 遮罩（仅图生图模式） -->
+            <template v-if="detailRecord.mode === 'EDIT'">
+              <!-- 参考图 -->
+              <div v-if="splitImagePaths(detailRecord.referenceImagePaths).length > 0">
+                <label class="text-xs font-medium mb-1.5 block">
+                  参考图（{{ splitImagePaths(detailRecord.referenceImagePaths).length }} 张）
+                </label>
+                <div class="flex flex-wrap gap-2">
+                  <div
+                    v-for="(refPath, idx) in splitImagePaths(detailRecord.referenceImagePaths)"
+                    :key="idx"
+                    class="w-28 h-28 rounded-lg overflow-hidden bg-muted/20 border cursor-zoom-in hover:opacity-80 transition-opacity"
+                    @click="openLightbox(refPath)"
+                  >
+                    <img :src="imageUrl(refPath)" class="w-full h-full object-cover" alt="参考图" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- 遮罩图 -->
+              <div v-if="detailRecord.maskImagePath">
+                <label class="text-xs font-medium mb-1.5 block">遮罩图（Mask）</label>
+                <div class="w-28 h-28 rounded-lg overflow-hidden bg-muted/20 border cursor-zoom-in hover:opacity-80 transition-opacity"
+                  @click="openLightbox(detailRecord.maskImagePath!)">
+                  <img :src="imageUrl(detailRecord.maskImagePath)" class="w-full h-full object-cover" alt="遮罩图" />
+                </div>
+              </div>
+            </template>
+
+            <!-- 时间 -->
+            <div class="text-xs text-muted-foreground pt-1">
+              创建时间：{{ formatDateTime(detailRecord.createdAt) }}
+            </div>
+          </div>
+        </template>
+
+        <DialogFooter>
+          <Button variant="outline" @click="closeDetail">关闭</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

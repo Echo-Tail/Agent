@@ -311,6 +311,10 @@ public class ImageGenerationService {
 
         long overallMs = System.currentTimeMillis() - overallStart;
 
+        // 参考图、遮罩图文件流已在 buildEditMultipartBody 中读取完毕，现在保存到磁盘
+        String savedReferencePaths = saveReferenceImages(images);
+        String savedMaskPath = (mask != null && !mask.isEmpty()) ? saveMaskImage(mask) : null;
+
         // 每张图保存一条历史记录
         List<Long> recordIds = new ArrayList<>();
         for (String path : resultPaths) {
@@ -322,6 +326,8 @@ public class ImageGenerationService {
                     .size(finalSize)
                     .quality(finalQuality)
                     .resultPath(path)
+                    .referenceImagePaths(savedReferencePaths)
+                    .maskImagePath(savedMaskPath)
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
@@ -476,6 +482,22 @@ public class ImageGenerationService {
 
         Page<ImageGenerationRecord> result = recordRepository.findAll(spec, pageable);
         return result;
+    }
+
+    /**
+     * 获取单条图片生成记录详情（含参考图和遮罩图路径）。
+     *
+     * @param recordId 记录 ID
+     * @param userId   操作用户 ID
+     * @return 图片生成记录实体
+     */
+    public ImageGenerationRecord getRecord(Long recordId, Long userId) {
+        ImageGenerationRecord record = recordRepository.findById(recordId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "记录不存在"));
+        if (!record.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看此记录");
+        }
+        return record;
     }
 
     /**
@@ -1026,6 +1048,62 @@ public class ImageGenerationService {
             // 解析失败则使用默认错误消息
         }
         return null;
+    }
+
+    /**
+     * 保存参考图片到磁盘。
+     *
+     * @param images 参考图片列表
+     * @return 换行分隔的保存路径，无图片时返回 null
+     */
+    private String saveReferenceImages(List<MultipartFile> images) {
+        if (images == null || images.isEmpty()) return null;
+        try {
+            Path refDir = Paths.get(uploadDir, "reference");
+            Files.createDirectories(refDir);
+            List<String> paths = new ArrayList<>();
+            for (MultipartFile img : images) {
+                String uuid = UUID.randomUUID().toString().replace("-", "");
+                String ext = ".png";
+                String name = img.getOriginalFilename();
+                if (name != null) {
+                    String lower = name.toLowerCase();
+                    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) ext = ".jpg";
+                    else if (lower.endsWith(".gif")) ext = ".gif";
+                    else if (lower.endsWith(".webp")) ext = ".webp";
+                }
+                String fileName = uuid + ext;
+                Path target = refDir.resolve(fileName);
+                img.transferTo(target.toFile());
+                paths.add("/uploads/reference/" + fileName);
+            }
+            return String.join("\n", paths);
+        } catch (IOException e) {
+            log.error("Failed to save reference images", e);
+            return null;
+        }
+    }
+
+    /**
+     * 保存遮罩图到磁盘。
+     *
+     * @param mask 遮罩图片文件
+     * @return 保存路径，无遮罩时返回 null
+     */
+    private String saveMaskImage(MultipartFile mask) {
+        if (mask == null || mask.isEmpty()) return null;
+        try {
+            Path maskDir = Paths.get(uploadDir, "mask");
+            Files.createDirectories(maskDir);
+            String uuid = UUID.randomUUID().toString().replace("-", "");
+            String fileName = uuid + ".png";
+            Path target = maskDir.resolve(fileName);
+            mask.transferTo(target.toFile());
+            return "/uploads/mask/" + fileName;
+        } catch (IOException e) {
+            log.error("Failed to save mask image", e);
+            return null;
+        }
     }
 
     /**

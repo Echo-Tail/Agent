@@ -116,6 +116,17 @@ public class ImageGenerationController {
     }
 
     /**
+     * 查询单条图片生成记录详情（含参考图和遮罩图路径）。
+     */
+    @GetMapping("/records/{id}")
+    public ApiResponse<ImageGenerationRecord> getRecord(
+            @PathVariable("id") Long id,
+            @CurrentUserId Long userId) {
+        var record = imageGenerationService.getRecord(id, userId);
+        return ApiResponse.success(record);
+    }
+
+    /**
      * 分析图片表达结构 — 使用本地 codex exec 进行多模态视觉分析。
      */
     @PostMapping("/analyze-expression")
