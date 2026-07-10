@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import PageHeader from '@/components/PageHeader.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import {
   Loader2,
   Copy,
@@ -21,7 +23,6 @@ import {
   X,
   Trash2,
   ShieldX,
-  ZoomIn,
   Tag,
 } from 'lucide-vue-next'
 
@@ -35,12 +36,8 @@ const page = ref(0)
 const totalPages = ref(0)
 const loadingMore = ref(false)
 
-// ── Lightbox ──
-const lightboxOpen = ref(false)
-const lightboxUrl = ref('')
-const zoomLevel = ref(1)
-const panX = ref(0)
-const panY = ref(0)
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
+
 
 // ── Publish Dialog ──
 const publishDialogOpen = ref(false)
@@ -95,32 +92,6 @@ function onScroll(event: Event) {
 }
 
 // ── Lightbox ──
-function openLightbox(url: string) {
-  lightboxUrl.value = url
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
-  lightboxOpen.value = true
-}
-
-function closeLightbox() {
-  lightboxOpen.value = false
-  lightboxUrl.value = ''
-}
-
-function handleWheel(e: WheelEvent) {
-  e.preventDefault()
-  const delta = e.deltaY > 0 ? -0.1 : 0.1
-  zoomLevel.value = Math.max(0.5, Math.min(5, zoomLevel.value + delta))
-}
-
-function resetZoom() {
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
-}
-
-// ── Copy prompt ──
 function copyPrompt(text: string) {
   navigator.clipboard.writeText(text).then(() => {
     toast.success(t('gallery.promptCopied') || 'Prompt 已复制')
@@ -202,7 +173,7 @@ async function executeConfirm() {
     confirmDialogOpen.value = false
     items.value = items.value.filter(i => i.id !== confirmTargetId.value)
     if (lightboxUrl.value && confirmTargetId.value) {
-      closeLightbox()
+      lightboxOpen.value = false
     }
   } catch {
     // toast handled by interceptor
@@ -347,53 +318,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ═══ Image Lightbox ═══ -->
-    <Teleport to="body">
-      <div
-        v-if="lightboxOpen"
-        class="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
-        @click="closeLightbox"
-        @wheel.prevent="handleWheel"
-      >
-        <h2 class="sr-only">{{ $t('gallery.desc') }}</h2>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70"
-          @click.stop="closeLightbox"
-        >
-          <X class="h-5 w-5" />
-        </Button>
-
-        <div class="absolute top-4 left-4 z-10 flex items-center gap-2">
-          <Badge variant="outline" class="bg-black/50 text-white border-white/20 text-xs">
-            {{ Math.round(zoomLevel * 100) }}%
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            class="bg-black/50 text-white border-white/20 h-7 text-xs"
-            @click.stop="resetZoom"
-          >
-            <ZoomIn class="h-3 w-3 mr-1" />
-            重置缩放
-          </Button>
-        </div>
-
-        <img
-          v-if="lightboxUrl"
-          :src="lightboxUrl"
-          class="max-w-[90vw] max-h-[90vh] w-auto h-auto transition-transform duration-100"
-          :style="{
-            transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
-          }"
-          alt="Preview"
-          draggable="false"
-          @click.stop
-        />
-      </div>
-    </Teleport>
+    <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 
     <!-- ── Publish Dialog ── -->
     <Dialog :open="publishDialogOpen" @update:open="publishDialogOpen = $event">

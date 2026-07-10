@@ -47,7 +47,7 @@ import java.util.UUID;
 @Slf4j
 public class ImageGenerationService {
 
-    private static final String DEFAULT_SIZE = "1024x1024";
+    private static final String DEFAULT_SIZE = "1254x1254";
     private static final String DEFAULT_QUALITY = "auto";
     private static final String MODEL_NAME = "gpt-image-2";
 
@@ -141,6 +141,7 @@ public class ImageGenerationService {
 
         // 每张图保存一条历史记录
         List<Long> recordIds = new ArrayList<>();
+        List<GeneratedImage> generatedImages = new ArrayList<>();
         for (String path : resultPaths) {
             ImageGenerationRecord record = ImageGenerationRecord.builder()
                     .userId(userId)
@@ -153,13 +154,16 @@ public class ImageGenerationService {
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
-            // 读取图片尺寸
-            // resultPath 可能已包含 uploadDir 前缀
-            Path imgPath = path.contains("uploads") ? Paths.get(path) : Paths.get(uploadDir, path);
+            // 读取图片尺寸 — 用绝对路径解析确保跨部署环境一致
+            Path imgPath = (path.contains("uploads")
+                    ? Paths.get(uploadDir).toAbsolutePath().normalize().resolve(
+                            path.replace('\\', '/').replaceFirst("^/?\\.?/+uploads/+", ""))
+                    : Paths.get(uploadDir, path).toAbsolutePath().normalize());
             int[] d = readImageSize(imgPath);
             if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
+            generatedImages.add(new GeneratedImage(record.getId(), record.getResultPathNormalized(), record.getWidth(), record.getHeight()));
         }
 
         log.info("Generated {} image(s) for user {} ({}ms)", resultPaths.size(), userId, overallMs);
@@ -168,7 +172,7 @@ public class ImageGenerationService {
         List<String> urls = resultPaths.stream()
                 .map(p -> p.replace("\\", "/").replace("./", ""))
                 .toList();
-        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount, generatedImages);
     }
 
     /**
@@ -317,6 +321,7 @@ public class ImageGenerationService {
 
         // 每张图保存一条历史记录
         List<Long> recordIds = new ArrayList<>();
+        List<GeneratedImage> generatedImages = new ArrayList<>();
         for (String path : resultPaths) {
             ImageGenerationRecord record = ImageGenerationRecord.builder()
                     .userId(userId)
@@ -331,11 +336,16 @@ public class ImageGenerationService {
                     .timeCostMs(overallMs)
                     .createdAt(LocalDateTime.now())
                     .build();
-            Path imgPath = path.contains("uploads") ? Paths.get(path) : Paths.get(uploadDir, path);
+            // 读取图片尺寸 — 用绝对路径解析确保跨部署环境一致
+            Path imgPath = (path.contains("uploads")
+                    ? Paths.get(uploadDir).toAbsolutePath().normalize().resolve(
+                            path.replace('\\', '/').replaceFirst("^/?\\.?/+uploads/+", ""))
+                    : Paths.get(uploadDir, path).toAbsolutePath().normalize());
             int[] d = readImageSize(imgPath);
             if (d != null) { record.setWidth(d[0]); record.setHeight(d[1]); }
             recordRepository.save(record);
             recordIds.add(record.getId());
+            generatedImages.add(new GeneratedImage(record.getId(), record.getResultPathNormalized(), record.getWidth(), record.getHeight()));
         }
 
         log.info("Edited {} image(s) for user {} ({}ms)", resultPaths.size(), userId, overallMs);
@@ -344,7 +354,7 @@ public class ImageGenerationService {
         List<String> urls = resultPaths.stream()
                 .map(p -> p.replace("\\", "/").replace("./", ""))
                 .toList();
-        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount);
+        return new ImageGenerationResult(urls, revisedPrompt, overallMs, recordIds.get(0), failedCount, generatedImages);
     }
 
     /**
@@ -691,6 +701,7 @@ public class ImageGenerationService {
      */
     private String normalizePath(String raw) {
         String normalized = raw.replace("\\", "/");
+        // 确保以 /uploads/ 开头，兼容前端 .replace("./", "") 和 Paths.get 文件解析
         if (!normalized.startsWith("/")) normalized = "/" + normalized;
         return normalized;
     }
@@ -825,7 +836,8 @@ public class ImageGenerationService {
 
             return new ImageGenerationResult(
                     List.of(resultPath.replace("\\", "/").replace("./", "")),
-                    content, timeCostMs, record.getId(), 0);
+                    content, timeCostMs, record.getId(), 0,
+                    List.of(new GeneratedImage(record.getId(), record.getResultPathNormalized(), record.getWidth(), record.getHeight())));
 
             } finally {
                 conn.disconnect();
@@ -951,7 +963,8 @@ public class ImageGenerationService {
 
                 return new ImageGenerationResult(
                         List.of(resultPath.replace("\\", "/").replace("./", "")),
-                        content, timeCostMs, record.getId(), 0);
+                        content, timeCostMs, record.getId(), 0,
+                    List.of(new GeneratedImage(record.getId(), record.getResultPathNormalized(), record.getWidth(), record.getHeight())));
 
             } finally {
                 conn.disconnect();
@@ -1059,7 +1072,7 @@ public class ImageGenerationService {
     private String saveReferenceImages(List<MultipartFile> images) {
         if (images == null || images.isEmpty()) return null;
         try {
-            Path refDir = Paths.get(uploadDir, "reference");
+            Path refDir = Paths.get(uploadDir, "reference").toAbsolutePath().normalize();
             Files.createDirectories(refDir);
             List<String> paths = new ArrayList<>();
             for (MultipartFile img : images) {
@@ -1074,7 +1087,10 @@ public class ImageGenerationService {
                 }
                 String fileName = uuid + ext;
                 Path target = refDir.resolve(fileName);
-                img.transferTo(target.toFile());
+                // 使用 Files.write 而非 img.transferTo：
+                // getBytes() 可多次调用（Spring 内部缓存到内存），
+                // 而 transferTo 依赖 Part.write() 可能因底层临时文件已被消费而失败
+                Files.write(target, img.getBytes());
                 paths.add("/uploads/reference/" + fileName);
             }
             return String.join("\n", paths);
@@ -1093,12 +1109,13 @@ public class ImageGenerationService {
     private String saveMaskImage(MultipartFile mask) {
         if (mask == null || mask.isEmpty()) return null;
         try {
-            Path maskDir = Paths.get(uploadDir, "mask");
+            Path maskDir = Paths.get(uploadDir, "mask").toAbsolutePath().normalize();
             Files.createDirectories(maskDir);
             String uuid = UUID.randomUUID().toString().replace("-", "");
             String fileName = uuid + ".png";
             Path target = maskDir.resolve(fileName);
-            mask.transferTo(target.toFile());
+            // 使用 Files.write 而非 mask.transferTo：理由同 saveReferenceImages
+            Files.write(target, mask.getBytes());
             return "/uploads/mask/" + fileName;
         } catch (IOException e) {
             log.error("Failed to save mask image", e);
@@ -1115,5 +1132,8 @@ public class ImageGenerationService {
     /**
      * 图片生成结果 DTO。
      */
-    public record ImageGenerationResult(List<String> urls, String revisedPrompt, Long timeCostMs, Long recordId, int failedCount) {}
+    public record GeneratedImage(Long recordId, String url, Integer width, Integer height) {}
+
+    public record ImageGenerationResult(List<String> urls, String revisedPrompt, Long timeCostMs, Long recordId,
+                                        int failedCount, List<GeneratedImage> images) {}
 }

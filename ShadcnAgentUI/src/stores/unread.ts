@@ -10,6 +10,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '@/api/request'
+import type { RequestConfig } from '@/api/request'
+
+const silentPollingConfig: RequestConfig = { silent: true, skipRetry: true }
 
 export const useUnreadStore = defineStore('unread', () => {
   /** 私聊未读映射：key 为对方用户 ID，value 为未读消息数 */
@@ -29,8 +32,8 @@ export const useUnreadStore = defineStore('unread', () => {
   async function fetchAll() {
     try {
       const [privateData, groupData] = await Promise.all([
-        http.get<any, Array<{ userId: number; count: number }>>('/messages/unread-summary'),
-        http.get<any, Array<{ groupId: number; count: number }>>('/groups/unread-summary'),
+        http.get<any, Array<{ userId: number; count: number }>>('/messages/unread-summary', silentPollingConfig),
+        http.get<any, Array<{ groupId: number; count: number }>>('/groups/unread-summary', silentPollingConfig),
       ])
       const pm: Record<number, number> = {}
       for (const item of privateData ?? []) pm[item.userId] = item.count

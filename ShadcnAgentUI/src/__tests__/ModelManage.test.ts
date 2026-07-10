@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ModelManage from '@/views/admin/ModelManage.vue'
 import i18n from '@/locales'
-import { listModelsApi } from '@/api/model'
+import { createModelApi, listModelsApi } from '@/api/model'
+import { toast } from 'sonner'
 
 vi.mock('@/api/model', () => ({
   listModelsApi: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     warning: vi.fn(),
+    error: vi.fn(),
   },
 }))
 
@@ -48,6 +50,8 @@ describe('ModelManage', () => {
   beforeEach(() => {
     i18n.global.locale.value = 'zh-CN' as 'zh-CN' | 'en'
     vi.mocked(listModelsApi).mockResolvedValue([])
+    vi.mocked(createModelApi).mockResolvedValue({} as never)
+    vi.clearAllMocks()
   })
 
   it('associates model form labels with named fields', async () => {
@@ -75,5 +79,16 @@ describe('ModelManage', () => {
       expect(field.exists()).toBe(true)
       expect(field.attributes('name')).toBe(id)
     }
+  })
+
+  it('shows a validation message instead of silently skipping invalid create', async () => {
+    const wrapper = createWrapper()
+    await wrapper.find('header button').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').at(-1)?.trigger('click')
+
+    expect(createModelApi).not.toHaveBeenCalled()
+    expect(toast.warning).toHaveBeenCalledWith('请填写完整的模型信息')
   })
 })

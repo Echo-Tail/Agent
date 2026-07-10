@@ -29,7 +29,7 @@ import java.util.UUID;
 public class ChatCompletionsController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatCompletionsController.class);
-    private static final String DEFAULT_IMAGE_SIZE = "1024x1024";
+    private static final String DEFAULT_IMAGE_SIZE = "1254x1254";
     private static final String DEFAULT_IMAGE_QUALITY = "standard";
 
     private final ImageGenerationService imageGenerationService;

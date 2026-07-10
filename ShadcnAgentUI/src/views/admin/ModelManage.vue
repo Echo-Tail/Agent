@@ -42,6 +42,7 @@ const { t } = useI18n()
 const modelTypeKeys: Record<string, string> = {
   TEXT: 'modelManage.modelType.TEXT',
   IMAGE: 'modelManage.modelType.IMAGE',
+  MULTIMODAL: 'modelManage.modelType.MULTIMODAL',
 }
 
 const models = ref<AiModel[]>([])
@@ -53,6 +54,8 @@ const editingModel = ref<Partial<AiModel>>({})
 const isEditMode = ref(false)
 const showDeleteDialog = ref(false)
 const deleteTarget = ref<number | null>(null)
+const formError = ref('')
+const showApiKeyInput = ref(false)
 
 const fetchingModels = ref(false)
 const availableModelIds = ref<{ label: string; value: string }[]>([])
@@ -77,11 +80,14 @@ const apiTypeOptions = [
 ]
 
 const tokenOptions = [
-  { label: '128K', value: 128000 },
-  { label: '256K', value: 256000 },
-  { label: '512K', value: 512000 },
-  { label: '1M', value: 1000000 },
+  { label: '4K', value: 4096 },
+  { label: '16K', value: 16384 },
+  { label: '64K', value: 65536 },
+  { label: '128K', value: 131072 },
+  { label: '256K', value: 262144 },
 ]
+
+const modelTypeOptions = Object.keys(modelTypeKeys)
 
 const providerLabels: Record<string, string> = {
   openai: 'OpenAI',
@@ -119,21 +125,30 @@ function openCreate() {
     apiUrl: providerDefaults.openai.apiUrl,
     apiType: 'openai',
     apiKey: '',
-    maxTokens: 256000,
+    maxTokens: 65536,
     temperature: 0.7,
     modelType: 'TEXT',
     isDefault: false,
     enabled: true,
   }
+  formError.value = ''
+  showApiKeyInput.value = true
   availableModelIds.value = []
   showModal.value = true
 }
 
 function openEdit(model: AiModel) {
   editingModel.value = { ...model }
+  formError.value = ''
+  showApiKeyInput.value = false
   availableModelIds.value = []
   isEditMode.value = true
   showModal.value = true
+}
+
+function maskApiKey(key: string | undefined): string {
+  if (!key || key.length <= 8) return '****'
+  return key.slice(0, 8) + '********' + key.slice(-4)
 }
 
 async function handleFetchModels() {
@@ -163,19 +178,70 @@ async function handleFetchModels() {
   }
 }
 
+function hasTextValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function validateEditingModel() {
+  const model = editingModel.value
+  if (!hasTextValue(model.name) || !hasTextValue(model.provider) || !hasTextValue(model.modelName) || !hasTextValue(model.apiUrl)) {
+    return t('modelManage.formInvalid')
+  }
+  if (!hasTextValue(model.modelType) || !modelTypeOptions.includes(model.modelType as string)) {
+    return t('modelManage.formInvalid')
+  }
+  const maxTokens = Number(model.maxTokens)
+  if (!Number.isFinite(maxTokens) || maxTokens < 1) {
+    return t('modelManage.formInvalid')
+  }
+  const temperature = Number(model.temperature)
+  if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
+    return t('modelManage.formInvalid')
+  }
+  return ''
+}
+
+function buildModelPayload(): Partial<AiModel> {
+  const model = editingModel.value
+  return {
+    ...model,
+    name: model.name?.trim(),
+    provider: model.provider?.trim(),
+    modelName: model.modelName?.trim(),
+    apiUrl: model.apiUrl?.trim(),
+    apiType: model.apiType?.trim() || 'openai',
+    modelType: model.modelType?.trim() || 'TEXT',
+    maxTokens: Number(model.maxTokens),
+    temperature: Number(model.temperature),
+  }
+}
+
 async function handleSave() {
+  if (saving.value) return
+  const validationError = validateEditingModel()
+  if (validationError) {
+    toast.warning(validationError)
+    return
+  }
   saving.value = true
+  const payload = buildModelPayload()
   try {
-    if (isEditMode.value && editingModel.value.id) {
-      await updateModelApi(editingModel.value.id, editingModel.value)
+    if (isEditMode.value && payload.id) {
+      await updateModelApi(payload.id, payload)
       toast.success(t('toast.updateSuccess'))
     } else {
-      await createModelApi(editingModel.value)
+      await createModelApi(payload)
       toast.success(t('toast.createSuccess'))
     }
     showModal.value = false
     await fetchModels()
-  } catch { /* interceptor handles toast */ } finally {
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : t('error.saveFailed')
+    // 去除可能混入的代码前缀，只保留友好的用户提示
+    const cleanMsg = msg.replace(/^(Error|TypeError|AxiosError):\s*/i, '')
+    formError.value = cleanMsg
+    toast.error(cleanMsg)
+  } finally {
     saving.value = false
   }
 }
@@ -233,6 +299,7 @@ async function handleDelete() {
             <td class="px-3 py-2.5 font-medium max-w-[200px] truncate" :title="m.name">{{ m.name }}</td>
             <td class="px-3 py-2.5 whitespace-nowrap">
               <Badge v-if="m.modelType === 'IMAGE'" variant="secondary" class="text-xs whitespace-nowrap">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
+              <Badge v-else-if="m.modelType === 'MULTIMODAL'" variant="outline" class="text-xs whitespace-nowrap">{{ $t(modelTypeKeys.MULTIMODAL) }}</Badge>
               <span v-else class="text-xs text-muted-foreground whitespace-nowrap">{{ $t(modelTypeKeys.TEXT) }}</span>
             </td>
             <td class="px-3 py-2.5 text-muted-foreground">{{ providerLabels[m.provider] || m.provider }}</td>
@@ -275,6 +342,9 @@ async function handleDelete() {
           <DialogTitle>{{ isEditMode ? $t('modelManage.editModel') : $t('modelManage.addModel') }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div v-if="formError" class="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-3 py-2 text-sm">
+            {{ formError }}
+          </div>
           <div class="space-y-2">
             <label for="model-name" class="text-sm font-medium">{{ $t('modelManage.form.name') }} <span class="text-destructive">*</span></label>
             <Input id="model-name" name="model-name" v-model="editingModel.name" placeholder="GPT-4o、DeepSeek-V3" />
@@ -283,7 +353,7 @@ async function handleDelete() {
             <div class="space-y-2">
               <label for="model-provider" class="text-sm font-medium">{{ $t('modelManage.form.provider') }} <span class="text-destructive">*</span></label>
               <Select v-model="editingModel.provider">
-                <SelectTrigger id="model-provider" name="model-provider"><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
+                <SelectTrigger id="model-provider" name="model-provider" class="w-full"><SelectValue :placeholder="$t('common.select')" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in providerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
@@ -292,10 +362,9 @@ async function handleDelete() {
             <div class="space-y-2">
               <label for="model-type" class="text-sm font-medium">{{ $t('modelManage.form.modelType') }}</label>
               <Select v-model="editingModel.modelType">
-                <SelectTrigger id="model-type" name="model-type"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="model-type" name="model-type" class="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="TEXT">{{ $t(modelTypeKeys.TEXT) }}</SelectItem>
-                  <SelectItem value="IMAGE">{{ $t(modelTypeKeys.IMAGE) }}</SelectItem>
+                  <SelectItem v-for="type in modelTypeOptions" :key="type" :value="type">{{ $t(modelTypeKeys[type]) }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -327,7 +396,7 @@ async function handleDelete() {
             </div>
           </div>
           <div class="space-y-2">
-            <label for="model-api-url" class="text-sm font-medium">{{ $t('modelManage.form.apiUrl') }}</label>
+            <label for="model-api-url" class="text-sm font-medium">{{ $t('modelManage.form.apiUrl') }} <span class="text-destructive">*</span></label>
             <Input id="model-api-url" name="model-api-url" v-model="editingModel.apiUrl" placeholder="https://api.openai.com" />
           </div>
           <div class="grid grid-cols-2 gap-4">
@@ -346,8 +415,21 @@ async function handleDelete() {
             </div>
           </div>
           <div class="space-y-2">
-            <label for="model-api-key" class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}</label>
-            <Input id="model-api-key" name="model-api-key" v-model="editingModel.apiKey" type="password" placeholder="sk-..." />
+            <label class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}</label>
+            <div v-if="isEditMode && editingModel.apiKey && !showApiKeyInput"
+              class="cursor-pointer" @click="showApiKeyInput = true; editingModel.apiKey = ''"
+            >
+              <code class="text-sm font-mono bg-muted px-2.5 py-1.5 rounded border tracking-wider select-all">{{ maskApiKey(editingModel.apiKey) }}</code>
+            </div>
+            <Input
+              v-else
+              id="model-api-key"
+              name="model-api-key"
+              v-model="editingModel.apiKey"
+              type="password"
+              placeholder="sk-..."
+              @focus="showApiKeyInput = true"
+            />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">

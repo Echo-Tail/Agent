@@ -4,6 +4,7 @@
     "chat": "Chat",
     "agentPlaza": "Agent Plaza",
     "imageGeneration": "Image Generation",
+    "imageSuperResolution": "Image Upscaling",
     "history": "History",
     "myTickets": "My Tickets",
     "knowledgeBase": "Knowledge Base",
@@ -28,6 +29,8 @@
     "chat": "Chat",
     "agentPlaza": "Agent Plaza",
     "imageGeneration": "Image Generation",
+    "imageSuperResolution": "Image Upscaling",
+    "imageSuperResolution": "Image Upscaling",
     "imageGenDesc": "Generate images using gpt-image-2 model",
     "createAgent": "Create Agent",
     "groupChat": "Group Chat",
@@ -599,7 +602,8 @@
     },
     "modelType": {
       "TEXT": "Text",
-      "IMAGE": "Image"
+      "IMAGE": "Image",
+      "MULTIMODAL": "Multimodal"
     },
     "form": {
       "name": "Model Name",

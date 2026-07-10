@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useUnreadStore } from '@/stores/unread'
+import { getActiveSuperResolutionJobCount } from '@/api/image'
 import { useI18n } from 'vue-i18n'
 import { setLocale, getCurrentLocale } from '@/locales'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ import {
   ImagePlus,
   PanelsTopLeft,
   ScrollText,
+  ScanLine,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -47,6 +49,7 @@ const { t } = useI18n()
 
 const sidebarCollapsed = ref(false)
 const mobileSidebarOpen = ref(false)
+const activeUpscaleCount = ref(0)
 const currentLocale = ref(getCurrentLocale())
 
 function toggleLocale() {
@@ -77,6 +80,7 @@ const pageTitleKey: Record<string, string> = {
   PublicAssets: 'pageTitle.publicAssets',
   PromptLibrary: 'pageTitle.promptLibrary',
   AmazonImageWorkbench: 'pageTitle.amazonImageWorkbench',
+  ImageSuperResolution: 'pageTitle.imageSuperResolution',
   Logs: 'pageTitle.logs',
   Settings: 'pageTitle.settings',
 }
@@ -103,6 +107,7 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
     { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
+    { translationKey: 'nav.imageSuperResolution', key: 'ImageSuperResolution', icon: ScanLine },
     { translationKey: 'nav.productProfiles', key: 'ProductProfileList', icon: FileText },
     { translationKey: 'nav.amazonImageWorkbench', key: 'AmazonImageWorkbench', icon: PanelsTopLeft },
     { translationKey: 'nav.imageHistory', key: 'ImageHistory', icon: History },
@@ -145,17 +150,24 @@ function navigate(key: string) {
 }
 
 let unreadPollTimer: ReturnType<typeof setInterval> | null = null
+let upscalePollTimer: ReturnType<typeof setInterval> | null = null
+
+async function refreshUpscaleCount() {
+  try {
+    activeUpscaleCount.value = await getActiveSuperResolutionJobCount()
+  } catch { /* keep navigation usable when the API is unavailable */ }
+}
 
 onMounted(() => {
   unread.fetchAll()
-  unreadPollTimer = setInterval(() => unread.fetchAll(), 10000)
+  refreshUpscaleCount()
+  unreadPollTimer = setInterval(() => unread.fetchAll(), 30000)
+  upscalePollTimer = setInterval(refreshUpscaleCount, 30000)
 })
 
 onUnmounted(() => {
-  if (unreadPollTimer) {
-    clearInterval(unreadPollTimer)
-    unreadPollTimer = null
-  }
+  if (unreadPollTimer) clearInterval(unreadPollTimer)
+  if (upscalePollTimer) clearInterval(upscalePollTimer)
 })
 
 function handleLogout() {
@@ -204,7 +216,7 @@ const userAvatar = computed(() => {
             :key="item.key"
             @click="navigate(item.key)"
           :class="[
-            'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors',
+            'relative flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors',
             activeKey === item.key
               ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
               : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
@@ -221,7 +233,10 @@ const userAvatar = computed(() => {
           <span
             v-else-if="item.key === 'GroupChat' && unread.totalGroup() > 0"
             class="absolute right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1"
-          >{{ unread.totalGroup() > 99 ? '99+' : unread.totalGroup() }}</span>
+          >{{ unread.totalGroup() > 99 ? '99+' : unread.totalGroup() }}</span>          <span
+            v-else-if="item.key === 'ImageSuperResolution' && activeUpscaleCount > 0"
+            class="absolute right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1"
+          >{{ activeUpscaleCount > 99 ? '99+' : activeUpscaleCount }}</span>
         </button>
         </template>
       </nav>

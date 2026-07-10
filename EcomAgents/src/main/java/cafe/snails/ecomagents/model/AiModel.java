@@ -1,6 +1,5 @@
 package cafe.snails.ecomagents.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -43,7 +42,6 @@ public class AiModel {
 
     /** API 密钥 */
     @Column(name = "api_key", length = 500)
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String apiKey;
 
     /** API 格式类型：openai / anthropic */
@@ -59,7 +57,7 @@ public class AiModel {
     /** 最大输出 token 数 */
     @Column(name = "max_tokens")
     @Builder.Default
-    private Integer maxTokens = 256000;
+    private Integer maxTokens = 65536;
 
     /** 生成温度，控制随机性 */
     @Builder.Default
@@ -70,7 +68,7 @@ public class AiModel {
     @Column(name = "is_default")
     private Boolean isDefault = false;
 
-    /** 模型类型：TEXT / IMAGE */
+    /** 模型类型：TEXT / IMAGE / MULTIMODAL */
     @Column(name = "model_type", length = 10)
     @Builder.Default
     private String modelType = "TEXT";

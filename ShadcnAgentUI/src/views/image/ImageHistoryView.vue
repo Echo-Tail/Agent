@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { toast } from 'sonner'
 import PageHeader from '@/components/PageHeader.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -17,7 +19,7 @@ import { importFromRecord, listSpaces } from '@/api/assets'
 import type { AssetSpace } from '@/api/assets'
 import { createPrompt as createPromptApi, setCoverRef } from '@/api/prompts'
 import {
-  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, X, Plus, Upload, Eye,
+  Loader2, ImageIcon, Download, Copy, Check, ZoomIn, Trash2, Plus, Upload, Eye,
 } from 'lucide-vue-next'
 
 const records = ref<ImageRecord[]>([])
@@ -28,12 +30,7 @@ const totalElements = ref(0)
 const promptFilter = ref('')
 const copiedRecordId = ref<number | null>(null)
 
-// Lightbox
-const lightboxOpen = ref(false)
-const lightboxUrl = ref('')
-const zoomLevel = ref(1)
-const panX = ref(0)
-const panY = ref(0)
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox: showLightbox } = useImageLightbox()
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalElements.value / pageSize)))
 
@@ -52,6 +49,7 @@ const categories = [
 const modeLabels: Record<string, string> = {
   GENERATE: '文生图',
   EDIT: '图生图',
+  SUPER_RESOLUTION: '超分',
 }
 
 function imageUrl(path: string): string {
@@ -161,25 +159,9 @@ async function handleUploadToAssets() {
 }
 
 function openLightbox(url: string) {
-  lightboxUrl.value = imageUrl(url)
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
-  lightboxOpen.value = true
+  showLightbox(imageUrl(url))
 }
 
-function closeLightbox() {
-  lightboxOpen.value = false
-  lightboxUrl.value = ''
-}
-
-function handleWheel(e: WheelEvent) {
-  e.preventDefault()
-  const delta = e.deltaY > 0 ? -0.1 : 0.1
-  zoomLevel.value = Math.max(0.5, Math.min(5, zoomLevel.value + delta))
-}
-
-// ── 保存到提示词库 ──
 const saveDialogOpen = ref(false)
 const saveTarget = ref<ImageRecord | null>(null)
 const saveCategory = ref('车载主机')
@@ -374,39 +356,7 @@ onMounted(loadRecords)
       <p>暂无生成记录</p>
     </div>
 
-    <!-- Lightbox -->
-    <Teleport to="body">
-      <div
-        v-if="lightboxOpen"
-        class="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
-        @click="closeLightbox"
-        @wheel.prevent="handleWheel"
-      >
-        <Button variant="ghost" size="icon" class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70"
-          @click.stop="closeLightbox">
-          <X class="h-5 w-5" />
-        </Button>
-
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full px-3 py-1.5 text-white text-xs">
-          <Button variant="ghost" size="sm" class="h-6 text-white hover:bg-white/20" @click.stop="zoomLevel = Math.max(0.5, zoomLevel - 0.2)">-</Button>
-          <span>{{ Math.round(zoomLevel * 100) }}%</span>
-          <Button variant="ghost" size="sm" class="h-6 text-white hover:bg-white/20" @click.stop="zoomLevel = Math.min(5, zoomLevel + 0.2)">+</Button>
-          <Button variant="ghost" size="sm" class="h-6 text-white hover:bg-white/20 ml-2" @click.stop="zoomLevel = 1; panX = 0; panY = 0">重置</Button>
-        </div>
-
-        <img
-          v-if="lightboxUrl"
-          :src="lightboxUrl"
-          class="max-w-[90vw] max-h-[90vh] w-auto h-auto transition-transform duration-100 cursor-grab active:cursor-grabbing select-none"
-          :style="{
-            transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
-          }"
-          alt="Preview"
-          draggable="false"
-          @click.stop
-        />
-      </div>
-    </Teleport>
+    <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
     <!-- ══════════ 保存到提示词库 dialog ══════════ -->
     <Dialog v-model:open="saveDialogOpen">
       <DialogContent class="sm:max-w-[480px]" aria-describedby="save-prompt-desc">
@@ -490,7 +440,6 @@ onMounted(loadRecords)
             <Select v-if="spaces.length > 0" v-model="selectedSpaceId">
               <SelectTrigger><SelectValue placeholder="选择空间（可选）" /></SelectTrigger>
               <SelectContent>
-                <SelectItem :value="undefined">不指定空间</SelectItem>
                 <SelectItem v-for="s in spaces" :key="s.id" :value="s.id">{{ s.name }}</SelectItem>
               </SelectContent>
             </Select>

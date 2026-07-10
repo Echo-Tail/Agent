@@ -29,6 +29,7 @@ const router = createRouter({
         { path: 'agents', name: 'AgentList', component: () => import('@/views/agent/AgentList.vue') },
         { path: 'agents/plaza', name: 'AgentPlaza', component: () => import('@/views/agent/AgentPlaza.vue') },
         { path: 'agents/image', name: 'ImageGeneration', component: () => import('@/views/image/ImageGenerationView.vue') },
+        { path: 'images/super-resolution', name: 'ImageSuperResolution', component: () => import('@/views/image/ImageSuperResolutionView.vue') },
         { path: 'agents/products', name: 'ProductProfileList', component: () => import('@/views/product/ProductProfileListView.vue') },
         { path: 'agents/products/:id', name: 'ProductProfileDetail', component: () => import('@/views/product/ProductProfileDetailView.vue') },
         { path: 'agents/amazon-images', name: 'AmazonImageWorkbench', component: () => import('@/views/amazon/AmazonImageWorkbenchView.vue') },

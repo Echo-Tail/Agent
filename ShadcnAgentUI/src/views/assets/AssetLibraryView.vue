@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/PageHeader.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -15,6 +17,7 @@ import { toast } from 'sonner'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 
 const { t } = useI18n()
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 const auth = useAuthStore()
 
 // Navigation
@@ -638,7 +641,8 @@ function imageUrl(path: string): string {
           <img
             :key="'asset-preview-' + assetPreviewKey"
             :src="assetPreviewUrls[assetPreviewIndex]"
-            class="max-h-[75vh] max-w-full object-contain rounded-lg p-6"
+            @click="openLightbox(assetPreviewUrls[assetPreviewIndex], assets[assetPreviewIndex]?.fileName ?? 'Image preview')"
+            class="max-h-[75vh] max-w-full cursor-zoom-in object-contain rounded-lg p-6"
             :alt="assets[assetPreviewIndex]?.fileName ?? ''"
           />
           <Button
@@ -773,7 +777,8 @@ function imageUrl(path: string): string {
           <img
             :key="'preview-img-' + previewKey"
             :src="previewUrls[previewIndex]"
-            class="max-h-[75vh] max-w-full object-contain rounded-lg p-6"
+            @click="openLightbox(previewUrls[previewIndex], uploadFiles[previewIndex]?.name ?? 'Image preview')"
+            class="max-h-[75vh] max-w-full cursor-zoom-in object-contain rounded-lg p-6"
             :alt="uploadFiles[previewIndex]?.name ?? ''"
           />
           <Button
@@ -804,4 +809,5 @@ function imageUrl(path: string): string {
     </Dialog>
 
   </div>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>
