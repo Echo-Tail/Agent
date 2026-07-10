@@ -36,14 +36,16 @@
 ### 📚 知识库
 
 - **文档管理** — 管理员创建知识库，普通用户管理文档（TXT、MD、JSON 格式），支持上传、编辑和删除
-- **向量检索** — PgVector 全文语义检索 + 操作审计日志
+- **向量检索** — 基于 Ollama 运行 bge-m3 模型的本地嵌入方案，文档分块后生成向量，支持语义相似度检索 + 操作审计日志
 - **RAG 模式** — 支持 **AGENTIC**（Agent 自主检索）和 **GENERIC**（自动注入上下文）两种模式
 
 ### 🖼️ 多媒体生成
 
 - **图片生成** — 集成 gpt-image-2 模型，支持文本生图、风格选择、参数调节
 - **图片超分辨率** — 支持将图片放大 2x/4x，基于 Replicate API，可引用历史生成记录或直接上传原图，异步 Job 管理，进度追踪
-- **画廊** — 用户可将生成的图片发布到画廊，分享作品、点赞互动
+- **生成历史** — 查看过往图片生成记录，可选作为超分辨率源图
+- **素材库** — 公共素材管理，支持上传和引用
+- **提示词库** — 管理常用图片生成提示词模板
 
 ### 💬 社交协作
 
@@ -56,6 +58,8 @@
 - **工单系统** — 用户提交工单，管理员处理反馈，支持工单状态流转和变更记录
 - **系统日志** — 按模块/操作类型/用户筛选的系统操作审计日志
 - **Token 用量统计** — 记录和查看各模型 Token 消耗情况，按模型和用户维度统计
+- **产品资料** — AI 驱动的产品资料生成与管理
+- **Amazon 图像工作台** — Amazon 商品图批量处理工作台
 - **国际化 (i18n)** — 中文/英文界面切换
 
 ## 技术栈
@@ -70,8 +74,8 @@
 | ORM | Hibernate 7 + Spring Data JPA |
 | 认证 | JWT (jjwt 0.12.6) + Spring Security |
 | 智能体框架 | [AgentScope Java SDK](https://java.agentscope.io/) 1.1.0-RC1 |
-| 向量检索 | PgVector (pgvector) |
-| 图片生成 | gpt-image-2 / DALL-E / Stable Diffusion |
+| 向量检索 | Ollama bge-m3（本地嵌入方案）|
+| 图片生成 | gpt-image-2 / Replicate 超分辨率 |
 | 构建 | Gradle |
 | 测试 | JUnit 5 + Mockito（70+ 测试类） |
 
@@ -129,8 +133,12 @@ Agent/
 │           ├── dashboard/               # DashboardView — 系统概览
 │           ├── group/                   # GroupListView/GroupChatView — 群聊社交
 │           ├── history/                 # HistoryView — 历史记录
-│           ├── image/                   # ImageGenerationView/GalleryView/ImageSuperResolutionView
-│           │                            # 图片生成、超分辨率、画廊
+│           ├── image/                   # ImageGenerationView/ImageSuperResolutionView/
+│           │                            # ImageHistoryView — 图片生成、超分、历史
+│           ├── assets/                  # AssetLibraryView — 素材库
+│           ├── prompts/                 # PromptLibraryView — 提示词库
+│           ├── product/                 # ProductProfileListView/DetailView — 产品资料
+│           ├── amazon/                  # AmazonImageWorkbenchView — 图像工作台
 │           ├── knowledge/               # KnowledgeBase — 知识库管理
 │           ├── log/                     # LogViewer — 系统操作审计日志
 │           ├── login/                   # 登录
@@ -296,15 +304,12 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 | PUT | `/v1/knowledge-bases/{kbId}/documents/{docId}` | 更新文档内容 |
 | DELETE | `/v1/knowledge-bases/{kbId}/documents/{docId}` | 删除文档 |
 
-### 图片生成与画廊
+### 图片生成
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/v1/image/generate` | 请求图片生成 |
 | GET | `/v1/image/history` | 图片生成历史 |
-| GET | `/v1/gallery/items` | 画廊作品列表 |
-| POST | `/v1/gallery/items` | 发布作品到画廊 |
-| DELETE | `/v1/gallery/items/{id}` | 删除画廊作品 |
 | POST | `/v1/image/super-resolution` | 图片超分辨率（直接处理） |
 | POST | `/v1/image/super-resolution/jobs` | 创建超分辨率 Job |
 | POST | `/v1/image/super-resolution/jobs/upload` | 上传图片并创建超分辨率 Job |
@@ -312,10 +317,6 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 | GET | `/v1/image/super-resolution/jobs` | 超分辨率 Job 列表 |
 | GET | `/v1/image/super-resolution/jobs/active-count` | 进行中的 Job 数量 |
 | GET | `/v1/image/super-resolution/sources` | 可选为超分辨率源的历史记录 |
-| GET | `/v1/gallery/items` | 画廊作品列表 |
-| POST | `/v1/gallery/items` | 发布作品到画廊 |
-| DELETE | `/v1/gallery/items/{id}` | 删除画廊作品 |
-| POST | `/v1/gallery/items/{id}/like` | 点赞/取消点赞 |
 
 ### 群聊
 
@@ -385,7 +386,7 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 - **权限控制**: Vue Router `beforeEach` + 后端 `JwtAuthenticationFilter` 双重控制，管理员/普通用户角色分离
 - **Agent 所有权**: 用户只能修改自己创建的 Agent，可通过 "Agent 广场" 使用他人的 Agent
 - **技能系统**: 全局技能池（文件系统 `workspace/skills/{name}/SKILL.md`，YAML frontmatter），创建 Agent 时复制绑定到工作空间
-- **知识库**: 管理员创建/删除，普通用户管理文档，PgVector 向量化检索，全程操作审计
+- **知识库**: 管理员创建/删除，普通用户管理文档，Ollama bge-m3 本地向量检索，全程操作审计
 - **国际化**: 基于 Vue I18n 的运行时切换，支持中文/英文，通过 Pinia store 持久化语言偏好
 - **代码索引**: 项目配置了 [CodeGraph](https://github.com/getcodegraph/codegraph) MCP 服务，提供符号查询、调用链分析和影响范围评估
 

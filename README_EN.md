@@ -34,14 +34,16 @@ A full-stack platform for managing, configuring, and interacting with AI agents 
 ### 📚 Knowledge Base
 
 - **Document Management** — Admin-managed knowledge bases with document upload (TXT, MD, JSON), editing, and deletion
-- **Vector Search** — PgVector full-text semantic retrieval with full operation audit trail
+- **Vector Search** — Local embedding via Ollama bge-m3 model; documents chunked and vectorized for semantic similarity search + full operation audit trail
 - **RAG Modes** — Supports **AGENTIC** (agent decides when to retrieve) and **GENERIC** (auto-inject context before each message)
 
 ### 🖼️ Media Generation
 
 - **Image Generation** — Integrated gpt-image-2 model with text-to-image, style selection, and parameter tuning
 - **Image Super Resolution** — Upscale images 2x/4x via Replicate API; supports referencing historical generation records or direct upload; async job management with progress tracking
-- **Gallery** — Share generated images, view and like community works
+- **Generation History** — Browse past generation records, optionally use as super resolution source
+- **Asset Library** — Public asset management with upload and referencing
+- **Prompt Library** — Manage reusable image generation prompt templates
 
 ### 💬 Social Collaboration
 
@@ -54,6 +56,8 @@ A full-stack platform for managing, configuring, and interacting with AI agents 
 - **Ticket System** — User-submitted tickets with admin processing, status transitions, and change records
 - **System Logs** — Filterable operation audit logs by module, action type, and user
 - **Token Usage** — Track and view token consumption across models, aggregated by model and user
+- **Product Profiles** — AI-powered product profile generation and management
+- **Amazon Image Workbench** — Batch processing workbench for Amazon product images
 - **i18n** — Chinese/English UI switching
 
 ## Tech Stack
@@ -68,8 +72,8 @@ A full-stack platform for managing, configuring, and interacting with AI agents 
 | ORM | Hibernate 7 + Spring Data JPA |
 | Auth | JWT (jjwt 0.12.6) + Spring Security |
 | Agent Framework | [AgentScope Java SDK](https://java.agentscope.io/) 1.1.0-RC1 |
-| Vector Search | PgVector (pgvector) |
-| Image Generation | gpt-image-2 / DALL-E / Stable Diffusion |
+| Vector Search | Ollama bge-m3 (local embedding) |
+| Image Generation | gpt-image-2 / Replicate super resolution |
 | Build | Gradle |
 | Testing | JUnit 5 + Mockito (70+ test classes) |
 
@@ -127,7 +131,12 @@ Agent/
 │           ├── dashboard/               # DashboardView — system overview
 │           ├── group/                   # GroupListView/GroupChatView — group chat
 │           ├── history/                 # HistoryView — chat history
-│           ├── image/                   # ImageGenerationView/GalleryView/ImageSuperResolutionView
+│           ├── image/                   # ImageGenerationView/ImageSuperResolutionView/
+│           │                            # ImageHistoryView — generation, upscale, history
+│           ├── assets/                  # AssetLibraryView — asset library
+│           ├── prompts/                 # PromptLibraryView — prompt library
+│           ├── product/                 # ProductProfileListView/DetailView
+│           ├── amazon/                  # AmazonImageWorkbenchView
 │           ├── knowledge/               # KnowledgeBase
 │           ├── log/                     # LogViewer — system audit log
 │           ├── login/                   # Login
@@ -293,7 +302,7 @@ The frontend dev server proxies `/v1/*` and `/chat/*` requests to `http://localh
 | PUT | `/v1/knowledge-bases/{kbId}/documents/{docId}` | Update document |
 | DELETE | `/v1/knowledge-bases/{kbId}/documents/{docId}` | Delete document |
 
-### Image Generation & Gallery
+### Image Generation
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -306,10 +315,6 @@ The frontend dev server proxies `/v1/*` and `/chat/*` requests to `http://localh
 | GET | `/v1/image/super-resolution/jobs` | List super resolution jobs |
 | GET | `/v1/image/super-resolution/jobs/active-count` | Active job count |
 | GET | `/v1/image/super-resolution/sources` | Eligible source images |
-| GET | `/v1/gallery/items` | Gallery items |
-| POST | `/v1/gallery/items` | Publish to gallery |
-| DELETE | `/v1/gallery/items/{id}` | Delete gallery item |
-| POST | `/v1/gallery/items/{id}/like` | Toggle like |
 
 ### Group Chat
 
@@ -380,7 +385,7 @@ The platform supports multiple users interacting with the same agent. Data isola
 - **Access Control**: Dual guard via Vue Router `beforeEach` + `JwtAuthenticationFilter`; admin/user role separation
 - **Agent Ownership**: Users can only modify agents they created; "Agent Plaza" allows using others' agents for conversation
 - **Skills**: Global skill pool stored in `workspace/skills/{name}/SKILL.md` with YAML frontmatter; copied per-agent on binding
-- **Knowledge Base**: Admin-managed lifecycle with PgVector vector search and full operation audit trail
+- **Knowledge Base**: Admin-managed lifecycle with Ollama bge-m3 local vector search and full operation audit trail
 - **i18n**: Runtime-switchable Chinese/English via Vue I18n, language preference persisted in Pinia store
 - **Code Index**: [CodeGraph](https://github.com/getcodegraph/codegraph) MCP service configured for symbol search, call chain analysis, and impact assessment
 
