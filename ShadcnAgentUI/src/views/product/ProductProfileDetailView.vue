@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -50,6 +52,7 @@ import { VisuallyHidden } from 'reka-ui'
 
 const route = useRoute()
 const router = useRouter()
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 const profileId = Number(route.params.id)
 
 const profile = ref({} as ProductProfile)
@@ -959,7 +962,7 @@ onMounted(loadAll)
           <div v-else class="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             <div v-for="img in images" :key="img.id" class="group relative overflow-hidden rounded-md border bg-card">
               <div class="aspect-square">
-                <img :src="imageUrl(img.filePath)" :alt="img.fileName" class="h-full w-full object-cover" />
+                <img :src="imageUrl(img.filePath)" :alt="img.fileName" class="h-full w-full cursor-zoom-in object-cover" @click="openLightbox(imageUrl(img.filePath), img.fileName)" />
               </div>
               <div class="absolute inset-0 flex items-start justify-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="destructive" size="icon" class="h-7 w-7" @click="deleteImage(img.id)">
@@ -989,4 +992,5 @@ onMounted(loadAll)
       </DialogFooter>
     </DialogContent>
   </Dialog>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>

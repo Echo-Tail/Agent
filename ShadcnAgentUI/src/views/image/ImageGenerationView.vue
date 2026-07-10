@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
-import EmptyState from '@/components/EmptyState.vue'
+import AspectRatioIcon from '@/components/AspectRatioIcon.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,20 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
-  Check, Copy, Download, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle,
-  Search, ChevronLeft, ChevronRight, ZoomIn, X,
+  Check, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle, Download,
+  ZoomIn,
 } from 'lucide-vue-next'
-import { generateImage, editImage } from '@/api/image'
+import { generateImage, editImage, createSuperResolutionJob, listSuperResolutionJobs } from '@/api/image'
 import { getImageModelsApi } from '@/api/model'
 import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import type { ImageRecord, ImageGenerationResult } from '@/api/image'
+import type { GeneratedImage, ImageGenerationResult, SuperResolutionJob } from '@/api/image'
 
 const { t } = useI18n()
 
@@ -38,7 +38,7 @@ const selectedModelId = ref<number | undefined>(undefined)
 
 // ── Form ──
 const prompt = ref('')
-const size = ref('1024x1024')
+const size = ref('1254x1254')
 const quality = ref('high')   // default: high
 const imageCount = ref(1)
 const editImages = ref<File[]>([])
@@ -49,10 +49,19 @@ const maskPreviewUrl = ref<string>('')
 // ── Generation ──
 const generating = ref(false)
 const result = ref<ImageGenerationResult | null>(null)
+const superResolutionJobs = ref<SuperResolutionJob[]>([])
+const hiddenTerminalJobIds = new Set<number>()
+const upscaleConfirmOpen = ref(false)
+const selectedUpscale = ref<{ image: GeneratedImage; factor: number } | null>(null)
+const submittingUpscale = ref(false)
 const timerSeconds = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
+let queuePollInterval: ReturnType<typeof setInterval> | null = null
 
-onBeforeUnmount(() => stopTimer())
+onBeforeUnmount(() => {
+  stopTimer()
+  if (queuePollInterval) clearInterval(queuePollInterval)
+})
 
 function startTimer() {
   timerSeconds.value = 0
@@ -67,27 +76,20 @@ function stopTimer() {
 }
 
 // ── Image viewer lightbox ──
-const copiedRecordId = ref<number | null>(null)
 const lightboxOpen = ref(false)
 const lightboxUrl = ref('')
-const zoomLevel = ref(1)
-const panX = ref(0)
-const panY = ref(0)
+
 
 // ── Size options with descriptions ──
 const sizeOptions = [
-  { value: '1024x1024', label: '1024 × 1024 — 方形' },
-  { value: '1504x1504', label: '1504 × 1504 — 方形' },
-  { value: '1536x1024', label: '1536 × 1024 — 横向' },
-  { value: '1024x1536', label: '1024 × 1536 — 纵向' },
-  { value: '1600x1600', label: '1600 × 1600 — 方形' },
-  { value: '2048x2048', label: '2048 × 2048 — 方形 2K' },
-  { value: '2048x1152', label: '2048 × 1152 — 横向 2K' },
-  { value: '3840x2160', label: '3840 × 2160 — 横向 4K' },
-  { value: '2160x3840', label: '2160 × 3840 — 纵向 4K' },
-  { value: 'auto', label: 'auto — 自动' },
+  { value: '1024x1024', label: '1024x1024', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1254x1254', label: '1254x1254', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1672x941', label: '1672x941', ratio: '16 / 9', ratioLabel: '16:9' },
+  { value: '1536x1024', label: '1536x1024', ratio: '3 / 2', ratioLabel: '3:2' },
+  { value: '1024x1536', label: '1024x1536', ratio: '2 / 3', ratioLabel: '2:3' },
+  { value: '1448x1086', label: '1448x1086', ratio: '4 / 3', ratioLabel: '4:3' },
+  { value: '1659x948', label: '1659x948', ratio: '7 / 4', ratioLabel: '7:4' },
 ]
-
 const qualityOptions = [
   { value: 'low', label: 'low' },
   { value: 'medium', label: 'medium' },
@@ -95,6 +97,7 @@ const qualityOptions = [
   { value: 'auto', label: 'auto' },
 ]
 
+const selectedSizeOption = computed(() => sizeOptions.find(opt => opt.value === size.value) ?? sizeOptions[0])
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
 const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
 const resultImageUrl = (url: string) => {
@@ -105,7 +108,64 @@ const resultImageUrl = (url: string) => {
 }
 
 // ── Lifecycle ──
+const generatedImages = computed<GeneratedImage[]>(() => result.value?.images ?? [])
+
+function canUpscale(image: GeneratedImage): boolean {
+  if (!image.width || !image.height) return false
+  return Math.max(image.width, image.height) <= 1920 && Math.min(image.width, image.height) <= 1080
+}
+
+function availableUpscaleFactors(image: GeneratedImage): number[] {
+  return canUpscale(image) ? [2, 3, 4] : []
+}
+
+function updateGeneratedDimensions(image: GeneratedImage, event: Event) {
+  const element = event.target as HTMLImageElement
+  if (!image.width || !image.height) {
+    image.width = element.naturalWidth
+    image.height = element.naturalHeight
+  }
+}
+
+function requestUpscale(image: GeneratedImage, factor: number) {
+  selectedUpscale.value = { image, factor }
+  upscaleConfirmOpen.value = true
+}
+
+async function confirmUpscale() {
+  if (!selectedUpscale.value || submittingUpscale.value) return
+  submittingUpscale.value = true
+  try {
+    const job = await createSuperResolutionJob(selectedUpscale.value.image.recordId, selectedUpscale.value.factor, 'IMAGE_GENERATION')
+    superResolutionJobs.value = [job, ...superResolutionJobs.value.filter(item => item.id !== job.id)]
+    upscaleConfirmOpen.value = false
+    selectedUpscale.value = null
+    toast.success('超分任务已加入队列')
+  } finally {
+    submittingUpscale.value = false
+  }
+}
+
+async function loadSuperResolutionJobs() {
+  try {
+    const jobs = await listSuperResolutionJobs('IMAGE_GENERATION')
+    superResolutionJobs.value = jobs.filter(job =>
+      !hiddenTerminalJobIds.has(job.id) || job.status === 'PENDING' || job.status === 'RUNNING',
+    )
+  } catch { /* request interceptor handles errors */ }
+}
+
+function hideCompletedUpscaleJobs() {
+  superResolutionJobs.value.forEach(job => {
+    if (job.status === 'SUCCEEDED' || job.status === 'FAILED') hiddenTerminalJobIds.add(job.id)
+  })
+  superResolutionJobs.value = superResolutionJobs.value.filter(job =>
+    job.status === 'PENDING' || job.status === 'RUNNING',
+  )
+}
 onMounted(async () => {
+  await loadSuperResolutionJobs()
+  queuePollInterval = setInterval(loadSuperResolutionJobs, 10000)
   try {
     const models = await getImageModelsApi()
     hasModel.value = models.length > 0
@@ -124,6 +184,7 @@ onMounted(async () => {
 async function handleGenerate() {
   if (!canGenerate.value || generating.value) return
   generating.value = true
+  hideCompletedUpscaleJobs()
   result.value = null
   startTimer()
   try {
@@ -188,18 +249,7 @@ const assetUploadSpaceId = ref<number | undefined>(undefined)
 const uploadingAsset = ref(false)
 const assetSpaces = ref<AssetSpace[]>([])
 
-function openAssetUpload(record: ImageRecord) {
-  assetUploadRecordId.value = record.id
-  assetUploadSpaceId.value = undefined
-  assetUploadOpen.value = true
-  loadAssetSpaces()
-}
 
-async function loadAssetSpaces() {
-  try {
-    assetSpaces.value = await listSpaces()
-  } catch { /* ignore */ }
-}
 
 async function submitAssetUpload() {
   if (!assetUploadRecordId.value) return
@@ -293,27 +343,7 @@ function imageUrl(path: string): string {
 // ── Lightbox ──
 function openLightbox(url: string) {
   lightboxUrl.value = resultImageUrl(url)
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
   lightboxOpen.value = true
-}
-
-function closeLightbox() {
-  lightboxOpen.value = false
-  lightboxUrl.value = ''
-}
-
-function handleWheel(e: WheelEvent) {
-  e.preventDefault()
-  const delta = e.deltaY > 0 ? -0.1 : 0.1
-  zoomLevel.value = Math.max(0.5, Math.min(5, zoomLevel.value + delta))
-}
-
-function resetZoom() {
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
 }
 
 function formatTime(ms: number): string {
@@ -321,14 +351,6 @@ function formatTime(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-function getModeLabel(mode: string): string {
-  return mode === 'GENERATE' ? t('imageGen.modeGenerate') : t('imageGen.modeEdit')
-}
-
-function formatDateTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleString()
-}
 </script>
 
 <template>
@@ -393,7 +415,7 @@ function formatDateTime(dateStr: string): string {
             <p class="text-xs text-muted-foreground">{{ $t('imageGen.maskHint') }}</p>
             <div class="flex flex-wrap gap-3 items-center">
               <div v-if="maskPreviewUrl" class="relative group w-20 h-20 rounded-lg overflow-hidden border border-border">
-                <img :src="maskPreviewUrl" class="w-full h-full object-cover" alt="mask" />
+                <img :src="maskPreviewUrl" class="w-full h-full cursor-zoom-in object-cover" alt="mask" @click="openLightbox(maskPreviewUrl)" />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -441,11 +463,17 @@ function formatDateTime(dateStr: string): string {
               <span class="text-sm font-medium">{{ $t('imageGen.size') }}</span>
               <Select v-model="size">
                 <SelectTrigger class="min-w-[160px]">
-                  <SelectValue />
+                  <SelectValue>
+                    <span class="flex items-center gap-2">
+                      {{ selectedSizeOption.label }}
+                      <AspectRatioIcon :ratio="selectedSizeOption.ratio" />
+                      <span class="text-muted-foreground">{{ selectedSizeOption.ratioLabel }}</span>
+                    </span>
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
+                    <span class="flex items-center gap-2">{{ opt.label }}<AspectRatioIcon :ratio="opt.ratio" /><span class="text-muted-foreground">{{ opt.ratioLabel }}</span></span>
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -503,6 +531,59 @@ function formatDateTime(dateStr: string): string {
               </span>
             </div>
           </div>
+
+          <div v-if="superResolutionJobs.length > 0" class="space-y-2 border-t border-border pt-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-medium">超分队列</h3>
+              <Badge variant="secondary" class="text-xs">{{ superResolutionJobs.length }}</Badge>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div
+                v-for="job in superResolutionJobs"
+                :key="job.id"
+                class="grid min-h-24 grid-cols-[88px_32px_1fr] items-center gap-3 overflow-hidden rounded-md border border-border bg-muted/20 p-2"
+              >
+                <button
+                  type="button"
+                  class="h-20 w-[88px] cursor-zoom-in overflow-hidden rounded bg-muted"
+                  title="查看大图"
+                  @click="openLightbox(job.status === 'SUCCEEDED' && job.resultPath ? job.resultPath : job.sourcePath)"
+                >
+                  <img
+                    :src="resultImageUrl(job.status === 'SUCCEEDED' && job.resultPath ? job.resultPath : job.sourcePath)"
+                    class="h-full w-full object-cover transition-opacity hover:opacity-90"
+                    :alt="'超分任务 ' + job.id"
+                  />
+                </button>
+                <Loader2 v-if="job.status === 'PENDING' || job.status === 'RUNNING'" class="h-5 w-5 animate-spin text-primary" />
+                <AlertCircle v-else-if="job.status === 'FAILED'" class="h-5 w-5 text-destructive" />
+                <Check v-else class="h-5 w-5 text-emerald-600" />
+                <div class="min-w-0 text-sm">
+                  <p v-if="job.status === 'PENDING' || job.status === 'RUNNING'" class="font-medium">正在超分，请等待...</p>
+                  <p v-else-if="job.status === 'FAILED'" class="font-medium text-destructive">超分失败</p>
+                  <p v-else class="font-medium">超分完成</p>
+                  <p class="mt-1 text-xs text-muted-foreground">放大 x{{ job.upscaleFactor }}</p>
+                  <p v-if="job.width && job.height" class="text-xs text-muted-foreground">{{ job.width }}x{{ job.height }}</p>
+                  <p v-if="job.errorMessage" class="mt-1 truncate text-xs text-destructive" :title="job.errorMessage">{{ job.errorMessage }}</p>
+                  <Button
+                    v-if="job.status === 'SUCCEEDED' && job.resultPath"
+                    variant="outline"
+                    size="icon"
+                    class="mt-2 h-7 w-7"
+                    as-child
+                  >
+                    <a
+                      :href="resultImageUrl(job.resultPath)"
+                      :download="'super-resolution-' + job.id + '.png'"
+                      target="_blank"
+                      title="下载超分图片"
+                    >
+                      <Download class="h-3.5 w-3.5" />
+                    </a>
+                  </Button>                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Right: Result -->
@@ -516,22 +597,42 @@ function formatDateTime(dateStr: string): string {
                 </Badge>
               </div>
 
-              <!-- Image grid -->
-              <div class="grid grid-cols-2 gap-3">
+              <!-- Image cards -->
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div
-                  v-for="(imgUrl, idx) in result!.urls"
-                  :key="idx"
-                  class="rounded-lg overflow-hidden border border-border bg-muted/30 cursor-zoom-in"
-                  @click="openLightbox(imgUrl)"
+                  v-for="(image, idx) in generatedImages"
+                  :key="image.recordId"
+                  class="overflow-hidden rounded-md border border-border bg-background"
                 >
-                  <img
-                    :src="resultImageUrl(imgUrl)"
-                    class="w-full h-auto object-contain hover:opacity-90 transition-opacity"
-                    :alt="'Generated image ' + (idx + 1)"
-                  />
+                  <button type="button" class="block w-full cursor-zoom-in bg-muted/30" @click="openLightbox(image.url)">
+                    <img
+                      :src="resultImageUrl(image.url)"
+                      class="aspect-square w-full object-contain transition-opacity hover:opacity-90"
+                      :alt="'Generated image ' + (idx + 1)"
+                      @load="updateGeneratedDimensions(image, $event)"
+                    />
+                  </button>
+                  <div class="space-y-2 border-t border-border p-3">
+                    <div class="flex items-center justify-between gap-2 text-xs">
+                      <span class="font-medium">可超分倍率</span>
+                      <span v-if="image.width && image.height" class="text-muted-foreground">{{ image.width }}x{{ image.height }}</span>
+                    </div>
+                    <div v-if="availableUpscaleFactors(image).length" class="flex gap-2">
+                      <Button
+                        v-for="factor in availableUpscaleFactors(image)"
+                        :key="factor"
+                        variant="outline"
+                        size="sm"
+                        class="h-7 flex-1"
+                        @click="requestUpscale(image, factor)"
+                      >
+                        x{{ factor }}
+                      </Button>
+                    </div>
+                    <p v-else class="text-xs text-muted-foreground">该图片尺寸不符合超分输入限制</p>
+                  </div>
                 </div>
               </div>
-
               <div v-if="result!.revisedPrompt" class="text-xs text-muted-foreground bg-muted/30 rounded-md p-3">
                 <span class="font-medium">{{ $t('imageGen.revisedPrompt') }}:</span>
                 {{ result!.revisedPrompt }}
@@ -561,57 +662,26 @@ function formatDateTime(dateStr: string): string {
       </div>
 
     <!-- ═══ Image Lightbox（全屏覆盖层，不依赖 Dialog 组件） ═══ -->
-    <Teleport to="body">
-      <div
-        v-if="lightboxOpen"
-        class="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
-        @click="closeLightbox"
-        @wheel.prevent="handleWheel"
-      >
-        <h2 class="sr-only">{{ $t('imageGen.preview') }}</h2>
-
-        <!-- Close button -->
-        <Button
-          variant="ghost"
-          size="icon"
-          class="absolute top-4 right-4 z-10 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-          @click.stop="closeLightbox"
-        >
-          <X class="h-5 w-5" />
-        </Button>
-
-        <!-- Zoom info -->
-        <div class="absolute top-4 left-4 z-10 flex items-center gap-2">
-          <Badge variant="outline" class="bg-black/50 text-white border-white/20 text-xs">
-            {{ Math.round(zoomLevel * 100) }}%
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            class="bg-black/50 text-white border-white/20 h-7 text-xs"
-            @click.stop="resetZoom"
-          >
-            <ZoomIn class="h-3 w-3 mr-1" />
-            {{ $t('imageGen.resetZoom') }}
-          </Button>
-        </div>
-
-        <!-- Zoomable image — 保持原始宽高比 -->
-        <img
-          v-if="lightboxUrl"
-          :src="lightboxUrl"
-          class="max-w-[90vw] max-h-[90vh] w-auto h-auto transition-transform duration-100"
-          :style="{
-            transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`,
-          }"
-          alt="Preview"
-          draggable="false"
-          @click.stop
-        />
-      </div>
-    </Teleport>
+    <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" />
 
     <!-- ═══ Asset Upload Dialog ═══ -->
+    <Dialog :open="upscaleConfirmOpen" @update:open="upscaleConfirmOpen = $event">
+      <DialogContent class="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>确认进行超分</DialogTitle>
+          <DialogDescription>
+            将图片放大 x{{ selectedUpscale?.factor }}，任务提交后会在超分队列中执行。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" :disabled="submittingUpscale" @click="upscaleConfirmOpen = false">取消</Button>
+          <Button :disabled="submittingUpscale" @click="confirmUpscale">
+            <Loader2 v-if="submittingUpscale" class="mr-2 h-4 w-4 animate-spin" />
+            确认超分
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Dialog :open="assetUploadOpen" @update:open="assetUploadOpen = $event">
       <DialogContent class="sm:max-w-sm">
         <DialogHeader>
@@ -689,6 +759,7 @@ function formatDateTime(dateStr: string): string {
           <img
             v-if="pickerPreviewAsset"
             :src="imageUrl(pickerPreviewAsset.filePath)"
+            @click="openLightbox(imageUrl(pickerPreviewAsset.filePath))"
             class="max-h-[70vh] max-w-full object-contain rounded-lg"
             :alt="pickerPreviewAsset.fileName"
           />

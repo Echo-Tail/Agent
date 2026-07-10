@@ -28,8 +28,8 @@ public class ImageGenerationRecord {
     @Column(nullable = false)
     private Long userId;
 
-    /** 生成模式：GENERATE（文生图） / EDIT（图生图） */
-    @Column(nullable = false, length = 10)
+    /** 生成模式：GENERATE（文生图） / EDIT（图生图） / SUPER_RESOLUTION（超分） */
+    @Column(nullable = false, length = 20)
     private String mode;
 
     /** 用户输入的提示词 */
@@ -72,6 +72,13 @@ public class ImageGenerationRecord {
     @Column(name = "mask_image_path", length = 500)
     private String maskImagePath;
 
+    /** 原始图片记录 ID，仅超分记录使用 */
+    @Column(name = "source_record_id")
+    private Long sourceRecordId;
+
+    /** 超分倍率，仅超分记录使用 */
+    @Column(name = "upscale_factor")
+    private Integer upscaleFactor;
     /** 创建时间 */
     @Column(nullable = false)
     private LocalDateTime createdAt;

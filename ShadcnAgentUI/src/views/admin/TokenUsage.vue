@@ -25,6 +25,7 @@ useI18n()
 const modelTypeKeys: Record<string, string> = {
   TEXT: 'modelManage.modelType.TEXT',
   IMAGE: 'modelManage.modelType.IMAGE',
+  MULTIMODAL: 'modelManage.modelType.MULTIMODAL',
 }
 
 const loading = ref(false)
@@ -162,6 +163,7 @@ onMounted(fetchData)
             <td class="px-4 py-2.5 text-sm">{{ row.username || '-' }}</td>
             <td class="px-4 py-2.5">
               <Badge v-if="row.modelType === 'IMAGE'" variant="secondary" class="text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
+              <Badge v-else-if="row.modelType === 'MULTIMODAL'" variant="outline" class="text-xs">{{ $t(modelTypeKeys.MULTIMODAL) }}</Badge>
               <span v-else class="text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
             </td>
             <td class="px-4 py-2.5 text-right tabular-nums">{{ row.callCount.toLocaleString() }}</td>
@@ -206,6 +208,7 @@ onMounted(fetchData)
               <td class="px-3 py-2 text-xs">{{ row.username || '-' }}</td>
               <td class="px-3 py-2">
                 <Badge v-if="row.modelType === 'IMAGE'" variant="secondary" class="text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
+                <Badge v-else-if="row.modelType === 'MULTIMODAL'" variant="outline" class="text-xs">{{ $t(modelTypeKeys.MULTIMODAL) }}</Badge>
                 <span v-else class="text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
               </td>
               <td class="px-3 py-2 text-right tabular-nums text-xs">{{ row.promptTokens.toLocaleString() }}</td>

@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { toast } from 'sonner'
 import PageHeader from '@/components/PageHeader.vue'
+import AspectRatioIcon from '@/components/AspectRatioIcon.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   generateImage, editImage, type ImageGenerationResult,
   collectAsinImages, analyzeExpressionCached,
@@ -41,20 +45,26 @@ watch(showAddDialog, (v) => { if (!v) addedFileNames.value = [] })
 
 // --- Generate params ---
 const genPrompt = ref('')
-const genSize = ref('1024x1024')
+const genSize = ref('1254x1254')
 const genQuality = ref('auto')
 const genCount = ref(1)
 const genModelId = ref<number | undefined>()
+const sizeOptions = [
+  { value: '1024x1024', label: '1024x1024', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1254x1254', label: '1254x1254', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1672x941', label: '1672x941', ratio: '16 / 9', ratioLabel: '16:9' },
+  { value: '1536x1024', label: '1536x1024', ratio: '3 / 2', ratioLabel: '3:2' },
+  { value: '1024x1536', label: '1024x1536', ratio: '2 / 3', ratioLabel: '2:3' },
+  { value: '1448x1086', label: '1448x1086', ratio: '4 / 3', ratioLabel: '4:3' },
+  { value: '1659x948', label: '1659x948', ratio: '7 / 4', ratioLabel: '7:4' },
+]
+const selectedSizeOption = computed(() => sizeOptions.find(opt => opt.value === genSize.value) ?? sizeOptions[0])
 const genReferenceFiles = ref<File[]>([])
 const genResults = ref<string[]>([])
 const genRevisedPrompt = ref('')
 
 // Lightbox
-const lightboxOpen = ref(false)
-const lightboxUrl = ref('')
-const zoomLevel = ref(1)
-const panX = ref(0)
-const panY = ref(0)
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox: showLightbox } = useImageLightbox()
 const copiedResultIdx = ref<number | null>(null)
 
 function imageUrl(path: string): string {
@@ -133,22 +143,7 @@ async function analyzeExpression() {
 
 // --- Generate ---
 function openLightbox(url: string) {
-  lightboxUrl.value = imageUrl(url)
-  zoomLevel.value = 1
-  panX.value = 0
-  panY.value = 0
-  lightboxOpen.value = true
-}
-
-function closeLightbox() {
-  lightboxOpen.value = false
-  lightboxUrl.value = ''
-}
-
-function handleWheel(e: WheelEvent) {
-  e.preventDefault()
-  const delta = e.deltaY > 0 ? -0.1 : 0.1
-  zoomLevel.value = Math.max(0.5, Math.min(5, zoomLevel.value + delta))
+  showLightbox(imageUrl(url))
 }
 
 function downloadResult(url: string) {
@@ -336,12 +331,22 @@ async function pickAsset(asset: PublicAsset) {
             <div class="grid gap-3 md:grid-cols-4">
               <div>
                 <label class="text-xs text-muted-foreground">尺寸</label>
-                <select v-model="genSize" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="1024x1024">1024×1024</option>
-                  <option value="1536x1024">1536×1024</option>
-                  <option value="1024x1536">1024×1536</option>
-                  <option value="3840x2160">3840×2160</option>
-                </select>
+                <Select v-model="genSize">
+                  <SelectTrigger>
+                    <SelectValue>
+                      <span class="flex items-center gap-2">
+                      {{ selectedSizeOption.label }}
+                      <AspectRatioIcon :ratio="selectedSizeOption.ratio" />
+                      <span class="text-muted-foreground">{{ selectedSizeOption.ratioLabel }}</span>
+                    </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">
+                      <span class="flex items-center gap-2">{{ opt.label }}<AspectRatioIcon :ratio="opt.ratio" /><span class="text-muted-foreground">{{ opt.ratioLabel }}</span></span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label class="text-xs text-muted-foreground">质量</label>
@@ -468,25 +473,7 @@ async function pickAsset(asset: PublicAsset) {
       </div>
     </Teleport>
 
-    <!-- Lightbox -->
-    <Teleport to="body">
-      <div v-if="lightboxOpen" class="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
-        @click="closeLightbox" @wheel.prevent="handleWheel">
-        <button class="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70" @click.stop="closeLightbox">
-          <X class="h-5 w-5" />
-        </button>
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full px-3 py-1.5 text-white text-xs">
-          <button class="px-2 py-1 hover:bg-white/20 rounded" @click.stop="zoomLevel = Math.max(0.5, zoomLevel - 0.2)">-</button>
-          <span>{{ Math.round(zoomLevel * 100) }}%</span>
-          <button class="px-2 py-1 hover:bg-white/20 rounded" @click.stop="zoomLevel = Math.min(5, zoomLevel + 0.2)">+</button>
-          <button class="px-2 py-1 hover:bg-white/20 rounded ml-2" @click.stop="zoomLevel = 1; panX = 0; panY = 0">重置</button>
-        </div>
-        <img v-if="lightboxUrl" :src="lightboxUrl"
-          class="max-w-[90vw] max-h-[90vh] w-auto h-auto transition-transform duration-100 cursor-grab select-none"
-          :style="{ transform: `scale(${zoomLevel}) translate(${panX}px, ${panY}px)` }"
-          alt="" draggable="false" @click.stop />
-      </div>
-    </Teleport>
+    <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 
     <!-- Add dialog -->
     <Teleport to="body">

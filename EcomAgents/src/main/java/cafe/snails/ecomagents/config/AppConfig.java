@@ -27,6 +27,16 @@ public class AppConfig {
      * LLM 流式对话的异步任务执行器。
      * 核心线程 2，最大线程 5，队列容量 50，线程名前缀 "llm-stream-"。
      */
+    @Bean(name = "imageSuperResolutionExecutor")
+    public Executor imageSuperResolutionExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("image-upscale-");
+        executor.initialize();
+        return executor;
+    }
     @Bean(name = "llmTaskExecutor")
     public Executor llmTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

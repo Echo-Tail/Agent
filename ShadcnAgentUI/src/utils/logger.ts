@@ -11,6 +11,12 @@
  */
 
 import { maskHeaders, maskBody, maskUrl, maskString } from './mask'
+const consoleSink = ((globalThis as any).__ECOM_CONSOLE_SINK__ ??= {
+  error: console.error.bind(console),
+  warn: console.warn.bind(console),
+  debug: console.debug.bind(console),
+  log: console.log.bind(console),
+}) as Pick<Console, 'error' | 'warn' | 'debug' | 'log'>
 
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 
@@ -132,16 +138,16 @@ function log(level: LogLevel, context: string, message: string, data?: unknown) 
   const formatted = formatMessage(level, context, message, data)
   switch (level) {
     case 'ERROR':
-      console.error(formatted)
+      consoleSink.error(formatted)
       break
     case 'WARN':
-      console.warn(formatted)
+      consoleSink.warn(formatted)
       break
     case 'DEBUG':
-      console.debug(formatted)
+      consoleSink.debug(formatted)
       break
     default:
-      console.log(formatted)
+      consoleSink.log(formatted)
   }
 
   // 缓冲入队等待上传
@@ -178,6 +184,7 @@ export const logger = {
    * @param data 响应数据（自动脱敏）
    */
   traceResponse(method: string, url: string, status: number, duration: number, data?: unknown) {
+    if (status < 400) return
     const level = status >= 400 ? 'WARN' : 'INFO'
     const ctx = 'HTTP'
     const msg = `← ${method?.toUpperCase()} ${maskUrl(url)} → ${status} (${duration}ms)`
@@ -215,10 +222,9 @@ export function setupGlobalErrorLogging() {
   })
 
   // 拦截 console.error 以捕获第三方库的错误
-  const originalOnError = console.error
   console.error = function (...args: unknown[]) {
     logger.error('CONSOLE', args.map(a => (typeof a === 'string' ? maskString(a) : String(a))).join(' '))
-    originalOnError.apply(console, args)
+    consoleSink.error(...args)
   }
 
   logger.info('LOGGER', 'Global error logging initialized')

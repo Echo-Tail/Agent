@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { analyzeImageExpression } from '@/api/image'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-vue-next'
+
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 
 const emit = defineEmits<{
   done: [expressionJson: string]
@@ -100,7 +104,7 @@ function imageUrl(path: string): string {
           @click="selectedImage = img"
         >
           <div class="aspect-square">
-            <img :src="imageUrl(img)" alt="素材" class="h-full w-full object-cover" />
+            <img :src="imageUrl(img)" alt="素材" class="h-full w-full cursor-zoom-in object-cover" @dblclick.stop="openLightbox(imageUrl(img))" />
           </div>
           <div class="p-1 text-center text-xs text-muted-foreground truncate">#{{ i + 1 }}</div>
         </button>
@@ -129,4 +133,5 @@ function imageUrl(path: string): string {
       </div>
     </template>
   </div>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>

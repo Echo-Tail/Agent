@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
+import AspectRatioIcon from '@/components/AspectRatioIcon.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, WandSparkles, CheckCircle, XCircle, ImageIcon } from 'lucide-vue-next'
+
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 
 const emit = defineEmits<{
   generate: [params: GenerateParams]
@@ -30,13 +35,22 @@ const props = defineProps<{
   results?: ResultImage[]
 }>()
 
-const sizes = ['1024x1024', '1536x1024', '1024x1536', '3840x2160']
+const sizeOptions = [
+  { value: '1024x1024', label: '1024x1024', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1254x1254', label: '1254x1254', ratio: '1 / 1', ratioLabel: '1:1' },
+  { value: '1672x941', label: '1672x941', ratio: '16 / 9', ratioLabel: '16:9' },
+  { value: '1536x1024', label: '1536x1024', ratio: '3 / 2', ratioLabel: '3:2' },
+  { value: '1024x1536', label: '1024x1536', ratio: '2 / 3', ratioLabel: '2:3' },
+  { value: '1448x1086', label: '1448x1086', ratio: '4 / 3', ratioLabel: '4:3' },
+  { value: '1659x948', label: '1659x948', ratio: '7 / 4', ratioLabel: '7:4' },
+]
 const qualities = ['low', 'medium', 'high', 'auto']
 
-const size = ref('1024x1024')
+const size = ref('1254x1254')
 const quality = ref('auto')
 const count = ref(4)
 const files = ref<File[]>([])
+const selectedSizeOption = computed(() => sizeOptions.find(opt => opt.value === size.value) ?? sizeOptions[0])
 
 function handleFiles(event: Event) {
   const input = event.target as HTMLInputElement
@@ -68,9 +82,19 @@ function imageUrl(path: string): string {
         <div>
           <label class="text-xs text-muted-foreground">尺寸</label>
           <Select v-model="size">
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                <span class="flex items-center gap-2">
+                      {{ selectedSizeOption.label }}
+                      <AspectRatioIcon :ratio="selectedSizeOption.ratio" />
+                      <span class="text-muted-foreground">{{ selectedSizeOption.ratioLabel }}</span>
+                    </span>
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="s in sizes" :key="s" :value="s">{{ s }}</SelectItem>
+              <SelectItem v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">
+                <span class="flex items-center gap-2">{{ opt.label }}<AspectRatioIcon :ratio="opt.ratio" /><span class="text-muted-foreground">{{ opt.ratioLabel }}</span></span>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -105,7 +129,7 @@ function imageUrl(path: string): string {
       <div class="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         <div v-for="img in results" :key="img.id" class="group relative overflow-hidden rounded-md border bg-card">
           <div class="aspect-square">
-            <img :src="imageUrl(img.url)" alt="生成图" class="h-full w-full object-cover" />
+            <img :src="imageUrl(img.url)" alt="生成图" class="h-full w-full cursor-zoom-in object-cover" @click="openLightbox(imageUrl(img.url))" />
           </div>
           <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
@@ -147,4 +171,5 @@ function imageUrl(path: string): string {
       <p>暂无生成结果</p>
     </div>
   </div>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>

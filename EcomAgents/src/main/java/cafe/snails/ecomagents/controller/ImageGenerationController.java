@@ -8,6 +8,8 @@ import cafe.snails.ecomagents.repository.ImageExpressionCacheRepository;
 import cafe.snails.ecomagents.service.BrightDataService;
 import cafe.snails.ecomagents.service.ImageAnalysisService;
 import cafe.snails.ecomagents.service.ImageGenerationService;
+import cafe.snails.ecomagents.service.ImageSuperResolutionService;
+import cafe.snails.ecomagents.service.ImageSuperResolutionJobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,8 @@ import java.util.Map;
 public class ImageGenerationController {
 
     private final ImageGenerationService imageGenerationService;
+    private final ImageSuperResolutionService imageSuperResolutionService;
+    private final ImageSuperResolutionJobService imageSuperResolutionJobService;
     private final ImageAnalysisService imageAnalysisService;
     private final BrightDataService brightDataService;
     private final ImageExpressionCacheRepository expressionCacheRepository;
@@ -79,7 +83,61 @@ public class ImageGenerationController {
                 userId, result.timeCostMs(), result.recordId(), result.failedCount());
         return ApiResponse.success(result);
     }
+    @PostMapping("/super-resolution")
+    public ApiResponse<ImageSuperResolutionService.SuperResolutionResult> superResolution(
+            @RequestBody ImageSuperResolutionService.SuperResolutionRequest request,
+            @CurrentUserId Long userId) {
+        var result = imageSuperResolutionService.upscale(request, userId);
+        return ApiResponse.success(result);
+    }
 
+    @PostMapping("/super-resolution/jobs")
+    public ApiResponse<ImageSuperResolutionJobService.JobResponse> createSuperResolutionJob(
+            @RequestBody ImageSuperResolutionJobService.CreateJobRequest request,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(imageSuperResolutionJobService.submit(request, userId));
+    }
+
+    @PostMapping("/super-resolution/jobs/upload")
+    public ApiResponse<ImageSuperResolutionJobService.JobResponse> uploadSuperResolutionJob(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("upscaleFactor") Integer upscaleFactor,
+            @RequestParam(value = "origin", required = false) String origin,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(imageSuperResolutionJobService.submitUpload(file, upscaleFactor, origin, userId));
+    }
+
+    @PostMapping("/super-resolution/jobs/{id}/retry")
+    public ApiResponse<ImageSuperResolutionJobService.JobResponse> retrySuperResolutionJob(
+            @PathVariable("id") Long id,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(imageSuperResolutionJobService.retry(id, userId));
+    }
+
+    @GetMapping("/super-resolution/jobs")
+    public ApiResponse<List<ImageSuperResolutionJobService.JobResponse>> listSuperResolutionJobs(
+            @RequestParam(value = "origin", required = false) String origin,
+            @CurrentUserId Long userId) {
+        return ApiResponse.success(imageSuperResolutionJobService.list(userId, origin));
+    }
+
+    @GetMapping("/super-resolution/jobs/active-count")
+    public ApiResponse<Long> countActiveSuperResolutionJobs(@CurrentUserId Long userId) {
+        return ApiResponse.success(imageSuperResolutionJobService.activeCount(userId));
+    }
+
+    @GetMapping("/super-resolution/sources")
+    public ApiResponse<Page<ImageGenerationRecord>> listSuperResolutionSources(
+            @CurrentUserId Long userId,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "12") int size,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(value = "prompt", required = false) String prompt) {
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ApiResponse.success(
+                imageSuperResolutionJobService.eligibleHistorySources(userId, startDate, endDate, prompt, pageable));
+    }
     /**
      * 安全解析整数，解析失败返回默认值。
      */

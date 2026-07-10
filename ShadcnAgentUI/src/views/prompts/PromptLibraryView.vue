@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/PageHeader.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,6 +24,7 @@ import { listImageRecords } from '@/api/image'
 import { toast } from 'sonner'
 
 const { t } = useI18n()
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 const auth = useAuthStore()
 
 // ── Categories ──
@@ -509,8 +512,9 @@ function imageUrl(path: string): string {
           <img
             v-if="p.coverPath"
             :src="imageUrl(p.coverPath)"
-            class="absolute inset-0 w-full h-full object-cover"
+            class="absolute inset-0 w-full h-full cursor-zoom-in object-cover"
             :alt="p.prompt"
+            @click="openLightbox(imageUrl(p.coverPath), p.prompt)"
             loading="lazy"
           />
           <div v-else class="absolute inset-0 flex items-center justify-center text-muted-foreground/40">
@@ -752,7 +756,7 @@ function imageUrl(path: string): string {
         <VisuallyHidden><div id="detail-prompt-desc">{{ $t('promptLibrary.promptDetail') }}</div></VisuallyHidden>
         <div v-if="detailTarget" class="space-y-4 py-2">
           <div v-if="detailTarget.coverPath" class="w-full rounded-md overflow-hidden bg-muted/30">
-            <img :src="imageUrl(detailTarget.coverPath)" class="w-full max-h-72 object-contain" alt="" />
+            <img :src="imageUrl(detailTarget.coverPath)" class="w-full max-h-72 cursor-zoom-in object-contain" alt="" @click="openLightbox(imageUrl(detailTarget.coverPath), detailTarget.prompt)" />
           </div>
           <div class="max-h-52 overflow-y-auto rounded-md border p-3 bg-muted/20">
             <p class="text-sm whitespace-pre-wrap leading-relaxed">{{ detailTarget.prompt }}</p>
@@ -789,6 +793,7 @@ function imageUrl(path: string): string {
       </DialogContent>
     </Dialog>
   </div>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>
 
 <style scoped>

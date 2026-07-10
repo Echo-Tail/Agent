@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
+import { useImageLightbox } from '@/composables/useImageLightbox'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +16,8 @@ interface SourceData {
   brightDataJson: string
   scrapedImages: string[]
 }
+
+const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
 
 const props = defineProps<{
   initial?: SourceData
@@ -123,7 +127,7 @@ function imageUrl(path: string): string {
         <label class="text-xs font-medium text-muted-foreground">采集到的图片（将自动进入下一步）</label>
         <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">
           <div v-for="(url, i) in scrapedImages.slice(0, 12)" :key="i" class="aspect-square overflow-hidden rounded border">
-            <img :src="imageUrl(url)" class="h-full w-full object-cover" :alt="`img ${i+1}`" />
+            <img :src="imageUrl(url)" class="h-full w-full cursor-zoom-in object-cover" :alt="`img ${i+1}`" @click="openLightbox(imageUrl(url))" />
           </div>
           <div v-if="scrapedImages.length > 12" class="flex items-center justify-center text-xs text-muted-foreground border rounded">
             +{{ scrapedImages.length - 12 }}
@@ -158,4 +162,5 @@ function imageUrl(path: string): string {
       <Button :disabled="!asin.trim() && imageUrls.length === 0" @click="confirmDone">确认素材来源</Button>
     </div>
   </div>
+  <ImageLightbox v-model:open="lightboxOpen" :src="lightboxUrl" :alt="lightboxAlt" />
 </template>
