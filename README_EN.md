@@ -40,6 +40,7 @@ A full-stack platform for managing, configuring, and interacting with AI agents 
 ### 🖼️ Media Generation
 
 - **Image Generation** — Integrated gpt-image-2 model with text-to-image, style selection, and parameter tuning
+- **Image Super Resolution** — Upscale images 2x/4x via Replicate API; supports referencing historical generation records or direct upload; async job management with progress tracking
 - **Gallery** — Share generated images, view and like community works
 
 ### 💬 Social Collaboration
@@ -110,6 +111,7 @@ Agent/
 │       ├── api/                         # Axios HTTP client layer (17 API modules)
 │       ├── components/                  # Business components + shadcn-vue UI
 │       │   └── ui/                      # Button, Card, Dialog, Table, Badge, etc.
+│       ├── composables/                 # Reusable Composition API logic
 │       ├── constants/                   # Shared constants
 │       ├── layouts/                     # DefaultLayout (sidebar) / BlankLayout (fullscreen)
 │       ├── locales/                     # i18n (zh-CN / en)
@@ -125,7 +127,7 @@ Agent/
 │           ├── dashboard/               # DashboardView — system overview
 │           ├── group/                   # GroupListView/GroupChatView — group chat
 │           ├── history/                 # HistoryView — chat history
-│           ├── image/                   # ImageGenerationView/GalleryView
+│           ├── image/                   # ImageGenerationView/GalleryView/ImageSuperResolutionView
 │           ├── knowledge/               # KnowledgeBase
 │           ├── log/                     # LogViewer — system audit log
 │           ├── login/                   # Login
@@ -297,6 +299,13 @@ The frontend dev server proxies `/v1/*` and `/chat/*` requests to `http://localh
 |--------|------|-------------|
 | POST | `/v1/image/generate` | Request image generation |
 | GET | `/v1/image/history` | Generation history |
+| POST | `/v1/image/super-resolution` | Upscale image directly |
+| POST | `/v1/image/super-resolution/jobs` | Create super resolution job |
+| POST | `/v1/image/super-resolution/jobs/upload` | Upload image & create job |
+| POST | `/v1/image/super-resolution/jobs/{id}/retry` | Retry super resolution job |
+| GET | `/v1/image/super-resolution/jobs` | List super resolution jobs |
+| GET | `/v1/image/super-resolution/jobs/active-count` | Active job count |
+| GET | `/v1/image/super-resolution/sources` | Eligible source images |
 | GET | `/v1/gallery/items` | Gallery items |
 | POST | `/v1/gallery/items` | Publish to gallery |
 | DELETE | `/v1/gallery/items/{id}` | Delete gallery item |

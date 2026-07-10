@@ -42,6 +42,7 @@
 ### 🖼️ 多媒体生成
 
 - **图片生成** — 集成 gpt-image-2 模型，支持文本生图、风格选择、参数调节
+- **图片超分辨率** — 支持将图片放大 2x/4x，基于 Replicate API，可引用历史生成记录或直接上传原图，异步 Job 管理，进度追踪
 - **画廊** — 用户可将生成的图片发布到画廊，分享作品、点赞互动
 
 ### 💬 社交协作
@@ -112,6 +113,7 @@ Agent/
 │       ├── api/                         # Axios HTTP 客户端层 (17 个 API 模块)
 │       ├── components/                  # 业务组件 + shadcn-vue UI 组件
 │       │   └── ui/                      # Button, Card, Dialog, Table, Badge 等
+│       ├── composables/                 # Composition API 可复用逻辑
 │       ├── constants/                   # 共享常量 (API 地址、存储键、验证限制)
 │       ├── layouts/                     # DefaultLayout (侧边栏) / BlankLayout (全屏)
 │       ├── locales/                     # 国际化 (zh-CN / en)
@@ -127,7 +129,8 @@ Agent/
 │           ├── dashboard/               # DashboardView — 系统概览
 │           ├── group/                   # GroupListView/GroupChatView — 群聊社交
 │           ├── history/                 # HistoryView — 历史记录
-│           ├── image/                   # ImageGenerationView/GalleryView — 图片生成+画廊
+│           ├── image/                   # ImageGenerationView/GalleryView/ImageSuperResolutionView
+│           │                            # 图片生成、超分辨率、画廊
 │           ├── knowledge/               # KnowledgeBase — 知识库管理
 │           ├── log/                     # LogViewer — 系统操作审计日志
 │           ├── login/                   # 登录
@@ -299,6 +302,16 @@ https://github.com/{owner}/{repo}/tree/main/skills/{name}      # 导入单个技
 |------|------|------|
 | POST | `/v1/image/generate` | 请求图片生成 |
 | GET | `/v1/image/history` | 图片生成历史 |
+| GET | `/v1/gallery/items` | 画廊作品列表 |
+| POST | `/v1/gallery/items` | 发布作品到画廊 |
+| DELETE | `/v1/gallery/items/{id}` | 删除画廊作品 |
+| POST | `/v1/image/super-resolution` | 图片超分辨率（直接处理） |
+| POST | `/v1/image/super-resolution/jobs` | 创建超分辨率 Job |
+| POST | `/v1/image/super-resolution/jobs/upload` | 上传图片并创建超分辨率 Job |
+| POST | `/v1/image/super-resolution/jobs/{id}/retry` | 重试超分辨率 Job |
+| GET | `/v1/image/super-resolution/jobs` | 超分辨率 Job 列表 |
+| GET | `/v1/image/super-resolution/jobs/active-count` | 进行中的 Job 数量 |
+| GET | `/v1/image/super-resolution/sources` | 可选为超分辨率源的历史记录 |
 | GET | `/v1/gallery/items` | 画廊作品列表 |
 | POST | `/v1/gallery/items` | 发布作品到画廊 |
 | DELETE | `/v1/gallery/items/{id}` | 删除画廊作品 |
