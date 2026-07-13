@@ -37,6 +37,15 @@ import {
 import { toast } from 'sonner'
 import { useI18n } from 'vue-i18n'
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+
 const { t } = useI18n()
 
 const modelTypeKeys: Record<string, string> = {
@@ -279,48 +288,46 @@ async function handleDelete() {
 
     <!-- Table -->
     <div v-else class="border border-border rounded-lg overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-muted/50 border-b border-border">
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('userManage.columns.id') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-[200px]">{{ $t('modelManage.columns.name') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-20 whitespace-nowrap">{{ $t('modelManage.columns.modelType') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-20">{{ $t('modelManage.columns.provider') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground">{{ $t('modelManage.columns.modelId') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground">{{ $t('modelManage.form.apiUrl') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('modelManage.columns.default') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-14">{{ $t('modelManage.columns.status') }}</th>
-            <th class="text-left px-3 py-2.5 font-medium text-muted-foreground w-28">{{ $t('common.action') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-border">
-          <tr v-for="m in models" :key="m.id" class="hover:bg-muted/30 transition-colors">
-            <td class="px-3 py-2.5 text-muted-foreground">{{ m.id }}</td>
-            <td class="px-3 py-2.5 font-medium max-w-[200px] truncate" :title="m.name">{{ m.name }}</td>
-            <td class="px-3 py-2.5 whitespace-nowrap">
-              <Badge v-if="m.modelType === 'IMAGE'" variant="secondary" class="text-xs whitespace-nowrap">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
-              <Badge v-else-if="m.modelType === 'MULTIMODAL'" variant="outline" class="text-xs whitespace-nowrap">{{ $t(modelTypeKeys.MULTIMODAL) }}</Badge>
-              <span v-else class="text-xs text-muted-foreground whitespace-nowrap">{{ $t(modelTypeKeys.TEXT) }}</span>
-            </td>
-            <td class="px-3 py-2.5 text-muted-foreground">{{ providerLabels[m.provider] || m.provider }}</td>
-            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[130px] truncate" :title="m.modelName">{{ m.modelName }}</td>
-            <td class="px-3 py-2.5 text-muted-foreground font-mono text-xs max-w-[210px] truncate" :title="m.apiUrl">{{ m.apiUrl }}</td>
-            <td class="px-3 py-2.5">
-              <Badge v-if="m.isDefault" class="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-200">{{ $t('common.yes') }}</Badge>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead class="w-14">{{ $t('userManage.columns.id') }}</TableHead>
+            <TableHead class="w-[200px]">{{ $t('modelManage.columns.name') }}</TableHead>
+            <TableHead class="w-20 whitespace-nowrap">{{ $t('modelManage.columns.modelType') }}</TableHead>
+            <TableHead class="w-20">{{ $t('modelManage.columns.provider') }}</TableHead>
+            <TableHead>{{ $t('modelManage.columns.modelId') }}</TableHead>
+            <TableHead>{{ $t('modelManage.form.apiUrl') }}</TableHead>
+            <TableHead class="w-14">{{ $t('modelManage.columns.default') }}</TableHead>
+            <TableHead class="w-14">{{ $t('modelManage.columns.status') }}</TableHead>
+            <TableHead class="w-28">{{ $t('common.action') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="m in models" :key="m.id">
+            <TableCell class="text-muted-foreground">{{ m.id }}</TableCell>
+            <TableCell class="max-w-[200px] truncate font-medium" :title="m.name">{{ m.name }}</TableCell>
+            <TableCell class="whitespace-nowrap">
+              <Badge v-if="m.modelType === 'IMAGE'" variant="secondary" class="whitespace-nowrap text-xs">{{ $t(modelTypeKeys.IMAGE) }}</Badge>
+              <Badge v-else-if="m.modelType === 'MULTIMODAL'" variant="outline" class="whitespace-nowrap text-xs">{{ $t(modelTypeKeys.MULTIMODAL) }}</Badge>
+              <span v-else class="whitespace-nowrap text-xs text-muted-foreground">{{ $t(modelTypeKeys.TEXT) }}</span>
+            </TableCell>
+            <TableCell class="text-muted-foreground">{{ providerLabels[m.provider] || m.provider }}</TableCell>
+            <TableCell class="max-w-[130px] truncate font-mono text-xs text-muted-foreground" :title="m.modelName">{{ m.modelName }}</TableCell>
+            <TableCell class="max-w-[210px] truncate font-mono text-xs text-muted-foreground" :title="m.apiUrl">{{ m.apiUrl }}</TableCell>
+            <TableCell>
+              <Badge v-if="m.isDefault" class="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-200 text-xs">{{ $t('common.yes') }}</Badge>
               <span v-else class="text-xs text-muted-foreground">-</span>
-            </td>
-            <td class="px-3 py-2.5">
+            </TableCell>
+            <TableCell>
               <Badge
                 variant="outline"
-                :class="m.enabled
-                  ? 'text-green-600 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950'
-                  : 'text-muted-foreground'"
+                :class="m.enabled ? 'text-green-600 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950' : 'text-muted-foreground'"
                 class="text-xs"
               >
                 {{ m.enabled ? $t('toolManage.enableTool') : $t('toolManage.disableTool') }}
               </Badge>
-            </td>
-            <td class="px-3 py-2.5">
+            </TableCell>
+            <TableCell>
               <div class="flex items-center gap-1">
                 <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEdit(m)">
                   <Pencil class="h-4 w-4" />
@@ -329,10 +336,10 @@ async function handleDelete() {
                   <Trash2 class="h-4 w-4" />
                 </Button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- Edit/Create Modal -->
