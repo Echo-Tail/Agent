@@ -6,7 +6,6 @@
  * 会话管理、Agent 切换等功能。使用 streamChat 流式响应。
  */
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { STORAGE_KEY_TOKEN } from '@/constants'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
@@ -18,11 +17,14 @@ import type { Agent, ToolAvailability } from '@/types/agent'
 import type { AiModel } from '@/types/api'
 import type { ToolDefinition } from '@/api/tool'
 import { Button } from '@/components/ui/button'
-
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import { MessageScrollerItem } from '@/components/ui/message-scroller'
+import AgentChatContainer from '@/components/chat/AgentChatContainer.vue'
+import AgentMessageItem from '@/components/chat/AgentMessageItem.vue'
+import AgentStreamingIndicator from '@/components/chat/AgentStreamingIndicator.vue'
+import AgentFilePreview from '@/components/chat/AgentFilePreview.vue'
+import type { FileAttachment } from '@/components/chat/AgentFilePreview.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import {
   Send,
@@ -31,11 +33,6 @@ import {
   RefreshCw,
   Wrench,
   Paperclip,
-  X,
-  File as FileIcon,
-  Download,
-  Copy,
-  Check,
   AlertCircle,
 } from 'lucide-vue-next'
 import { toast } from 'sonner'
@@ -48,27 +45,13 @@ const chatStore = useChatStore()
 const agentStore = useAgentStore()
 
 const inputText = ref('')
-const messagesEnd = ref<HTMLDivElement | null>(null)
 const initializing = ref(true)
-const msgCopiedIdx = ref<number | null>(null)
-
-interface FileAttachment {
-  file: File
-  record?: { id: number; originalName: string; fileSize: number; mimeType: string }
-  error?: string
-}
 
 const attachments = ref<FileAttachment[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploadError = ref<string | null>(null)
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
 
 function getUniqueFileName(originalName: string, existingNames: string[]): string {
   const dotIndex = originalName.lastIndexOf('.')
@@ -122,6 +105,13 @@ function removeFile(index: number) {
   if (attachments.value.length === 0) {
     uploadError.value = null
   }
+}
+
+function retryFile(index: number) {
+  const att = attachments.value[index]
+  if (!att) return
+  att.error = undefined
+  uploadFile(att)
 }
 
 const selectedAgent = ref<Agent | null>(null)
@@ -243,49 +233,8 @@ onMounted(async () => {
     }
   } finally {
     initializing.value = false
-    nextTick(() => {
-      requestAnimationFrame(() => messagesEnd.value?.scrollIntoView())
-    })
   }
 })
-
-watch(() => chatStore.messages, () => {
-  nextTick(() => {
-    requestAnimationFrame(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
-  })
-}, { flush: 'post' })
-
-async function copyMessage(idx: number, content: string) {
-  try {
-    await navigator.clipboard.writeText(content)
-    msgCopiedIdx.value = idx
-    setTimeout(() => { msgCopiedIdx.value = null }, 1500)
-  } catch { /* ignore */ }
-}
-
-async function downloadFile(file: { id: number; name: string; url: string; size: number }) {
-  try {
-    const token = localStorage.getItem(STORAGE_KEY_TOKEN)
-    const response = await fetch(file.url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!response.ok) {
-      toast.error(t('error.downloadFailed'))
-      return
-    }
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = file.name
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-  } catch {
-    toast.error(t('error.downloadFailed'))
-  }
-}
 
 async function handleSend() {
   const content = inputText.value.trim()
@@ -332,6 +281,14 @@ function autoResize() {
 
 watch(() => inputText.value, () => nextTick(autoResize))
 
+function formatTime(timestamp: string): string {
+  try {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
 async function selectAgent(agentId: number) {
   const agent = agentStore.myAgents.find(a => a.id === agentId)
     ?? agentStore.plazaAgents.find(a => a.id === agentId)
@@ -349,12 +306,6 @@ function newSession() {
   }
 }
 
-function toolBadgeVariant(status: string) {
-  if (status === 'timeout') return 'destructive'
-  if (status === 'degraded' || status === 'empty') return 'outline'
-  return 'secondary'
-}
-
 const availableAgents = computed(() => {
   const currentId = selectedAgent.value?.id
   const all = [...agentStore.myAgents, ...agentStore.plazaAgents]
@@ -368,9 +319,9 @@ const availableAgents = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-[calc(100vh-8rem)] max-w-6xl mx-auto">
+  <div class="flex h-[calc(100vh-8rem)] max-w-6xl mx-auto flex-col px-4 md:px-6">
     <!-- Toolbar -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="mb-4 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span v-if="selectedAgent" class="font-medium">{{ selectedAgent.name }}</span>
         <span v-else class="text-muted-foreground">{{ $t('chat.directChat') }}</span>
@@ -407,6 +358,7 @@ const availableAgents = computed(() => {
       </div>
     </div>
 
+    <!-- Web search unavailable warning -->
     <div
       v-if="selectedAgent && webSearchAvailability && !webSearchAvailability.available"
       class="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
@@ -415,120 +367,75 @@ const availableAgents = computed(() => {
       <span>{{ webSearchAvailability.message }}</span>
     </div>
 
-    <!-- Messages -->
-    <div class="flex-1 overflow-y-auto rounded-lg bg-muted/30 p-4 space-y-4">
-        <!-- Loading state -->
-        <div v-if="initializing" class="space-y-4">
-          <div class="flex gap-3"><Skeleton class="h-8 w-8 rounded-full" /><Skeleton class="h-16 flex-1 rounded-lg" /></div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-else-if="chatStore.messages.length === 0 && !chatStore.isStreaming" class="flex-1 flex items-center justify-center">
-          <div class="text-center">
-            <Bot class="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 class="mt-4 text-lg font-semibold">{{ selectedAgent ? selectedAgent.name : $t('chat.startChat') }}</h3>
-            <p class="text-sm text-muted-foreground mt-1">{{ selectedAgent?.greeting || $t('chat.startChat') }}</p>
+    <!-- Messages (AgentChatContainer uses MessageScroller internally) -->
+    <AgentChatContainer
+      class="flex-1 rounded-lg bg-muted/30"
+      viewport-class="px-4 pb-4"
+    >
+      <!-- Loading skeleton -->
+      <template v-if="initializing">
+        <MessageScrollerItem message-id="loading-skeleton">
+          <div class="flex gap-3">
+            <Skeleton class="h-8 w-8 rounded-full" />
+            <Skeleton class="h-16 flex-1 rounded-lg" />
           </div>
-        </div>
+        </MessageScrollerItem>
+      </template>
 
-        <!-- Messages -->
-        <template v-else>
-          <div v-for="(msg, idx) in chatStore.messages" :key="idx" :class="['flex gap-3', msg.role === 'user' ? 'justify-end' : '']">
-            <Avatar v-if="msg.role === 'assistant'" class="h-8 w-8 mt-1">
-              <AvatarFallback class="bg-primary text-primary-foreground text-xs">
-                {{ selectedAgent?.name?.charAt(0) || 'A' }}
-              </AvatarFallback>
-            </Avatar>
-            <div :class="['group relative rounded-lg p-3 text-sm', msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted', msg.isError ? 'bg-destructive/10 text-destructive' : '']">
-              <MarkdownRenderer v-if="msg.role === 'assistant' && !msg.isError" :content="msg.content" />
-              <div v-if="msg.file" class="mt-2 flex items-center gap-2 border-t pt-2">
-                <FileIcon class="h-4 w-4 text-muted-foreground" />
-                <span class="text-xs text-muted-foreground truncate max-w-[200px]">{{ msg.file.name }}</span>
-                <button
-                  class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  @click="downloadFile(msg.file)"
-                >
-                  <Download class="h-3.5 w-3.5" />
-                  {{ $t('chat.downloadFile') }}
-                </button>
-              </div>
-              <div v-if="msg.role !== 'assistant' || msg.isError" class="whitespace-pre-wrap">{{ msg.content }}</div>
-              <button
-                v-if="msg.role === 'assistant' && !msg.isError"
-                class="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
-                :class="msgCopiedIdx === idx ? 'text-green-500 opacity-100' : 'text-muted-foreground'"
-                :title="msgCopiedIdx === idx ? '已复制' : '复制消息'"
-                @click="copyMessage(idx, msg.content)"
-              >
-                <Check v-if="msgCopiedIdx === idx" class="h-3.5 w-3.5" />
-                <Copy v-else class="h-3.5 w-3.5" />
-              </button>
-              <div v-if="msg.isError && msg.partialContent" class="mt-2 text-xs opacity-70 border-t pt-1">
-                {{ $t('chat.errorPartial') }}: {{ msg.partialContent }}
-              </div>
-              <div v-if="msg.isError && !chatStore.isStreaming" class="mt-2">
-                <Button variant="ghost" size="sm" class="h-6 text-xs" @click="chatStore.retryMessage(msg)">
-                  <RefreshCw class="mr-1 h-3 w-3" /> {{ $t('chat.errorRetry') }}
-                </Button>
-              </div>
-            </div>
-            <Avatar v-if="msg.role === 'user'" class="h-8 w-8 mt-1">
-              <AvatarFallback class="bg-muted text-xs">U</AvatarFallback>
-            </Avatar>
-          </div>
-
-          <!-- Error message (not yet pushed to messages) -->
-          <div v-if="chatStore.isStreaming" class="flex gap-3">
-            <Avatar class="h-8 w-8 mt-1">
-              <AvatarFallback class="bg-primary text-primary-foreground text-xs">
-                {{ selectedAgent?.name?.charAt(0) || 'A' }}
-              </AvatarFallback>
-            </Avatar>
-            <div class="bg-muted rounded-lg p-3 text-sm">
-              <!-- Tool calls -->
-              <div v-if="chatStore.currentToolStatuses.length" class="flex flex-wrap gap-2 mb-2">
-                <Badge
-                  v-for="tool in chatStore.currentToolStatuses"
-                  :key="tool.tool"
-                  :variant="toolBadgeVariant(tool.status)"
-                  class="text-xs"
-                  :title="tool.message"
-                >
-                  <Wrench class="mr-1 h-3 w-3" /> {{ tool.message }}
-                </Badge>
-              </div>
-              <MarkdownRenderer :content="chatStore.streamingText" />
-              <span class="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
+      <!-- Empty state -->
+      <template v-else-if="chatStore.messages.length === 0 && !chatStore.isStreaming">
+        <MessageScrollerItem message-id="empty-state">
+          <div class="flex items-center justify-center py-20">
+            <div class="text-center">
+              <Bot class="mx-auto h-12 w-12 text-muted-foreground/50" />
+              <h3 class="mt-4 text-lg font-semibold">{{ selectedAgent ? selectedAgent.name : $t('chat.startChat') }}</h3>
+              <p class="mt-1 text-sm text-muted-foreground">{{ selectedAgent?.greeting || $t('chat.startChat') }}</p>
             </div>
           </div>
+        </MessageScrollerItem>
+      </template>
 
-          <div ref="messagesEnd" />
-        </template>
-    </div>
+      <!-- Chat messages + streaming indicator -->
+      <template v-else>
+        <MessageScrollerItem
+          v-for="(msg, idx) in chatStore.messages"
+          :key="idx"
+          :message-id="`msg-${idx}`"
+          :scroll-anchor="msg.role === 'user'"
+        >
+          <AgentMessageItem
+            :message="msg"
+            :align="msg.role === 'user' ? 'end' : 'start'"
+            :sender-name="msg.role === 'user' ? '我' : (selectedAgent?.name || '')"
+            :timestamp="formatTime(msg.timestamp)"
+            :agent-initial="selectedAgent?.name?.charAt(0) || 'A'"
+            @retry="chatStore.retryMessage"
+          />
+        </MessageScrollerItem>
+
+        <!-- Streaming indicator -->
+        <MessageScrollerItem
+          v-if="chatStore.isStreaming"
+          message-id="streaming"
+          scroll-anchor
+        >
+          <AgentStreamingIndicator
+            :streaming-text="chatStore.streamingText"
+            :current-tool-statuses="chatStore.currentToolStatuses"
+          />
+        </MessageScrollerItem>
+      </template>
+    </AgentChatContainer>
 
     <!-- Input -->
-    <div class="mt-4">
-      <!-- File preview chips -->
-      <div v-if="attachments.length > 0" class="flex gap-2 mb-2 overflow-x-auto pb-1">
-        <div
-          v-for="(att, idx) in attachments"
-          :key="att.file.name + idx"
-          class="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted rounded-md text-xs whitespace-nowrap shrink-0"
-        >
-          <FileIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span class="max-w-[120px] truncate">{{ att.file.name }}</span>
-          <span class="text-muted-foreground shrink-0">{{ formatFileSize(att.file.size) }}</span>
-          <span v-if="!att.record && !att.error" class="text-muted-foreground shrink-0">{{ $t('chat.uploading') }}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-4 w-4 shrink-0"
-            @click="removeFile(idx)"
-          >
-            <X class="h-3 w-3" />
-          </Button>
-        </div>
-      </div>
+    <div class="mt-6">
+      <!-- File preview chips (AttachmentGroup) -->
+      <AgentFilePreview
+        :attachments="attachments"
+        class="mb-2"
+        @remove="removeFile"
+        @retry="retryFile"
+      />
       <div v-if="uploadError && attachments.length === 0" class="mb-2 text-xs text-destructive">{{ uploadError }}</div>
       <div class="flex gap-2">
         <Button
@@ -541,10 +448,9 @@ const availableAgents = computed(() => {
         >
           <Paperclip class="h-4 w-4" />
         </Button>
-          <input
-            id="chat-file-upload"
-            name="chat-file-upload"
-            ref="fileInput"
+        <input
+          id="chat-file-upload"
+          ref="fileInput"
           type="file"
           multiple
           accept=".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.xml,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.zip"
@@ -554,47 +460,46 @@ const availableAgents = computed(() => {
         <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
         <textarea
           id="chat-input"
-          name="chat-input"
           ref="textareaRef"
           :value="inputText"
           @input="(e: Event) => { const ta = e.target as HTMLTextAreaElement; inputText = ta.value; autoResize() }"
           :placeholder="$t('chat.inputPlaceholder')"
           :disabled="chatStore.isStreaming || !selectedAgent"
           rows="1"
-          class="flex min-h-[44px] w-full rounded-md border border-input bg-transparent px-2.5 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
+          class="flex min-h-[44px] w-full resize-none overflow-hidden rounded-md border border-input bg-transparent px-2.5 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           @keydown="handleKeydown"
         />
-      <div class="flex flex-col gap-1">
-        <Button
-          v-if="!chatStore.isStreaming"
-          size="icon"
-          class="h-[44px] w-[44px]"
-          :disabled="!inputText.trim() || !selectedAgent"
-          @click="handleSend"
-        >
-          <Send class="h-4 w-4" />
-        </Button>
-        <Button
-          v-else
-          variant="destructive"
-          size="icon"
-          class="h-[44px] w-[44px]"
-          @click="handleStop"
-        >
-          <Square class="h-4 w-4" />
-        </Button>
+        <div class="flex flex-col gap-1">
+          <Button
+            v-if="!chatStore.isStreaming"
+            size="icon"
+            class="h-[44px] w-[44px]"
+            :disabled="!inputText.trim() || !selectedAgent"
+            @click="handleSend"
+          >
+            <Send class="h-4 w-4" />
+          </Button>
+          <Button
+            v-else
+            variant="destructive"
+            size="icon"
+            class="h-[44px] w-[44px]"
+            @click="handleStop"
+          >
+            <Square class="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-    </div>
     </div>
 
     <!-- Agent switching bar -->
-    <div v-if="!initializing && availableAgents.length > 0" class="mt-3 pt-3 border-t">
+    <div v-if="!initializing && availableAgents.length > 0" class="mt-3 border-t pt-3">
       <div class="flex flex-wrap gap-1.5">
         <Badge
           v-for="agent in availableAgents"
           :key="agent.id"
           variant="outline"
-          class="cursor-pointer hover:bg-accent text-xs py-1 px-2.5 select-none"
+          class="cursor-pointer select-none px-2.5 py-1 text-xs hover:bg-accent"
           @click="selectAgent(agent.id)"
         >
           {{ agent.name }}

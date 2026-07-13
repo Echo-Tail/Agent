@@ -25,10 +25,19 @@ import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import type { ToolDefinition } from '@/api/tool'
 
-import {
-  Settings2,
-} from 'lucide-vue-next'
+import { Settings2 } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -45,14 +54,6 @@ const editDescription = ref('')
 const configApiProvider = ref<'tavily' | 'firecrawl' | ''>('')
 const configApiKey = ref('')
 const saving = ref(false)
-
-const categoryColors: Record<string, string> = {
-  web: '#18a058',
-  media: '#2080f0',
-  browser: '#f0a020',
-  terminal_files: '#d03050',
-  memory: '#8050c0',
-}
 
 async function fetchTools() {
   loading.value = true
@@ -148,45 +149,52 @@ async function handleSaveConfig() {
     </div>
 
     <div v-else class="border border-border rounded-lg overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-muted/50 border-b border-border">
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground">{{ $t('toolManage.columns.name') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground">{{ $t('toolManage.columns.description') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-28">{{ $t('toolManage.columns.category') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{{ $t('toolManage.columns.status') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{{ $t('toolManage.columns.action') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-border">
-          <tr v-for="tool in tools" :key="tool.id" class="hover:bg-muted/30 transition-colors">
-            <td class="px-4 py-2.5 font-medium">{{ tool.name }}</td>
-            <td class="px-4 py-2.5 text-muted-foreground text-xs max-w-xs truncate" :title="tool.description">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead class="w-auto">{{ $t('toolManage.columns.name') }}</TableHead>
+            <TableHead class="w-auto">{{ $t('toolManage.columns.description') }}</TableHead>
+            <TableHead class="w-28">{{ $t('toolManage.columns.category') }}</TableHead>
+            <TableHead class="w-20">{{ $t('toolManage.columns.status') }}</TableHead>
+            <TableHead class="w-20">{{ $t('toolManage.columns.action') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="tool in tools" :key="tool.id">
+            <TableCell class="font-medium">{{ tool.name }}</TableCell>
+            <TableCell class="max-w-xs truncate text-xs text-muted-foreground" :title="tool.description">
               {{ tool.description }}
-            </td>
-            <td class="px-4 py-2.5">
-              <span
-                class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
-                :style="{ background: categoryColors[tool.category] || '#888' }"
+            </TableCell>
+            <TableCell>
+              <Badge
+                :class="[
+                  'text-xs text-white',
+                  tool.category === 'web' ? 'bg-green-600' :
+                  tool.category === 'media' ? 'bg-blue-600' :
+                  tool.category === 'browser' ? 'bg-amber-600' :
+                  tool.category === 'terminal_files' ? 'bg-red-600' :
+                  tool.category === 'memory' ? 'bg-purple-600' :
+                  'bg-muted-foreground'
+                ]"
               >
                 {{ $t(ToolCategoryKeys[tool.category]) || tool.category }}
-              </span>
-            </td>
-            <td class="px-4 py-2.5">
+              </Badge>
+            </TableCell>
+            <TableCell>
               <Switch
                 :checked="tool.enabled"
                 :disabled="toggling.has(tool.id)"
                 @update:checked="handleToggle(tool)"
               />
-            </td>
-            <td class="px-4 py-2.5">
+            </TableCell>
+            <TableCell>
               <Button variant="outline" size="sm" class="h-7 text-xs" @click="openConfig(tool)">
                 <Settings2 class="mr-1 h-3 w-3" />{{ $t('toolManage.config') }}
               </Button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- Config Modal -->
@@ -198,17 +206,12 @@ async function handleSaveConfig() {
         </DialogHeader>
         <div v-if="editingTool" class="space-y-4">
           <div class="space-y-2">
-            <label for="tool-name" class="text-sm font-medium">{{ $t('toolManage.columns.name') }}</label>
-            <Input id="tool-name" name="tool-name" v-model="editName" />
+            <Label for="tool-name">{{ $t('toolManage.columns.name') }}</Label>
+            <Input id="tool-name" v-model="editName" />
           </div>
           <div class="space-y-2">
-            <label for="tool-description" class="text-sm font-medium">{{ $t('toolManage.columns.description') }}</label>
-            <textarea
-              id="tool-description"
-              name="tool-description"
-              v-model="editDescription"
-              class="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+            <Label for="tool-description">{{ $t('toolManage.columns.description') }}</Label>
+            <Textarea id="tool-description" v-model="editDescription" rows="3" />
           </div>
 
           <div class="border-t border-border pt-4">
@@ -232,7 +235,7 @@ async function handleSaveConfig() {
                 </div>
               </div>
               <div class="space-y-2 mt-3">
-                <label for="tool-api-key" class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
+                <Label for="tool-api-key">{{ $t('toolManage.apiKeyConfig') }}</Label>
                 <Input id="tool-api-key" name="tool-api-key" v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
               </div>
             </template>
@@ -243,7 +246,7 @@ async function handleSaveConfig() {
                 {{ $t('toolManage.noExtraConfig') }}
               </div>
               <div v-else class="space-y-2">
-                <label for="tool-api-key-fallback" class="text-sm font-medium">{{ $t('toolManage.apiKeyConfig') }}</label>
+                <Label for="tool-api-key-fallback">{{ $t('toolManage.apiKeyConfig') }}</Label>
                 <Input id="tool-api-key-fallback" name="tool-api-key-fallback" v-model="configApiKey" type="password" :placeholder="$t('toolManage.config')" />
               </div>
             </template>

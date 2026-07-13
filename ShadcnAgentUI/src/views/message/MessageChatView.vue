@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
+/**
+ * MessageChatView.vue — 私聊界面
+ *
+ * 用户间私聊会话的主界面，支持实时消息推送、文件共享。
+ */
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { STORAGE_KEY_TOKEN } from '@/constants'
@@ -9,6 +14,11 @@ import { useUnreadStore } from '@/stores/unread'
 import type { ChatPrivateMessage } from '@/types/group'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Message, MessageAvatar, MessageContent } from '@/components/ui/message'
+import { Bubble, BubbleContent } from '@/components/ui/bubble'
+import { Textarea } from '@/components/ui/textarea'
+import { MessageScrollerItem } from '@/components/ui/message-scroller'
+import AgentChatContainer from '@/components/chat/AgentChatContainer.vue'
 import { toast } from 'sonner'
 import { Send, ArrowLeft, Loader2, Paperclip, FileIcon } from 'lucide-vue-next'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -28,20 +38,12 @@ const sending = ref(false)
 
 const otherUsername = ref('')
 const myUsername = computed(() => auth.currentUser?.username || '我')
-const messagesEnd = ref<HTMLDivElement | null>(null)
 
 const fileUploading = ref(false)
 const showFileDialog = ref(false)
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let eventSource: EventSource | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
-
-watch(() => messages.value.length, () => {
-  nextTick(() => {
-    requestAnimationFrame(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }))
-  })
-})
 
 onMounted(async () => {
   try {
@@ -58,9 +60,6 @@ onMounted(async () => {
     toast.error('加载失败')
   } finally {
     loading.value = false
-    nextTick(() => {
-      requestAnimationFrame(() => messagesEnd.value?.scrollIntoView())
-    })
   }
 
   // SSE 连接
@@ -101,10 +100,25 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (eventSource) eventSource.close()
+  eventSource?.close()
   if (reconnectTimer) clearTimeout(reconnectTimer)
-  if (pollTimer) clearInterval(pollTimer)
 })
+
+async function sendMessage() {
+  const content = inputText.value.trim()
+  if (!content || sending.value) return
+  sending.value = true
+  inputText.value = ''
+  try {
+    const msg = await sendPrivateMessageApi(otherUserId.value, content)
+    messages.value.push(msg)
+  } catch {
+    toast.error('发送失败')
+  } finally {
+    sending.value = false
+  }
+}
+
 
 async function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
@@ -127,21 +141,6 @@ async function handleFileUpload(event: Event) {
   }
 }
 
-async function sendMessage() {
-  const content = inputText.value.trim()
-  if (!content || sending.value) return
-  sending.value = true
-  inputText.value = ''
-  try {
-    const msg = await sendPrivateMessageApi(otherUserId.value, content)
-    messages.value.push(msg)
-  } catch {
-    toast.error('发送失败')
-  } finally {
-    sending.value = false
-  }
-}
-
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
@@ -149,26 +148,15 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
-
-function autoResize() {
-  const ta = textareaRef.value
-  if (!ta) return
-  ta.style.height = 'auto'
-  ta.style.height = ta.scrollHeight + 'px'
-}
-
-watch(() => inputText.value, () => nextTick(autoResize))
-
 function goBack() {
   router.push({ name: 'Messages' })
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-[calc(100vh-8rem)] -m-6">
+  <div class="flex flex-col h-[calc(100vh-8rem)] px-4 md:px-6">
     <!-- Header -->
-    <div class="flex items-center gap-3 px-4 h-14 border-b shrink-0">
+    <div class="flex shrink-0 items-center gap-3 border-b px-4 h-14">
       <Button variant="ghost" size="icon" class="h-8 w-8" @click="goBack">
         <ArrowLeft class="h-4 w-4" />
       </Button>
@@ -177,61 +165,94 @@ function goBack() {
       </Avatar>
       <span class="font-semibold">{{ otherUsername || `用户 #${otherUserId}` }}</span>
       <Button variant="outline" size="sm" @click="showFileDialog = true">
-        <FileIcon class="h-4 w-4 mr-1" /> 文件
+        <FileIcon class="mr-1 h-4 w-4" /> 文件
       </Button>
     </div>
 
     <!-- Messages -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-[#121212]">
-      <div v-if="loading" class="flex justify-center py-10">
-        <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-      <div v-else-if="messages.length === 0" class="flex flex-col items-center justify-center py-20 text-muted-foreground">
-        <p>发送第一条消息开始聊天</p>
-      </div>
+    <AgentChatContainer class="flex-1 bg-muted/30" viewport-class="px-4 pb-4">
+      <!-- Loading state -->
+      <template v-if="loading">
+        <MessageScrollerItem message-id="loading">
+          <div class="flex justify-center py-10">
+            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </MessageScrollerItem>
+      </template>
+
+      <!-- Empty state -->
+      <template v-else-if="messages.length === 0">
+        <MessageScrollerItem message-id="empty">
+          <div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <p>发送第一条消息开始聊天</p>
+          </div>
+        </MessageScrollerItem>
+      </template>
+
+      <!-- Messages list -->
       <template v-else>
-        <div
+        <MessageScrollerItem
           v-for="msg in messages"
           :key="msg.id"
-          :class="['flex gap-3', msg.senderId === auth.currentUser?.id ? 'flex-row-reverse' : '']"
+          :message-id="`msg-${msg.id}`"
+          :scroll-anchor="msg.senderId === auth.currentUser?.id"
         >
-          <div class="min-w-0 max-w-[75%]">
-            <div :class="['flex items-center gap-2 mb-1', msg.senderId === auth.currentUser?.id ? 'flex-row-reverse' : '']">
-              <span class="text-xs text-[#888888]">{{ msg.senderId === auth.currentUser?.id ? myUsername : otherUsername }}</span>
-              <span class="text-xs text-[#B2B2B2]">{{ new Date(msg.createdAt).toLocaleTimeString() }}</span>
-            </div>
-            <div :class="[
-              'rounded-lg p-3 text-sm w-fit max-w-full',
-              msg.senderId === auth.currentUser?.id
-                ? 'bg-[#E9ECEF] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100'
-                : 'bg-[#F0F2F5] text-[#191919] dark:bg-[#2d2d44] dark:text-gray-100'
-            ]">
-              <MarkdownRenderer v-if="msg.content.includes('[')" :content="msg.content" />
-              <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
-            </div>
-          </div>
-        </div>
-        <div ref="messagesEnd" />
+          <Message :align="msg.senderId === auth.currentUser?.id ? 'end' : 'start'">
+              <MessageAvatar class="self-start mt-6">
+                <Avatar class="h-8 w-8">
+                  <AvatarFallback
+                    :class="msg.senderId === auth.currentUser?.id
+                      ? 'bg-muted text-xs'
+                      : 'bg-primary text-primary-foreground text-xs'"
+                  >
+                    {{ msg.senderId === auth.currentUser?.id
+                      ? (myUsername?.charAt(0)?.toUpperCase() || 'U')
+                      : (otherUsername?.charAt(0)?.toUpperCase() || 'U') }}
+                  </AvatarFallback>
+                </Avatar>
+              </MessageAvatar>
+            <MessageContent>
+              <!-- Sender name + timestamp -->
+              <div
+                class="mb-0.5 flex items-center gap-2"
+                :class="msg.senderId === auth.currentUser?.id ? 'justify-end' : ''"
+              >
+                <span class="text-xs text-muted-foreground">
+                  {{ msg.senderId === auth.currentUser?.id ? myUsername : otherUsername }}
+                </span>
+                <span class="text-xs text-muted-foreground/60">
+                  {{ new Date(msg.createdAt).toLocaleTimeString() }}
+                </span>
+              </div>
+              <!-- Message content -->
+              <Bubble :variant="msg.senderId === auth.currentUser?.id ? 'default' : 'muted'">
+                <BubbleContent>
+                  <MarkdownRenderer
+                    v-if="msg.content.includes('[')"
+                    :content="msg.content"
+                  />
+                  <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
+                </BubbleContent>
+              </Bubble>
+            </MessageContent>
+          </Message>
+        </MessageScrollerItem>
       </template>
-    </div>
+    </AgentChatContainer>
 
     <!-- Input -->
-    <div class="px-4 py-3 border-t">
+    <div class="border-t px-4 py-4">
       <div class="flex gap-2">
-        <textarea
-          id="private-chat-input"
-          name="private-chat-input"
-          ref="textareaRef"
-          :value="inputText"
-          @input="(e: Event) => { const ta = e.target as HTMLTextAreaElement; inputText = ta.value; autoResize() }"
+        <Textarea
+          v-model="inputText"
           :placeholder="'发送消息...'"
           rows="1"
-          class="flex min-h-[44px] w-full rounded-md border border-input bg-transparent px-2.5 py-2.5 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden"
+          class="min-h-[44px] resize-none overflow-hidden"
           @keydown="handleKeydown"
         />
         <EmojiPicker @select="(val: string) => { inputText += val.length <= 2 ? val : '![emoji](' + val + ') ' }" />
-        <Button size="icon" variant="outline" class="h-[44px] w-[44px] shrink-0 relative" :disabled="fileUploading">
-          <input id="private-chat-file-upload" name="private-chat-file-upload" type="file" multiple class="absolute inset-0 opacity-0 cursor-pointer" @change="handleFileUpload" />
+        <Button size="icon" variant="outline" class="relative h-[44px] w-[44px] shrink-0" :disabled="fileUploading">
+          <input id="private-chat-file-upload" type="file" multiple class="absolute inset-0 cursor-pointer opacity-0" @change="handleFileUpload" />
           <Paperclip class="h-4 w-4" />
         </Button>
         <Button size="icon" class="h-[44px] w-[44px] shrink-0" :disabled="!inputText.trim() || sending" @click="sendMessage">

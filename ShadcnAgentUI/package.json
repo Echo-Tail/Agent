@@ -52,5 +52,8 @@
     "vite": "^8.0.12",
     "vitest": "^4.1.7",
     "vue-tsc": "^3.2.8"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "^1.1.5"
   }
 }

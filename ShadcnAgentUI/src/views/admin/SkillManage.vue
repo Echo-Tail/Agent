@@ -29,6 +29,11 @@ import {
   FileArchive,
   Globe,
 } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { useI18n } from 'vue-i18n'
 
@@ -94,23 +99,6 @@ const skillCategoryKeys: Record<string, string> = {
   other: 'skillManage.category.other',
 }
 
-const categoryColors: Record<string, string> = {
-  'content-creation': '#e74c3c',
-  'video-creation': '#e67e22',
-  'ecommerce-marketing': '#f39c12',
-  'presentation': '#2ecc71',
-  'digital-human': '#1abc9c',
-  'document-analysis': '#3498db',
-  'voice-audio': '#9b59b6',
-  'agent-collaboration': '#8e44ad',
-  'product-management': '#2980b9',
-  'financial-analysis': '#16a085',
-  'design-visualization': '#e91e63',
-  'cultural-creation': '#ff7043',
-  'document-processing': '#607d8b',
-  'skill-management': '#795548',
-  other: '#888',
-}
 
 async function fetchSkills() {
   loading.value = true
@@ -258,39 +246,35 @@ async function handleDelete() {
     <EmptyState v-else-if="skills.length === 0" :title="$t('common.noData')" :description="$t('skillManage.emptyDesc')" />
 
     <div v-else class="border border-border rounded-lg overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-muted/50 border-b border-border">
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground">{{ $t('skillManage.columns.name') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground">{{ $t('skillManage.columns.description') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-32">{{ $t('skillManage.columns.category') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{{ $t('skillManage.columns.action') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-border">
-          <tr v-for="skill in skills" :key="skill.name" class="hover:bg-muted/30 transition-colors">
-            <td class="px-4 py-2.5 font-medium">{{ skill.name }}</td>
-            <td class="px-4 py-2.5 text-muted-foreground text-xs max-w-xs truncate" :title="skill.description">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{{ $t('skillManage.columns.name') }}</TableHead>
+            <TableHead>{{ $t('skillManage.columns.description') }}</TableHead>
+            <TableHead class="w-32">{{ $t('skillManage.columns.category') }}</TableHead>
+            <TableHead class="w-20">{{ $t('skillManage.columns.action') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="skill in skills" :key="skill.name">
+            <TableCell class="font-medium">{{ skill.name }}</TableCell>
+            <TableCell class="max-w-xs truncate text-xs text-muted-foreground" :title="skill.description">
               {{ skill.description }}
-            </td>
-            <td class="px-4 py-2.5">
-              <span
-                v-if="skill.category"
-                class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
-                :style="{ background: categoryColors[skill.category] || '#888' }"
-              >
+            </TableCell>
+            <TableCell>
+              <Badge v-if="skill.category" variant="outline" class="text-xs">
                 {{ $t(skillCategoryKeys[skill.category]) || skill.category }}
-              </span>
+              </Badge>
               <span v-else class="text-xs text-muted-foreground">{{ $t('common.uncategorized') }}</span>
-            </td>
-            <td class="px-4 py-2.5">
+            </TableCell>
+            <TableCell>
               <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive hover:text-destructive" @click="confirmDelete(skill)">
                 <Trash2 class="h-4 w-4" />
               </Button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- URL Import Modal -->
@@ -307,7 +291,7 @@ async function handleDelete() {
             <p class="pl-3"><b>{{ $t('skillManage.urlImport.subtree') }}</b> — https://github.com/{owner}/{repo}/tree/main/skills/{name}</p>
           </div>
           <div class="space-y-2">
-            <label for="skill-import-url" class="text-sm font-medium">GitHub URL <span class="text-destructive">*</span></label>
+            <Label for="skill-import-url">GitHub URL <span class="text-destructive">*</span></Label>
             <Input id="skill-import-url" name="skill-import-url" v-model="importUrl" placeholder="https://github.com/{owner}/{repo}" />
           </div>
           <DialogFooter>
@@ -352,7 +336,7 @@ async function handleDelete() {
         <template v-if="!uploadResult">
           <div class="space-y-4">
             <div class="space-y-2">
-              <label for="skill-zip-file" class="text-sm font-medium">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></label>
+              <Label for="skill-zip-file">{{ $t('skillManage.zipFileSelect') }} <span class="text-destructive">*</span></Label>
               <input id="skill-zip-file" name="skill-zip-file" ref="fileInputRef" type="file" accept=".zip" class="hidden" @change="handleFileSelect" />
               <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" @click="fileInputRef?.click()">

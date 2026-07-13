@@ -45,6 +45,8 @@ import {
 import { toast } from 'sonner'
 
 const authStore = useAuthStore()
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
 const { t } = useI18n()
 
 const users = ref<UserDTO[]>([])
@@ -229,28 +231,28 @@ function formatDate(dateStr: string) {
       <Skeleton v-for="i in 5" :key="i" class="h-12 w-full" />
     </div>
     <div v-else class="border border-border rounded-lg overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-muted/50 border-b border-border">
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">{{ $t('userManage.columns.id') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground">{{ $t('userManage.columns.username') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{{ $t('userManage.columns.role') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{{ $t('userManage.columns.status') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-28">{{ $t('userManage.columns.createdAt') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-32">{{ $t('userManage.inviteCodes') }}</th>
-            <th class="text-left px-4 py-2.5 font-medium text-muted-foreground w-24">{{ $t('userManage.columns.action') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-border">
-          <tr v-for="user in users" :key="user.id" class="hover:bg-muted/30 transition-colors">
-            <td class="px-4 py-2.5 text-muted-foreground">{{ user.id }}</td>
-            <td class="px-4 py-2.5 font-medium">{{ user.username }}</td>
-            <td class="px-4 py-2.5">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead class="w-16">{{ $t('userManage.columns.id') }}</TableHead>
+            <TableHead>{{ $t('userManage.columns.username') }}</TableHead>
+            <TableHead class="w-20">{{ $t('userManage.columns.role') }}</TableHead>
+            <TableHead class="w-20">{{ $t('userManage.columns.status') }}</TableHead>
+            <TableHead class="w-28">{{ $t('userManage.columns.createdAt') }}</TableHead>
+            <TableHead class="w-32">{{ $t('userManage.inviteCodes') }}</TableHead>
+            <TableHead class="w-24">{{ $t('userManage.columns.action') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-for="user in users" :key="user.id">
+            <TableCell class="text-muted-foreground">{{ user.id }}</TableCell>
+            <TableCell class="font-medium">{{ user.username }}</TableCell>
+            <TableCell>
               <Badge :variant="user.role === 'admin' ? 'default' : 'secondary'" class="text-xs">
                 {{ $t(UserRoleKeys[user.role]) || user.role }}
               </Badge>
-            </td>
-            <td class="px-4 py-2.5">
+            </TableCell>
+            <TableCell>
               <Badge
                 variant="outline"
                 :class="user.status === 'active'
@@ -260,10 +262,10 @@ function formatDate(dateStr: string) {
               >
                 {{ $t(UserStatusKeys[user.status]) || user.status }}
               </Badge>
-            </td>
-            <td class="px-4 py-2.5 text-muted-foreground">{{ formatDate(user.createdAt) }}</td>
-            <td class="px-4 py-2.5 text-muted-foreground font-mono text-xs">{{ user.inviteCode || '-' }}</td>
-            <td class="px-4 py-2.5">
+              </TableCell>
+            <TableCell class="text-muted-foreground">{{ formatDate(user.createdAt) }}</TableCell>
+            <TableCell class="font-mono text-xs text-muted-foreground">{{ user.inviteCode || '-' }}</TableCell>
+            <TableCell>
               <Button
                 variant="outline"
                 size="sm"
@@ -275,10 +277,10 @@ function formatDate(dateStr: string) {
                 <Loader2 v-if="toggling.has(user.id)" class="mr-1 h-3 w-3 animate-spin" />
                 {{ user.status === 'active' ? $t('toolManage.disableTool') : $t('toolManage.enableTool') }}
               </Button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
 
     <!-- Invite Code Modal -->
