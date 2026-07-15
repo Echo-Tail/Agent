@@ -5,6 +5,9 @@ import cafe.snails.ecomagents.exception.ErrorCode;
 import cafe.snails.ecomagents.model.AmazonImageResult;
 import cafe.snails.ecomagents.model.AmazonImageTask;
 import cafe.snails.ecomagents.model.ProductProfileVersion;
+import cafe.snails.ecomagents.model.ImageGenerationJob;
+import cafe.snails.ecomagents.model.ImageGenerationJobStatus;
+import cafe.snails.ecomagents.model.ImageGenerationRecord;
 import cafe.snails.ecomagents.repository.AmazonImageResultRepository;
 import cafe.snails.ecomagents.repository.AmazonImageTaskRepository;
 import cafe.snails.ecomagents.repository.ProductProfileVersionRepository;
@@ -18,6 +21,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import cafe.snails.ecomagents.service.image.runtime.ImageGenerationWorkflowService;
+import java.time.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +49,7 @@ public class AmazonImageTaskService {
     private final AmazonImageTaskRepository taskRepository;
     private final AmazonImageResultRepository resultRepository;
     private final ProductProfileVersionRepository versionRepository;
-    private final ImageGenerationService imageGenerationService;
+    private final ImageGenerationWorkflowService imageGenerationWorkflow;
     private final PromptCompositionService promptCompositionService;
     private final ObjectMapper objectMapper;
 
@@ -92,7 +97,7 @@ public class AmazonImageTaskService {
 
     public record GenerateTaskResult(
             AmazonImageTask task,
-            ImageGenerationService.ImageGenerationResult generation,
+            ImageGenerationWorkflowService.GenerationResult generation,
             List<AmazonImageResult> results
     ) {}
 
@@ -212,7 +217,6 @@ public class AmazonImageTaskService {
         return taskRepository.save(task);
     }
 
-    @Transactional
     public GenerateTaskResult generate(Long id, String prompt, String size, String quality,
                                        List<MultipartFile> images, int n, Long modelId, Long userId) {
         AmazonImageTask task = get(id, userId);
@@ -240,36 +244,59 @@ public class AmazonImageTaskService {
         task.setStatus(STATUS_PENDING);
         task = taskRepository.save(task);
 
-        ImageGenerationService.ImageGenerationResult result;
+        ImageGenerationWorkflowService.AwaitResult awaited;
         try {
+            ImageGenerationJob imageJob;
             if (images != null && !images.isEmpty()) {
-                result = imageGenerationService.edit(finalPrompt, size, quality, images, null, n, userId, modelId);
+                imageJob = imageGenerationWorkflow.submitImage(userId, modelId, finalPrompt, size, quality,
+                        n, task.getNegativePrompt(), images, null);
             } else {
-                result = imageGenerationService.generate(finalPrompt, size, quality, n, userId, modelId);
+                imageJob = imageGenerationWorkflow.submitText(userId, modelId, finalPrompt, size, quality,
+                        n, task.getNegativePrompt());
+            }
+            task.setImageJobId(imageJob.getId());
+            task = taskRepository.save(task);
+            awaited = imageGenerationWorkflow.await(imageJob.getId(), userId, Duration.ofMinutes(10));
+            if (!awaited.completed()) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                        "图片任务仍在执行，imageJobId=" + imageJob.getId());
             }
         } catch (Exception e) {
-            task.setStatus(STATUS_FAILED);
+            if (task.getImageJobId() == null) task.setStatus(STATUS_FAILED);
             taskRepository.save(task);
+            if (e instanceof BusinessException businessException) throw businessException;
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片生成失败: " + e.getMessage());
         }
+
+        if (awaited.job().getStatus() == ImageGenerationJobStatus.FAILED
+                || awaited.job().getStatus() == ImageGenerationJobStatus.CANCELLED) {
+            task.setStatus(STATUS_FAILED);
+            taskRepository.save(task);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    awaited.job().getSafeErrorMessage() != null ? awaited.job().getSafeErrorMessage() : "图片生成失败");
+        }
+        ImageGenerationWorkflowService.GenerationResult result = imageGenerationWorkflow.result(awaited);
 
         // Create result records for each generated image
         List<AmazonImageResult> results = new ArrayList<>();
         List<String> savedUrls = new ArrayList<>();
-        for (int i = 0; i < result.urls().size(); i++) {
-            String url = result.urls().get(i);
+        List<ImageGenerationRecord> successfulRecords = awaited.successfulRecords();
+        for (int i = 0; i < successfulRecords.size(); i++) {
+            ImageGenerationRecord record = successfulRecords.get(i);
+            String url = record.getResultPathNormalized();
             savedUrls.add(url);
             AmazonImageResult r = AmazonImageResult.builder()
                     .taskId(id)
+                    .generationRecordId(record.getId())
                     .imagePath(url)
                     .status(RESULT_PENDING)
-                    .imageIndex(i)
+                    .imageIndex(record.getOutputIndex() != null ? record.getOutputIndex() : i)
                     .build();
             results.add(resultRepository.save(r));
         }
 
         task.setPromptText(finalPrompt);
-        task.setModelId(modelId);
+        task.setModelId(awaited.job().getModelId());
         task.setGenerationRecordId(result.recordId());
         task.setResultPaths(String.join("\n", savedUrls));
         task.setStatus(STATUS_GENERATED);

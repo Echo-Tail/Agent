@@ -38,6 +38,7 @@ import {
   PanelsTopLeft,
   ScrollText,
   ScanLine,
+  Activity,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -75,6 +76,7 @@ const pageTitleKey: Record<string, string> = {
   ToolManage: 'pageTitle.toolManage',
   SkillManage: 'pageTitle.skillManage',
   TokenUsage: 'pageTitle.tokenUsage',
+  ImageRuntimeMonitoring: 'pageTitle.imageRuntimeMonitoring',
   TicketManage: 'pageTitle.ticketManage',
   KnowledgeBase: 'pageTitle.knowledgeBase',
   PublicAssets: 'pageTitle.publicAssets',
@@ -122,6 +124,7 @@ const navGroups: NavItem[][] = [
   ],
   // 管理后台
   [
+    { translationKey: 'nav.imageRuntimeMonitoring', key: 'ImageRuntimeMonitoring', icon: Activity, adminOnly: true },
     { translationKey: 'nav.tokenUsage', key: 'TokenUsage', icon: BarChart3, adminOnly: true },
     { translationKey: 'nav.userManage', key: 'UserManage', icon: UserCog, adminOnly: true },
     { translationKey: 'nav.modelManage', key: 'ModelManage', icon: Brain, adminOnly: true },

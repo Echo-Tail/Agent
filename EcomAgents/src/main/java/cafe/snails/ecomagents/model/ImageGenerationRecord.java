@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
  * <p>记录用户的每一次文生图/图生图操作，包括 prompt、参数、结果路径和耗时。</p>
  */
 @Entity
-@Table(name = "image_generation_records")
+@Table(name = "image_generation_records", uniqueConstraints =
+        @UniqueConstraint(name = "uk_image_record_job_output", columnNames = {"job_id", "output_index"}))
 @Getter
 @Setter
 @ToString
@@ -23,6 +24,21 @@ public class ImageGenerationRecord {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "job_id")
+    private Long jobId;
+
+    @Column(name = "output_index")
+    private Integer outputIndex;
+
+    @Column(length = 32)
+    private String status;
+
+    @Column(name = "error_code", length = 100)
+    private String errorCode;
+
+    @Column(name = "safe_error_message", length = 500)
+    private String safeErrorMessage;
 
     /** 操作用户 ID */
     @Column(nullable = false)

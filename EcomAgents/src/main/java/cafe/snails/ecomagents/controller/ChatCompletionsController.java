@@ -5,7 +5,9 @@ import cafe.snails.ecomagents.dto.ChatCompletionsResponse;
 import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.exception.ErrorCode;
 import cafe.snails.ecomagents.security.CurrentUserId;
-import cafe.snails.ecomagents.service.ImageGenerationService;
+import cafe.snails.ecomagents.service.image.runtime.ImageGenerationWorkflowService;
+import cafe.snails.ecomagents.model.ImageGenerationJobStatus;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.Duration;
 
 /**
  * OpenAI Chat Completions 兼容接口。
@@ -32,7 +35,10 @@ public class ChatCompletionsController {
     private static final String DEFAULT_IMAGE_SIZE = "1254x1254";
     private static final String DEFAULT_IMAGE_QUALITY = "standard";
 
-    private final ImageGenerationService imageGenerationService;
+    private final ImageGenerationWorkflowService imageGenerationWorkflow;
+
+    @Value("${chat.image.wait-timeout-seconds:30}")
+    private long imageWaitTimeoutSeconds;
 
     /**
      * 处理 Chat Completions 请求。
@@ -53,15 +59,23 @@ public class ChatCompletionsController {
         String quality = request.getQuality() != null ? request.getQuality() : DEFAULT_IMAGE_QUALITY;
         log.info("ChatCompletions image generation: model={}, prompt=\"{}\", size={}", model, prompt, size);
 
-        // 调用图片生成（复用 ImageGenerationService 的 generate 逻辑）
-        ImageGenerationService.ImageGenerationResult result = imageGenerationService.generate(
-                prompt, size, quality, 1, userId);
+        var job = imageGenerationWorkflow.submitText(userId, null, prompt, size, quality, 1, null);
+        var awaited = imageGenerationWorkflow.await(job.getId(), userId, Duration.ofSeconds(imageWaitTimeoutSeconds));
 
-        // 构建图片 Markdown URL（兼容 OpenAI 格式，content 中返回图片链接）
-        String imageUrl = result.urls().get(0);
-        String markdownContent = String.format("![generated image](%s)", imageUrl);
-        if (result.revisedPrompt() != null && !result.revisedPrompt().isBlank()) {
-            markdownContent += "\n\n" + result.revisedPrompt();
+        String markdownContent;
+        if (!awaited.completed()) {
+            markdownContent = "图片生成任务已提交，仍在处理中。imageJobId=" + job.getId();
+        } else if (awaited.job().getStatus() == ImageGenerationJobStatus.FAILED
+                || awaited.job().getStatus() == ImageGenerationJobStatus.CANCELLED
+                || awaited.successfulRecords().isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    awaited.job().getSafeErrorMessage() != null ? awaited.job().getSafeErrorMessage() : "图片生成失败");
+        } else {
+            var record = awaited.successfulRecords().get(0);
+            markdownContent = String.format("![generated image](%s)", record.getResultPathNormalized());
+            if (record.getRevisedPrompt() != null && !record.getRevisedPrompt().isBlank()) {
+                markdownContent += "\n\n" + record.getRevisedPrompt();
+            }
         }
 
         long now = System.currentTimeMillis() / 1000;

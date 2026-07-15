@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import AspectRatioIcon from '@/components/AspectRatioIcon.vue'
 import ImageLightbox from '@/components/ImageLightbox.vue'
@@ -16,22 +16,28 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import {
   Check, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle, Download,
-  ZoomIn,
+  ZoomIn, XCircle,
 } from 'lucide-vue-next'
-import { generateImage, editImage, createSuperResolutionJob, listSuperResolutionJobs } from '@/api/image'
+import {
+  submitTextImageJob, submitImageToImageJob, getImageJob, getImageJobResults,
+  cancelImageJob, retryImageJob, createSuperResolutionJob, listSuperResolutionJobs,
+} from '@/api/image'
 import { getImageModelsApi } from '@/api/model'
 import { listSpaces, listAssets, importFromRecord } from '@/api/assets'
 import type { AssetSpace, PublicAsset, PageResponse } from '@/api/assets'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import type { GeneratedImage, ImageGenerationResult, SuperResolutionJob } from '@/api/image'
+import type { GeneratedImage, ImageGenerationResult, ImageJob, SuperResolutionJob } from '@/api/image'
+import type { AiModel } from '@/types/api'
+import { defaultImageSize, imageSizeOptions } from '@/utils/imageSizePolicy'
+import { imageJobPollDelay, imageJobResult, isImageJobTerminal } from '@/utils/imageJobRuntime'
 
 const { t } = useI18n()
 
 // ── Model availability ──
 const hasModel = ref(false)
 const modelLoading = ref(true)
-const imageModels = ref<{ id: number; name: string }[]>([])
+const imageModels = ref<AiModel[]>([])
 const selectedModelId = ref<number | undefined>(undefined)
 
 // ── Mode ──
@@ -49,6 +55,11 @@ const maskPreviewUrl = ref<string>('')
 // ── Generation ──
 const generating = ref(false)
 const result = ref<ImageGenerationResult | null>(null)
+const activeJob = ref<ImageJob | null>(null)
+const cancellingJob = ref(false)
+const retryingJob = ref(false)
+const ACTIVE_IMAGE_JOB_KEY = 'ecomagents_active_image_job_id'
+let generationPollVersion = 0
 const superResolutionJobs = ref<SuperResolutionJob[]>([])
 const hiddenTerminalJobIds = new Set<number>()
 const upscaleConfirmOpen = ref(false)
@@ -59,6 +70,7 @@ let timerInterval: ReturnType<typeof setInterval> | null = null
 let queuePollInterval: ReturnType<typeof setInterval> | null = null
 
 onBeforeUnmount(() => {
+  generationPollVersion++
   stopTimer()
   if (queuePollInterval) clearInterval(queuePollInterval)
 })
@@ -81,15 +93,8 @@ const lightboxUrl = ref('')
 
 
 // ── Size options with descriptions ──
-const sizeOptions = [
-  { value: '1024x1024', label: '1024x1024', ratio: '1 / 1', ratioLabel: '1:1' },
-  { value: '1254x1254', label: '1254x1254', ratio: '1 / 1', ratioLabel: '1:1' },
-  { value: '1672x941', label: '1672x941', ratio: '16 / 9', ratioLabel: '16:9' },
-  { value: '1536x1024', label: '1536x1024', ratio: '3 / 2', ratioLabel: '3:2' },
-  { value: '1024x1536', label: '1024x1536', ratio: '2 / 3', ratioLabel: '2:3' },
-  { value: '1448x1086', label: '1448x1086', ratio: '4 / 3', ratioLabel: '4:3' },
-  { value: '1659x948', label: '1659x948', ratio: '7 / 4', ratioLabel: '7:4' },
-]
+const selectedModel = computed(() => imageModels.value.find(model => model.id === selectedModelId.value))
+const sizeOptions = computed(() => imageSizeOptions(selectedModel.value?.modelName))
 const qualityOptions = [
   { value: 'low', label: 'low' },
   { value: 'medium', label: 'medium' },
@@ -97,7 +102,12 @@ const qualityOptions = [
   { value: 'auto', label: 'auto' },
 ]
 
-const selectedSizeOption = computed(() => sizeOptions.find(opt => opt.value === size.value) ?? sizeOptions[0])
+const selectedSizeOption = computed(() => sizeOptions.value.find(opt => opt.value === size.value) ?? sizeOptions.value[0])
+watch(selectedModelId, () => {
+  if (!sizeOptions.value.some(option => option.value === size.value)) {
+    size.value = defaultImageSize(selectedModel.value?.modelName)
+  }
+})
 const canGenerate = computed(() => hasModel.value && prompt.value.trim().length > 0)
 const hasResult = computed(() => result.value && result.value.urls && result.value.urls.length > 0)
 const resultImageUrl = (url: string) => {
@@ -167,12 +177,8 @@ onMounted(async () => {
   await loadSuperResolutionJobs()
   queuePollInterval = setInterval(loadSuperResolutionJobs, 10000)
   try {
-    const models = await getImageModelsApi()
-    hasModel.value = models.length > 0
-    imageModels.value = models
-    if (models.length > 0 && !selectedModelId.value) {
-      selectedModelId.value = models[0].id
-    }
+    await loadImageModels('TEXT_TO_IMAGE')
+    await recoverActiveImageJob()
   } catch {
     hasModel.value = false
   } finally {
@@ -180,31 +186,169 @@ onMounted(async () => {
   }
 })
 
+async function loadImageModels(capability: 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE') {
+  const models = await getImageModelsApi(capability)
+  hasModel.value = models.length > 0
+  imageModels.value = models
+  if (!models.some(model => model.id === selectedModelId.value)) {
+    selectedModelId.value = models[0]?.id
+  }
+}
+
+watch(() => editImages.value.length > 0, async hasReferences => {
+  try {
+    await loadImageModels(hasReferences ? 'IMAGE_TO_IMAGE' : 'TEXT_TO_IMAGE')
+  } catch {
+    hasModel.value = false
+    imageModels.value = []
+    selectedModelId.value = undefined
+  }
+})
+
 // ── Generate ──
 async function handleGenerate() {
   if (!canGenerate.value || generating.value) return
+  if (!selectedModelId.value) return
   generating.value = true
   hideCompletedUpscaleJobs()
   result.value = null
+  setActiveJob(null)
   startTimer()
   try {
+    const optionsJson = JSON.stringify({ size: size.value, quality: quality.value })
+    let job: ImageJob
     if (editImages.value.length > 0) {
-      result.value = await editImage(prompt.value, editImages.value, size.value, quality.value, maskFile.value, imageCount.value, selectedModelId.value)
+      job = await submitImageToImageJob({
+        modelId: selectedModelId.value,
+        prompt: prompt.value,
+        targetCount: imageCount.value,
+        optionsJson,
+        images: editImages.value,
+        mask: maskFile.value,
+      })
     } else {
-      result.value = await generateImage(prompt.value, size.value, quality.value, imageCount.value, selectedModelId.value)
+      job = await submitTextImageJob({
+        modelId: selectedModelId.value,
+        prompt: prompt.value,
+        targetCount: imageCount.value,
+        optionsJson,
+      })
     }
-    if (result.value.failedCount > 0) {
-      toast.success(`${result.value.urls.length} 张生成成功，${result.value.failedCount} 张失败`)
+    setActiveJob(job)
+    await pollImageJob(job.id)
+  } catch {
+    // 错误提示由 request.ts 拦截器统一处理
+    if (!activeJob.value) {
+      stopTimer()
+      generating.value = false
+    }
+  }
+}
+
+function setActiveJob(job: ImageJob | null) {
+  activeJob.value = job
+  if (job && !isImageJobTerminal(job.status)) localStorage.setItem(ACTIVE_IMAGE_JOB_KEY, String(job.id))
+  else localStorage.removeItem(ACTIVE_IMAGE_JOB_KEY)
+}
+
+async function pollImageJob(jobId: number) {
+  const version = ++generationPollVersion
+  let attempts = 0
+  generating.value = true
+  while (version === generationPollVersion) {
+    try {
+      const job = await getImageJob(jobId)
+      if (version !== generationPollVersion) return
+      activeJob.value = job
+      if (isImageJobTerminal(job.status)) {
+        setActiveJob(job)
+        await finishImageJob(job)
+        return
+      }
+      attempts++
+      await delay(imageJobPollDelay(attempts))
+    } catch {
+      if (version === generationPollVersion) await delay(3000)
+    }
+  }
+}
+
+async function finishImageJob(job: ImageJob) {
+  stopTimer()
+  generating.value = false
+  if (job.status === 'SUCCEEDED' || job.status === 'PARTIALLY_SUCCEEDED') {
+    const records = await getImageJobResults(job.id)
+    result.value = imageJobResult(job, records)
+    if (job.status === 'PARTIALLY_SUCCEEDED') {
+      toast.success(`${job.successCount} 张生成成功，${job.failureCount} 张失败`)
     } else {
       toast.success(t('toast.imageGenerated'))
     }
-  } catch {
-    // 错误提示由 request.ts 拦截器统一处理
-  } finally {
-    stopTimer()
-    generating.value = false
+  } else if (job.status === 'FAILED') {
+    toast.error(job.safeErrorMessage || '图片生成失败')
+  } else if (job.status === 'CANCELLED') {
+    toast.info('图片生成任务已取消')
   }
 }
+
+async function recoverActiveImageJob() {
+  const rawId = localStorage.getItem(ACTIVE_IMAGE_JOB_KEY)
+  if (!rawId || !/^\d+$/.test(rawId)) return
+  try {
+    const job = await getImageJob(Number(rawId))
+    activeJob.value = job
+    prompt.value = job.prompt
+    await loadImageModels(job.capability)
+    selectedModelId.value = job.modelId
+    if (isImageJobTerminal(job.status)) {
+      setActiveJob(job)
+      await finishImageJob(job)
+    } else {
+      startTimer()
+      void pollImageJob(job.id)
+    }
+  } catch {
+    localStorage.removeItem(ACTIVE_IMAGE_JOB_KEY)
+  }
+}
+
+async function handleCancelJob() {
+  if (!activeJob.value || cancellingJob.value) return
+  cancellingJob.value = true
+  try {
+    const job = await cancelImageJob(activeJob.value.id)
+    setActiveJob(job)
+    if (isImageJobTerminal(job.status)) await finishImageJob(job)
+  } finally {
+    cancellingJob.value = false
+  }
+}
+
+async function handleRetryJob() {
+  if (!activeJob.value || retryingJob.value) return
+  retryingJob.value = true
+  result.value = null
+  try {
+    const job = await retryImageJob(activeJob.value.id)
+    setActiveJob(job)
+    startTimer()
+    await pollImageJob(job.id)
+  } finally {
+    retryingJob.value = false
+  }
+}
+
+function delay(milliseconds: number) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+const activeJobPhaseLabel = computed(() => {
+  const labels: Record<string, string> = {
+    PREPARING: '准备输入', SUBMITTING: '提交到模型', POLLING: '等待模型生成',
+    DOWNLOADING: '下载结果', PERSISTING: '保存结果',
+  }
+  return activeJob.value?.executionPhase ? labels[activeJob.value.executionPhase] : '排队等待'
+})
 
 // ── File upload ──
 function handleFileSelect(event: Event) {
@@ -529,6 +673,40 @@ function formatTime(ms: number): string {
               <span v-if="generating" class="text-xs text-muted-foreground whitespace-nowrap">
                 {{ $t('imageGen.timer', { seconds: timerSeconds }) }}
               </span>
+              <Button
+                v-if="activeJob && (activeJob.status === 'PENDING' || activeJob.status === 'RUNNING' || activeJob.status === 'CANCEL_REQUESTED')"
+                variant="outline"
+                size="sm"
+                :disabled="cancellingJob || activeJob.status === 'CANCEL_REQUESTED'"
+                @click="handleCancelJob"
+              >
+                <Loader2 v-if="cancellingJob" class="mr-1 h-3.5 w-3.5 animate-spin" />
+                <XCircle v-else class="mr-1 h-3.5 w-3.5" />
+                {{ activeJob.status === 'CANCEL_REQUESTED' ? '正在取消' : '取消任务' }}
+              </Button>
+            </div>
+          </div>
+
+          <div v-if="activeJob" class="rounded-md border border-border bg-muted/20 p-3 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="font-medium">图片任务 #{{ activeJob.id }}</p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {{ activeJob.status }} · {{ activeJobPhaseLabel }} · 成功 {{ activeJob.successCount }}/{{ activeJob.targetCount }}
+                </p>
+                <p v-if="activeJob.safeErrorMessage" class="mt-1 text-xs text-destructive">{{ activeJob.safeErrorMessage }}</p>
+              </div>
+              <Button
+                v-if="activeJob.status === 'FAILED' && activeJob.retryable"
+                variant="outline"
+                size="sm"
+                :disabled="retryingJob"
+                @click="handleRetryJob"
+              >
+                <Loader2 v-if="retryingJob" class="mr-1 h-3.5 w-3.5 animate-spin" />
+                <RefreshCw v-else class="mr-1 h-3.5 w-3.5" />
+                重试
+              </Button>
             </div>
           </div>
 

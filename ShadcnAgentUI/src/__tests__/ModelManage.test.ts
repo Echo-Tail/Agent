@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import ModelManage from '@/views/admin/ModelManage.vue'
 import i18n from '@/locales'
 import { createModelApi, listModelsApi } from '@/api/model'
-import { toast } from 'sonner'
+import { toast } from 'vue-sonner'
 
 vi.mock('@/api/model', () => ({
   listModelsApi: vi.fn(),
@@ -11,9 +11,12 @@ vi.mock('@/api/model', () => ({
   updateModelApi: vi.fn(),
   deleteModelApi: vi.fn(),
   validateModelApi: vi.fn(),
+  listModelCredentialsApi: vi.fn().mockResolvedValue([]),
+  listModelCapabilitiesApi: vi.fn().mockResolvedValue([]),
+  replaceModelCapabilitiesApi: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('sonner', () => ({
+vi.mock('vue-sonner', () => ({
   toast: {
     success: vi.fn(),
     warning: vi.fn(),
@@ -74,7 +77,7 @@ describe('ModelManage', () => {
     ]
 
     for (const id of fieldIds) {
-      expect(wrapper.find(`label[for="${id}"]`).exists()).toBe(true)
+      expect(wrapper.find(`label[for="${id}"]`).exists(), `missing label for ${id}`).toBe(true)
       const field = wrapper.find(`#${id}`)
       expect(field.exists()).toBe(true)
       expect(field.attributes('name')).toBe(id)
@@ -87,8 +90,10 @@ describe('ModelManage', () => {
     await wrapper.vm.$nextTick()
 
     await wrapper.findAll('button').at(-1)?.trigger('click')
+    await wrapper.vm.$nextTick()
 
     expect(createModelApi).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledWith('请填写完整的模型信息')
+    expect(wrapper.text()).toContain('请填写完整的模型信息')
   })
 })

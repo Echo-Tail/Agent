@@ -26,15 +26,18 @@ import {
   updateModelApi,
   deleteModelApi,
   validateModelApi,
+  listModelCredentialsApi,
+  listModelCapabilitiesApi,
+  replaceModelCapabilitiesApi,
 } from '@/api/model'
-import type { AiModel } from '@/types/api'
+import type { AiModel, AiModelCapability, ModelCapability, ModelCredential, ModelProtocol } from '@/types/api'
 import {
   Plus,
   Pencil,
   Trash2,
   RefreshCw,
 } from 'lucide-vue-next'
-import { toast } from 'sonner'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 
 import {
@@ -65,6 +68,19 @@ const showDeleteDialog = ref(false)
 const deleteTarget = ref<number | null>(null)
 const formError = ref('')
 const showApiKeyInput = ref(false)
+const credentials = ref<ModelCredential[]>([])
+const capabilityConfigs = ref<AiModelCapability[]>([])
+
+const capabilityOptions: { value: ModelCapability; label: string }[] = [
+  { value: 'CHAT', label: '对话' },
+  { value: 'TEXT_TO_IMAGE', label: '文生图' },
+  { value: 'IMAGE_TO_IMAGE', label: '图生图' },
+]
+const protocolOptions: { value: ModelProtocol; label: string }[] = [
+  { value: 'OPENAI_CHAT', label: 'OpenAI Chat' },
+  { value: 'OPENAI_IMAGE', label: 'OpenAI Image' },
+  { value: 'BAILIAN_IMAGE', label: '阿里百炼图片' },
+]
 
 const fetchingModels = ref(false)
 const availableModelIds = ref<{ label: string; value: string }[]>([])
@@ -106,7 +122,9 @@ const providerLabels: Record<string, string> = {
   other: '其它',
 }
 
-onMounted(fetchModels)
+onMounted(async () => {
+  await Promise.all([fetchModels(), fetchCredentials()])
+})
 
 watch(() => editingModel.value.provider, (provider) => {
   if (!provider || isEditMode.value) return
@@ -116,6 +134,11 @@ watch(() => editingModel.value.provider, (provider) => {
   availableModelIds.value = []
 })
 
+watch(() => editingModel.value.modelType, (modelType) => {
+  if (!modelType || isEditMode.value) return
+  capabilityConfigs.value = defaultCapabilities(modelType, editingModel.value.provider || 'openai')
+})
+
 async function fetchModels() {
   loading.value = true
   try {
@@ -123,6 +146,36 @@ async function fetchModels() {
   } finally {
     loading.value = false
   }
+}
+
+async function fetchCredentials() {
+  credentials.value = (await listModelCredentialsApi()) ?? []
+}
+
+function defaultCapabilities(modelType: string, provider: string): AiModelCapability[] {
+  const imageProtocol: ModelProtocol = provider === 'qwen' ? 'BAILIAN_IMAGE' : 'OPENAI_IMAGE'
+  const result: AiModelCapability[] = []
+  if (modelType === 'TEXT' || modelType === 'MULTIMODAL') result.push({ capability: 'CHAT', protocol: 'OPENAI_CHAT' })
+  if (modelType === 'IMAGE' || modelType === 'MULTIMODAL') {
+    result.push({ capability: 'TEXT_TO_IMAGE', protocol: imageProtocol })
+    result.push({ capability: 'IMAGE_TO_IMAGE', protocol: imageProtocol })
+  }
+  return result
+}
+
+function isCapabilityEnabled(capability: ModelCapability) {
+  return capabilityConfigs.value.some((item) => item.capability === capability)
+}
+
+function toggleCapability(capability: ModelCapability, enabled: boolean) {
+  if (!enabled) {
+    capabilityConfigs.value = capabilityConfigs.value.filter((item) => item.capability !== capability)
+    return
+  }
+  const protocol: ModelProtocol = capability === 'CHAT'
+    ? 'OPENAI_CHAT'
+    : editingModel.value.provider === 'qwen' ? 'BAILIAN_IMAGE' : 'OPENAI_IMAGE'
+  capabilityConfigs.value.push({ capability, protocol })
 }
 
 function openCreate() {
@@ -143,16 +196,22 @@ function openCreate() {
   formError.value = ''
   showApiKeyInput.value = true
   availableModelIds.value = []
+  capabilityConfigs.value = defaultCapabilities('TEXT', 'openai')
   showModal.value = true
 }
 
-function openEdit(model: AiModel) {
+async function openEdit(model: AiModel) {
   editingModel.value = { ...model }
   formError.value = ''
   showApiKeyInput.value = false
   availableModelIds.value = []
   isEditMode.value = true
   showModal.value = true
+  try {
+    capabilityConfigs.value = (await listModelCapabilitiesApi(model.id)) ?? []
+  } catch {
+    capabilityConfigs.value = defaultCapabilities(model.modelType, model.provider)
+  }
 }
 
 function maskApiKey(key: string | undefined): string {
@@ -227,21 +286,26 @@ function buildModelPayload(): Partial<AiModel> {
 
 async function handleSave() {
   if (saving.value) return
+  formError.value = ''
   const validationError = validateEditingModel()
   if (validationError) {
+    formError.value = validationError
     toast.warning(validationError)
     return
   }
   saving.value = true
   const payload = buildModelPayload()
   try {
+    let saved: AiModel | undefined
     if (isEditMode.value && payload.id) {
-      await updateModelApi(payload.id, payload)
+      saved = await updateModelApi(payload.id, payload)
       toast.success(t('toast.updateSuccess'))
     } else {
-      await createModelApi(payload)
+      saved = await createModelApi(payload)
       toast.success(t('toast.createSuccess'))
     }
+    const modelId = saved?.id ?? payload.id
+    if (modelId) await replaceModelCapabilitiesApi(modelId, capabilityConfigs.value)
     showModal.value = false
     await fetchModels()
   } catch (error) {
@@ -349,7 +413,7 @@ async function handleDelete() {
           <DialogTitle>{{ isEditMode ? $t('modelManage.editModel') : $t('modelManage.addModel') }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-          <div v-if="formError" class="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-3 py-2 text-sm">
+          <div v-if="formError" role="alert" class="bg-destructive/10 border border-destructive/30 text-destructive rounded-lg px-3 py-2 text-sm">
             {{ formError }}
           </div>
           <div class="space-y-2">
@@ -422,7 +486,20 @@ async function handleDelete() {
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}</label>
+            <label for="model-credential" class="text-sm font-medium">已保存凭据</label>
+            <Select v-model="editingModel.defaultCredentialId">
+              <SelectTrigger id="model-credential" name="model-credential" class="w-full">
+                <SelectValue placeholder="选择已有加密凭据（可选）" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="credential in credentials" :key="credential.id" :value="credential.id">
+                  {{ credential.name }} · {{ credential.maskedHint }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
+            <label for="model-api-key" class="text-sm font-medium">{{ $t('modelManage.form.apiKey') }}（新建或轮换）</label>
             <div v-if="isEditMode && editingModel.apiKey && !showApiKeyInput"
               class="cursor-pointer" @click="showApiKeyInput = true; editingModel.apiKey = ''"
             >
@@ -437,6 +514,44 @@ async function handleDelete() {
               placeholder="sk-..."
               @focus="showApiKeyInput = true"
             />
+          </div>
+          <div class="space-y-3 rounded-lg border p-3">
+            <div>
+              <div class="text-sm font-medium">模型能力</div>
+              <div class="text-xs text-muted-foreground">每项能力独立选择调用协议，并可覆盖模型默认连接配置。</div>
+            </div>
+            <div class="flex flex-wrap gap-4">
+              <label v-for="option in capabilityOptions" :key="option.value" class="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  :checked="isCapabilityEnabled(option.value)"
+                  @change="toggleCapability(option.value, ($event.target as HTMLInputElement).checked)"
+                />
+                {{ option.label }}
+              </label>
+            </div>
+            <div v-for="config in capabilityConfigs" :key="config.capability" class="grid gap-3 rounded-md bg-muted/40 p-3 md:grid-cols-2">
+              <div class="space-y-1">
+                <div class="text-xs font-medium">{{ capabilityOptions.find(item => item.value === config.capability)?.label }}</div>
+                <Select v-model="config.protocol">
+                  <SelectTrigger class="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="protocol in protocolOptions" :key="protocol.value" :value="protocol.value">{{ protocol.label }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-1">
+                <div class="text-xs font-medium">覆盖凭据</div>
+                <Select v-model="config.credentialIdOverride">
+                  <SelectTrigger class="w-full"><SelectValue placeholder="使用模型默认凭据" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="credential in credentials" :key="credential.id" :value="credential.id">{{ credential.name }} · {{ credential.maskedHint }}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Input v-model="config.modelNameOverride" placeholder="覆盖模型名（可选）" />
+              <Input v-model="config.apiUrlOverride" placeholder="覆盖请求地址（可选）" />
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">

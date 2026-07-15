@@ -3,6 +3,8 @@ package cafe.snails.ecomagents.service;
 import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.ModelCredential;
+import cafe.snails.ecomagents.model.ModelCapability;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import io.agentscope.core.model.GenerateOptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,9 @@ class AiModelServiceTest {
     @Mock
     private LlmConfig llmConfig;
 
+    @Mock
+    private ModelCredentialService credentialService;
+
     private AiModelService service;
 
     private AiModel sampleModel;
@@ -40,7 +45,7 @@ class AiModelServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(llmConfig.getMaxTokens()).thenReturn(2048);
-        service = new AiModelService(repository, llmConfig);
+        service = new AiModelService(repository, llmConfig, credentialService);
         sampleModel = AiModel.builder()
                 .id(1L).name("GPT-4o").provider("openai").modelName("gpt-4o")
                 .apiUrl("https://api.openai.com/v1/chat/completions")
@@ -236,6 +241,59 @@ class AiModelServiceTest {
                 .apiUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
                 .build();
         assertEquals("/chat/completions", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void getEnabledImageModels_shouldFilterByRequestedCapability() {
+        when(repository.findEnabledByCapability(ModelCapability.IMAGE_TO_IMAGE)).thenReturn(List.of(sampleModel));
+        ApiResponse<List<AiModel>> result = service.getEnabledImageModels(ModelCapability.IMAGE_TO_IMAGE);
+        assertEquals(List.of(sampleModel), result.getData());
+        verify(repository).findEnabledByCapability(ModelCapability.IMAGE_TO_IMAGE);
+        verify(repository, never()).findByModelTypeAndEnabled(anyString(), anyBoolean());
+    }
+
+    @Test
+    void createModel_shouldMoveSubmittedApiKeyIntoEncryptedCredential() {
+        when(repository.count()).thenReturn(0L);
+        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(credentialService.create(any())).thenReturn(ModelCredential.builder().id(77L).build());
+        AiModel input = AiModel.builder().name("Bailian Image").provider("qwen")
+                .modelName("wanx-v1").apiUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .apiKey("sk-sensitive").modelType("IMAGE").build();
+
+        AiModel saved = service.createModel(input).getData();
+
+        assertNull(saved.getApiKey());
+        assertEquals(77L, saved.getDefaultCredentialId());
+        verify(credentialService).create(argThat(request -> "sk-sensitive".equals(request.secret())));
+    }
+
+    @Test
+    void buildEndpointPath_qwenMaasCompatibleBase_shouldNotAddV1Again() {
+        AiModel m = AiModel.builder()
+                .provider("qwen")
+                .apiType("openai")
+                .apiVersion("")
+                .apiUrl("https://llm-g66vy9lj2ib8d9uy.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+                .build();
+        assertEquals("/chat/completions", AiModelService.buildEndpointPath(m));
+    }
+
+    @Test
+    void createModel_qwenMaasEndpoint_shouldAcceptTenantSpecificHost() {
+        AiModel input = AiModel.builder()
+                .name("Qwen MaaS")
+                .modelName("qwen-max")
+                .provider("qwen")
+                .apiUrl("https://llm-g66vy9lj2ib8d9uy.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+                .build();
+        when(repository.count()).thenReturn(0L);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ApiResponse<AiModel> result = service.createModel(input);
+
+        assertEquals(200, result.getCode());
+        verify(repository).save(input);
     }
 
     @Test

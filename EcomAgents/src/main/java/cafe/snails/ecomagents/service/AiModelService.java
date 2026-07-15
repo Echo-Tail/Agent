@@ -4,11 +4,14 @@ import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.ModelValidateRequest;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.ModelCapability;
 import cafe.snails.ecomagents.repository.AiModelRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import cafe.snails.ecomagents.dto.ModelCredentialRequest;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -29,6 +32,7 @@ public class AiModelService {
     private final AiModelRepository repository;
     /** 全局 LLM 配置，用于补齐模型调用默认参数。 */
     private final LlmConfig llmConfig;
+    private final ModelCredentialService credentialService;
 
     /** 获取所有模型配置 */
     public ApiResponse<List<AiModel>> listModels() {
@@ -41,9 +45,11 @@ public class AiModelService {
                 .filter(AiModel::getEnabled).toList());
     }
 
-    /** 获取已启用的图片生成模型（modelType=IMAGE） */
-    public ApiResponse<List<AiModel>> getEnabledImageModels() {
-        return ApiResponse.success(repository.findByModelTypeAndEnabled("IMAGE", true));
+    /** 按图片能力获取已启用模型，不再依赖兼容期 modelType。 */
+    public ApiResponse<List<AiModel>> getEnabledImageModels(ModelCapability capability) {
+        ModelCapability requested = capability == ModelCapability.IMAGE_TO_IMAGE
+                ? ModelCapability.IMAGE_TO_IMAGE : ModelCapability.TEXT_TO_IMAGE;
+        return ApiResponse.success(repository.findEnabledByCapability(requested));
     }
 
     /** 根据 ID 获取模型详情 */
@@ -54,6 +60,7 @@ public class AiModelService {
     }
 
     /** 创建新模型，自动处理默认模型逻辑（首个模型自动设为默认） */
+    @Transactional
     public ApiResponse<AiModel> createModel(AiModel model) {
         normalizeModelConfig(model);
         ApiResponse<AiModel> validation = validateModel(model);
@@ -61,6 +68,7 @@ public class AiModelService {
         model.setId(null);
         model.setCreatedAt(LocalDate.now());
         model.setCreatedBy(0L);
+        migrateSubmittedSecret(model);
 
         if (model.getIsDefault()) {
             clearDefault();
@@ -72,6 +80,7 @@ public class AiModelService {
     }
 
     /** 更新模型配置，设为默认时自动清除其他模型的默认标记 */
+    @Transactional
     public ApiResponse<AiModel> updateModel(Long id, AiModel updates) {
         boolean shouldUpdateApiType = updates.getApiType() != null || updates.getProvider() != null;
         boolean shouldUpdateApiVersion = updates.getApiVersion() != null || updates.getApiUrl() != null || updates.getProvider() != null;
@@ -84,7 +93,14 @@ public class AiModelService {
                     if (updates.getProvider() != null) model.setProvider(updates.getProvider());
                     if (updates.getModelName() != null) model.setModelName(updates.getModelName());
                     if (updates.getApiUrl() != null) model.setApiUrl(updates.getApiUrl());
-                    if (updates.getApiKey() != null) model.setApiKey(updates.getApiKey());
+                    if (updates.getApiKey() != null && !updates.getApiKey().isBlank()) {
+                        var credential = credentialService.create(new ModelCredentialRequest(
+                                updates.getName() != null ? updates.getName() : model.getName(),
+                                updates.getProvider() != null ? updates.getProvider() : model.getProvider(),
+                                updates.getApiKey()));
+                        model.setDefaultCredentialId(credential.getId());
+                        model.setApiKey(null);
+                    }
                     if (shouldUpdateApiType) model.setApiType(updates.getApiType());
                     if (shouldUpdateApiVersion) model.setApiVersion(updates.getApiVersion());
                     if (updates.getMaxTokens() != null) model.setMaxTokens(updates.getMaxTokens());
@@ -138,7 +154,7 @@ public class AiModelService {
                             .build();
                     return io.agentscope.core.model.GenerateOptions.builder()
                             .modelName(model.getModelName())
-                            .apiKey(decryptApiKey(model.getApiKey()))
+                            .apiKey(resolveApiKey(model))
                             .baseUrl(model.getApiUrl())
                             .endpointPath(buildEndpointPath(model))
                             .temperature(model.getTemperature())
@@ -256,6 +272,20 @@ public class AiModelService {
     /** 解密 API Key（当前为透传，生产环境应实现加密存储） */
     private String decryptApiKey(String key) {
         return key;
+    }
+
+    private String resolveApiKey(AiModel model) {
+        return model.getDefaultCredentialId() != null
+                ? credentialService.resolveSecret(model.getDefaultCredentialId())
+                : decryptApiKey(model.getApiKey());
+    }
+
+    private void migrateSubmittedSecret(AiModel model) {
+        if (model.getApiKey() == null || model.getApiKey().isBlank()) return;
+        var credential = credentialService.create(new ModelCredentialRequest(
+                model.getName(), model.getProvider(), model.getApiKey()));
+        model.setDefaultCredentialId(credential.getId());
+        model.setApiKey(null);
     }
 
     /** 从 API URL 中提取基础地址（scheme + host + port） */
@@ -415,8 +445,10 @@ public class AiModelService {
         if ("deepseek".equalsIgnoreCase(provider) && !host.equals("api.deepseek.com")) {
             return ApiResponse.error(400, "DeepSeek 供应商默认地址为 https://api.deepseek.com；请检查供应商或请求地址");
         }
-        if ("qwen".equalsIgnoreCase(provider) && !host.equals("dashscope.aliyuncs.com")) {
-            return ApiResponse.error(400, "阿里百炼供应商默认地址为 https://dashscope.aliyuncs.com/compatible-mode/v1；请检查供应商或请求地址");
+        boolean isQwenHost = host.equals("dashscope.aliyuncs.com")
+                || host.endsWith(".maas.aliyuncs.com");
+        if ("qwen".equalsIgnoreCase(provider) && !isQwenHost) {
+            return ApiResponse.error(400, "阿里百炼请求地址应使用 DashScope 公共地址或专属 *.maas.aliyuncs.com 地址；请检查供应商或请求地址");
         }
         return null;
     }

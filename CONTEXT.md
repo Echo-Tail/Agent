@@ -212,6 +212,47 @@ type: "done"       → 完整文本
 ### 图片生成（Image Generation）
 独立于 Agent 体系的图片生成功能，入口为侧边栏"Agent 广场"下方的"图像生成"菜单项（路由 `/agents/image`），所有用户可用。
 
+#### 图片生成运行时（Image Generation Runtime）
+
+统一承载文生图与图生图用例的 Job-first 运行时。调用方提交类型安全的文生图或图生图命令并获得内部 `jobId`，随后查询任务状态与结果；不直接感知供应商任务 ID、轮询协议或临时图片 URL。
+
+- **执行模型**：Job-first。同步供应商可以立即完成；异步供应商由运行时提交并轮询。
+- **HTTP interface**：新调用入口为 `POST /v1/image-jobs`（返回 `202 + jobId`），查询入口为 `GET /v1/image-jobs/{jobId}` 和 `/results`，取消与人工重试分别使用 `POST /cancel`、`POST /retry`。
+- **前端进度**：首版使用轮询，不新增 SSE。初始每秒查询，长任务逐步退避到每 3 秒；页面刷新后按 jobId 恢复，进入终态后停止。部分成功结果可提前展示。
+- **兼容迁移**：现有 `POST /v1/images/generate` 与 `/v1/images/edit` 保留一个迁移周期，内部转调图片生成运行时并标记废弃；新前端只使用 `/v1/image-jobs`。
+- **任务调度**：数据库任务表是任务状态 SSOT，后台 Worker 通过抢占与租约执行任务；不以进程内 Future 或线程池状态作为任务真相源。服务重启后可恢复未完成任务。
+- **任务状态**：`PENDING` → `RUNNING` → `SUCCEEDED` / `PARTIALLY_SUCCEEDED` / `FAILED`；取消流程使用 `CANCEL_REQUESTED` → `CANCELLED`。
+- **取消语义**：取消采用 best-effort。`PENDING` 可立即取消；`RUNNING` 先进入 `CANCEL_REQUESTED`，Adapter 支持远程取消时等待确认，不支持时停止本地后续处理并记录 `PROVIDER_CANCEL_UNSUPPORTED`。取消不承诺停止供应商计费。
+- **取消竞争**：终态不可取消；取消与完成并发时使用数据库条件更新，由先成功提交的终态获胜。已经落盘的图片不因取消自动删除，供应商迟到响应不进入正式结果，只写安全审计记录。
+- **可靠性**：Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 原子领取任务，写入 `workerId`、`leaseUntil` 和 `attemptCount`，执行期间续租；失去租约的任务可被重新领取或进入明确失败状态。
+- **内部执行阶段**：外部任务状态保持 `RUNNING`，内部记录 `PREPARING`、`SUBMITTING`、`POLLING`、`DOWNLOADING`、`PERSISTING`，用于恢复和判断重试安全性。
+- **安全重试**：限流、明确的临时故障、已保存 taskId 的轮询、临时图片下载和本地落盘允许自动重试并使用指数退避。供应商支持幂等键时使用 `jobId + outputIndex`。
+- **不确定提交**：供应商可能已接受请求、但本地尚未保存 taskId 时，标记 `SUBMISSION_OUTCOME_UNKNOWN`，禁止自动重新提交，避免重复生成和扣费。人工重试创建新任务并记录 `retryOfJobId`，不覆盖原任务。
+- **模型配置 SSOT**：每次调用按 `modelId` 解析当前 `AiModel`。模型新增时不创建或长期注册“每模型实例”，避免地址、密钥、启停状态与内存实例不一致。
+- **任务模型快照**：提交任务时保存供应商、远程模型名、请求地址、能力与生成参数等非敏感调用快照，保证任务可复现；不复制 API Key，只保存模型 ID 或凭据引用，Worker 执行时读取最新密钥以支持密钥轮换。
+- **凭据模块**：API Key 从 `AiModel` 明文字段迁移到独立 `model_credentials` 表；模型与能力配置只保存 `credentialId`。凭据使用 AES-GCM 加密，主密钥从环境变量或外部密钥管理注入，数据库和仓库均不保存主密钥。
+- **凭据安全**：后端只返回 masked hint；Adapter 调用前才解密，原文不进入任务快照、日志或异常。删除仍被引用的凭据时拒绝操作，创建、轮换、删除写入不含秘密的审计记录。
+- **凭据迁移与替换**：迁移现有 `AiModel.apiKey` 时按不同密钥创建凭据记录，完成后删除明文字段。本地加密 implementation 后续可替换为 KMS Adapter，而不改变图片生成运行时 interface。
+- **配置变更语义**：模型提交后被禁用时，已提交任务继续执行，禁用只阻止新任务；模型名或请求地址后续修改不影响已提交任务。
+- **供应商 seam**：运行时按供应商选择无状态 Adapter。首批 Adapter 为阿里百炼与 OpenAI-compatible；第三方请求结构、鉴权、任务轮询、响应解析和错误转换保留在对应 Adapter 内。
+- **运行时职责**：模型与能力校验、任务状态、拆批与并发、结果稳定排序、临时结果下载、图片落盘、历史记录、用量统计和安全错误映射。
+- **Adapter 职责**：供应商通信。Adapter 不写业务数据库、不保存本地图片、不创建历史记录。
+- **参考图快照**：图生图任务在提交阶段将上传文件、公共素材或产品图复制到 `uploads/image-jobs/{jobId}/inputs/{index}`，Worker 只读取任务专属不可变快照，不依赖请求生命周期或可变来源文件。
+- **输入记录**：`image_generation_job_inputs` 按 `jobId + inputIndex` 保存输入角色、来源类型、原始来源 ID、快照路径、MIME、文件大小和 SHA-256，用于稳定排序、追溯与完整性校验。
+- **提交校验**：创建 `PENDING` 任务前完成参考图读取、格式、大小和安全校验；输入无效时直接拒绝，不把必然失败的任务交给 Worker。
+- **输入保留**：`SUCCEEDED` / `PARTIALLY_SUCCEEDED` 的输入快照默认保留 30 天，`FAILED` / `CANCELLED` 默认保留 7 天；`PENDING` / `RUNNING` 禁止清理。周期通过配置调整，并由每日清理任务执行引用检查后删除。
+- **输出保留**：生成结果持续保留到用户删除历史记录。供应商临时 URL 和原始响应在任务结束后不保留；任务元数据与安全错误摘要持续保留。
+- **默认配置**：`image.job.input-retention-days=30`、`image.job.failed-input-retention-days=7`、`image.job.cleanup-cron=0 30 3 * * *`。
+- **结果语义**：多图任务允许部分成功；每张目标图片拥有稳定 index 和独立状态，供应商并发完成顺序不改变结果顺序。
+- **能力表达**：文生图与图生图使用不同命令类型，但共享同一个图片生成运行时。模型能力通过 `ai_model_capabilities` 关系表保存可组合能力集合，新逻辑不再依赖单值 `modelType`。
+- **首批模型能力**：`CHAT`、`TEXT_TO_IMAGE`、`IMAGE_TO_IMAGE`。模型管理创建/编辑时显式选择；运行时按目标能力筛选和校验模型。
+- **能力约束**：模型配置能力必须是对应供应商 Adapter 支持能力的子集；前端按能力决定可用模式和参数，不以 `provider` 判断功能。
+- **能力协议**：`ai_model_capabilities` 为每项能力独立记录 `protocol` 和经过 schema 校验的 `optionsJson`。运行时通过 `(protocol, capability)` 选择 Adapter，允许同一模型配置的 CHAT 使用 OpenAI-compatible Chat，而图片能力使用百炼图片任务协议。
+- **能力级覆盖**：`AiModel` 保存默认远程模型名、请求地址和凭据引用；`ai_model_capabilities` 可选保存 `modelNameOverride`、`apiUrlOverride`、`credentialRefOverride`。运行时按“能力级覆盖 → 模型级默认”解析不可变调用快照。
+- **MULTIMODAL 连接**：同一配置可以让 CHAT 指向专属 MaaS OpenAI-compatible 地址，让 `TEXT_TO_IMAGE` / `IMAGE_TO_IMAGE` 指向百炼图片协议及各自远程模型名，不强制不同能力共享一个 endpoint。
+- **Adapter 路由**：`provider` 只承担展示、默认值和供应商校验，不保存 Java 类名，也不决定 implementation；首批协议键为 `OPENAI_COMPATIBLE_CHAT`、`OPENAI_IMAGE`、`BAILIAN_IMAGE`。
+- **兼容迁移**：`TEXT` → `CHAT`；`IMAGE` → `TEXT_TO_IMAGE + IMAGE_TO_IMAGE`；`MULTIMODAL` → `CHAT + TEXT_TO_IMAGE + IMAGE_TO_IMAGE`。`modelType` 保留一个迁移周期后删除。
+
 #### 调用架构
 ```
 前端 (/agents/image) → POST /v1/images/generate → 后端 WebClient → PackyAPI

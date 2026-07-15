@@ -16,6 +16,34 @@ export interface ImageGenerationResult {
   images: GeneratedImage[]
 }
 
+export type ImageJobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'PARTIALLY_SUCCEEDED' | 'FAILED' | 'CANCEL_REQUESTED' | 'CANCELLED'
+export type ImageJobPhase = 'PREPARING' | 'SUBMITTING' | 'POLLING' | 'DOWNLOADING' | 'PERSISTING' | null
+
+export interface ImageJob {
+  id: number
+  modelId: number
+  retryOfJobId: number | null
+  mode: 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE'
+  prompt: string
+  negativePrompt: string | null
+  targetCount: number
+  provider: string
+  protocol: 'OPENAI_IMAGE' | 'BAILIAN_IMAGE'
+  remoteModelName: string
+  capability: 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE'
+  status: ImageJobStatus
+  executionPhase: ImageJobPhase
+  successCount: number
+  failureCount: number
+  errorCode: string | null
+  safeErrorMessage: string | null
+  retryable: boolean
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+  updatedAt: string
+}
+
 
 export interface SuperResolutionRequest {
   recordId?: number
@@ -69,6 +97,9 @@ export interface ImageRecord {
   size: string
   quality: string
   resultPath: string
+  status?: 'PENDING' | 'SUCCEEDED' | 'FAILED'
+  errorCode?: string | null
+  safeErrorMessage?: string | null
   timeCostMs: number
   width?: number
   height?: number
@@ -104,35 +135,12 @@ export interface RecordQuery {
  * 文生图 — 根据文字描述生成图片。
  * @param n 生成张数（1~10），默认 1
  */
-export function generateImage(prompt: string, size?: string, quality?: string, n: number = 1, modelId?: number) {
-  const body: Record<string, string> = { prompt, n: String(n) }
-  if (size) body.size = size
-  if (quality) body.quality = quality
-  if (modelId) body.modelId = String(modelId)
-  return api.post<ImageGenerationResult>('/images/generate', body, {
-    timeout: 600_000,
-  })
-}
 
 /**
  * 图生图 — 上传参考图片进行编辑。
  * @param mask 可选遮罩图（PNG，透明区域=重绘区域，作用于第一张参考图）
  * @param n 生成张数（1~10），默认 1
  */
-export function editImage(prompt: string, images: File[], size?: string, quality?: string, mask?: File, n: number = 1, modelId?: number) {
-  const formData = new FormData()
-  formData.append('prompt', prompt)
-  if (size) formData.append('size', size)
-  if (quality) formData.append('quality', quality)
-  formData.append('n', String(n))
-  if (modelId) formData.append('modelId', String(modelId))
-  images.forEach(file => formData.append('image', file))
-  if (mask) formData.append('mask', mask)
-  return api.post<ImageGenerationResult>('/images/edit', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 600_000, // 10 minutes for image generation
-  })
-}
 
 /**
  * 分页查询当前用户的图片生成历史记录。
@@ -241,4 +249,50 @@ export function listSuperResolutionSources(query?: RecordQuery) {
   if (query?.endDate) params.endDate = query.endDate
   if (query?.prompt) params.prompt = query.prompt
   return api.get<PageResponse<ImageRecord>>('/images/super-resolution/sources', { params })
+}
+
+export function submitTextImageJob(request: {
+  modelId: number
+  prompt: string
+  negativePrompt?: string
+  targetCount?: number
+  optionsJson?: string
+}) {
+  return api.post<ImageJob>('/image-jobs', request)
+}
+
+export function submitImageToImageJob(request: {
+  modelId: number
+  prompt: string
+  negativePrompt?: string
+  targetCount?: number
+  optionsJson?: string
+  images: File[]
+  mask?: File
+}) {
+  const form = new FormData()
+  form.append('modelId', String(request.modelId))
+  form.append('prompt', request.prompt)
+  form.append('targetCount', String(request.targetCount ?? 1))
+  if (request.negativePrompt) form.append('negativePrompt', request.negativePrompt)
+  if (request.optionsJson) form.append('optionsJson', request.optionsJson)
+  request.images.forEach(image => form.append('images', image))
+  if (request.mask) form.append('mask', request.mask)
+  return api.post<ImageJob>('/image-jobs', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+}
+
+export function getImageJob(id: number) {
+  return api.get<ImageJob>(`/image-jobs/${id}`, { silent: true, skipRetry: true })
+}
+
+export function getImageJobResults(id: number) {
+  return api.get<ImageRecord[]>(`/image-jobs/${id}/results`, { silent: true, skipRetry: true })
+}
+
+export function cancelImageJob(id: number) {
+  return api.post<ImageJob>(`/image-jobs/${id}/cancel`)
+}
+
+export function retryImageJob(id: number) {
+  return api.post<ImageJob>(`/image-jobs/${id}/retry`)
 }
