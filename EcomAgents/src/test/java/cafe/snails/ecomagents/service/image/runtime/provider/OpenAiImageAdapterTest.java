@@ -11,6 +11,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,7 +31,9 @@ class OpenAiImageAdapterTest {
     void textToImageShouldUseResolvedModelAndExistingVersionPath() throws Exception {
         AtomicReference<String> body = new AtomicReference<>();
         AtomicReference<String> auth = new AtomicReference<>();
+        AtomicInteger requests = new AtomicInteger();
         start("/compatible-mode/v1/images/generations", exchange -> {
+            requests.incrementAndGet();
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             auth.set(exchange.getRequestHeaders().getFirst("Authorization"));
             respond(exchange, 200, "{\"data\":[{\"b64_json\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\",\"revised_prompt\":\"done\"}]}");
@@ -41,7 +44,9 @@ class OpenAiImageAdapterTest {
 
         var request = new ObjectMapper().readTree(body.get());
         assertEquals("configured-image-model", request.path("model").asText());
-        assertEquals(2, request.path("n").asInt());
+        assertEquals(1, request.path("n").asInt());
+        assertEquals(2, requests.get());
+        assertEquals(2, result.size());
         assertEquals("1536x1024", request.path("size").asText());
         assertEquals("Bearer secret", auth.get());
         assertEquals("image/png", result.get(0).mimeType());
@@ -52,7 +57,9 @@ class OpenAiImageAdapterTest {
     @Test
     void imageToImageShouldSendImmutableSnapshotsAsMultipart() throws Exception {
         AtomicReference<String> body = new AtomicReference<>();
+        AtomicInteger requests = new AtomicInteger();
         start("/v1/images/edits", exchange -> {
+            requests.incrementAndGet();
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
             respond(exchange, 200, "{\"data\":[{\"url\":\"https://cdn.example/result.png\"}]}");
         });
@@ -69,6 +76,29 @@ class OpenAiImageAdapterTest {
         assertTrue(body.get().contains("name=\"model\""));
         assertTrue(body.get().contains("configured-image-model"));
         assertTrue(body.get().contains("name=\"image[]\""));
+        assertTrue(body.get().contains("name=\"n\""));
+        assertTrue(body.get().contains("\r\n\r\n1\r\n"));
+        assertEquals(2, requests.get());
+        assertEquals(2, result.size());
+        assertEquals("https://cdn.example/result.png", result.get(0).remoteUrl());
+    }
+
+    @Test
+    void multipleRequestsShouldKeepSuccessfulImagesWhenOneRequestFails() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        start("/v1/images/generations", exchange -> {
+            int request = requests.incrementAndGet();
+            if (request == 1) {
+                respond(exchange, 500, "{\"error\":\"temporary\"}");
+            } else {
+                respond(exchange, 200, "{\"data\":[{\"url\":\"https://cdn.example/result.png\"}]}");
+            }
+        });
+
+        var result = adapter.generate(job(ModelCapability.TEXT_TO_IMAGE, ""), List.of(), "secret");
+
+        assertEquals(2, requests.get());
+        assertEquals(1, result.size());
         assertEquals("https://cdn.example/result.png", result.get(0).remoteUrl());
     }
 

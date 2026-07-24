@@ -7,16 +7,14 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -32,22 +30,28 @@ public class ImageRuntimeMonitoringService {
         }
 
         Map<String, ProviderAccumulator> providers = new TreeMap<>();
-        long completed = 0;
-        long successful = 0;
-        long failed = 0;
-        for (Counter counter : registry.find(PREFIX + ".jobs.completed").counters()) {
-            long count = Math.round(counter.count());
-            String provider = tag(counter, "provider");
-            String outcome = tag(counter, "outcome");
+        long successful = jobsByStatus.get(ImageGenerationJobStatus.SUCCEEDED.name())
+                + jobsByStatus.get(ImageGenerationJobStatus.PARTIALLY_SUCCEEDED.name());
+        long failed = jobsByStatus.get(ImageGenerationJobStatus.FAILED.name());
+        long completed = successful + failed + jobsByStatus.get(ImageGenerationJobStatus.CANCELLED.name());
+
+        // 任务数量来自数据库，避免应用重启后 Micrometer 进程内计数归零。
+        for (Object[] row : jobs.countByProviderAndStatus()) {
+            String provider = String.valueOf(row[0]).toLowerCase(Locale.ROOT);
+            ImageGenerationJobStatus status = (ImageGenerationJobStatus) row[1];
+            long count = ((Number) row[2]).longValue();
             ProviderAccumulator accumulator = providers.computeIfAbsent(provider, ignored -> new ProviderAccumulator());
-            accumulator.completed += count;
-            completed += count;
-            if ("failed".equals(outcome)) {
-                accumulator.failed += count;
-                failed += count;
-            } else if ("succeeded".equals(outcome) || "partially_succeeded".equals(outcome)) {
-                accumulator.successful += count;
-                successful += count;
+            switch (status) {
+                case SUCCEEDED, PARTIALLY_SUCCEEDED -> {
+                    accumulator.completed += count;
+                    accumulator.successful += count;
+                }
+                case FAILED -> {
+                    accumulator.completed += count;
+                    accumulator.failed += count;
+                }
+                case CANCELLED -> accumulator.completed += count;
+                default -> { }
             }
         }
 
@@ -57,14 +61,16 @@ public class ImageRuntimeMonitoringService {
             accumulator.errors += count;
             if ("timeout".equals(tag(counter, "category"))) accumulator.timeouts += count;
         }
-        for (Timer timer : registry.find(PREFIX + ".provider.duration").timers()) {
-            ProviderAccumulator accumulator = providers.computeIfAbsent(tag(timer, "provider"), ignored -> new ProviderAccumulator());
-            accumulator.requestCount += timer.count();
-            accumulator.requestTotalMs += timer.totalTime(TimeUnit.MILLISECONDS);
-            accumulator.requestP95Ms = Math.max(accumulator.requestP95Ms, percentile(timer, 0.95));
+        for (var row : jobs.aggregateCompletedDurationsByProvider()) {
+            ProviderAccumulator accumulator = providers.computeIfAbsent(row.getProvider(), ignored -> new ProviderAccumulator());
+            accumulator.averageRequestMs = number(row.getAverageMs());
+            accumulator.requestP95Ms = number(row.getP95Ms());
         }
 
-        TimerAggregate jobDuration = timerAggregate(PREFIX + ".jobs.duration");
+        var durationRow = jobs.aggregateCompletedDurations();
+        TimerAggregate jobDuration = new TimerAggregate(
+                durationRow == null ? 0 : number(durationRow.getAverageMs()),
+                durationRow == null ? 0 : number(durationRow.getP95Ms()));
         var providerMetrics = providers.entrySet().stream()
                 .map(entry -> entry.getValue().toResponse(entry.getKey())).toList();
         var recentFailures = jobs.findTop20ByStatusOrderByCompletedAtDesc(ImageGenerationJobStatus.FAILED).stream()
@@ -75,27 +81,9 @@ public class ImageRuntimeMonitoringService {
 
         return new ImageRuntimeMonitoringResponse(
                 LocalDateTime.now(), jobsByStatus, gauge(PREFIX + ".worker.active"), completed,
-                rate(successful, completed), rate(failed, completed), counter(PREFIX + ".timeouts"),
+                rate(successful, successful + failed), rate(failed, successful + failed), counter(PREFIX + ".timeouts"),
                 counter(PREFIX + ".retries"), counter(PREFIX + ".jobs.recovered"),
                 jobDuration.averageMs, jobDuration.p95Ms, providerMetrics, recentFailures);
-    }
-
-    private TimerAggregate timerAggregate(String name) {
-        long count = 0;
-        double total = 0;
-        double p95 = 0;
-        for (Timer timer : registry.find(name).timers()) {
-            count += timer.count();
-            total += timer.totalTime(TimeUnit.MILLISECONDS);
-            p95 = Math.max(p95, percentile(timer, 0.95));
-        }
-        return new TimerAggregate(count == 0 ? 0 : total / count, p95);
-    }
-
-    private double percentile(Timer timer, double wanted) {
-        return Arrays.stream(timer.takeSnapshot().percentileValues())
-                .filter(value -> Math.abs(value.percentile() - wanted) < 0.001)
-                .mapToDouble(value -> value.value(TimeUnit.MILLISECONDS)).findFirst().orElse(0);
     }
 
     private long counter(String name) {
@@ -115,6 +103,10 @@ public class ImageRuntimeMonitoringService {
         return value == null ? "unknown" : value;
     }
 
+    private static double number(Number value) {
+        return value == null ? 0 : value.doubleValue();
+    }
+
     private record TimerAggregate(double averageMs, double p95Ms) {}
 
     private static final class ProviderAccumulator {
@@ -123,14 +115,13 @@ public class ImageRuntimeMonitoringService {
         long failed;
         long errors;
         long timeouts;
-        long requestCount;
-        double requestTotalMs;
+        double averageRequestMs;
         double requestP95Ms;
 
         ImageRuntimeMonitoringResponse.ProviderMetrics toResponse(String provider) {
             return new ImageRuntimeMonitoringResponse.ProviderMetrics(
-                    provider, completed, failed, rate(successful, completed), errors, timeouts,
-                    requestCount == 0 ? 0 : requestTotalMs / requestCount, requestP95Ms);
+                    provider, completed, failed, rate(successful, successful + failed), errors, timeouts,
+                    averageRequestMs, requestP95Ms);
         }
     }
 }

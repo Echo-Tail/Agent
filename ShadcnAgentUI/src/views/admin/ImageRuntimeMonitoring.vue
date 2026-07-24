@@ -14,7 +14,9 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const statusCards = computed(() => {
   const value = data.value
+  const total = Object.values(value?.jobsByStatus ?? {}).reduce((sum, count) => sum + count, 0)
   return [
+    { label: '任务总数', value: total, icon: Activity },
     { label: '排队任务', value: value?.jobsByStatus.PENDING ?? 0, icon: Clock3 },
     { label: '运行任务', value: value?.jobsByStatus.RUNNING ?? 0, icon: Activity },
     { label: '成功率', value: percent(value?.successRate), icon: CheckCircle2 },
@@ -38,11 +40,21 @@ async function load(showError = true) {
 
 function percent(value?: number) { return `${((value ?? 0) * 100).toFixed(1)}%` }
 function duration(value?: number) {
-  const ms = value ?? 0
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} 秒` : `${Math.round(ms)} ms`
+  return `${((value ?? 0) / 1000).toFixed(1)} 秒`
 }
 function dateTime(value?: string | null) { return value ? new Date(value).toLocaleString('zh-CN') : '-' }
 function providerName(value: string) { return value === 'unknown' ? '未知' : value }
+function statusName(value: string) {
+  return {
+    PENDING: '等待处理',
+    RUNNING: '运行中',
+    SUCCEEDED: '成功',
+    PARTIALLY_SUCCEEDED: '部分成功',
+    FAILED: '失败',
+    CANCEL_REQUESTED: '正在取消',
+    CANCELLED: '已取消',
+  }[value] ?? value
+}
 
 onMounted(() => {
   void load()
@@ -60,7 +72,7 @@ onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
       </Button>
     </PageHeader>
 
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
       <Card v-for="item in statusCards" :key="item.label">
         <CardContent class="flex items-center justify-between p-4">
           <div><p class="text-xs text-muted-foreground">{{ item.label }}</p><p class="mt-1 text-xl font-bold">{{ item.value }}</p></div>
@@ -74,17 +86,16 @@ onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
         <CardHeader><CardTitle class="text-base">任务状态</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <div v-for="(count, status) in data?.jobsByStatus" :key="status" class="flex items-center justify-between text-sm">
-            <span class="text-muted-foreground">{{ status }}</span><Badge variant="secondary">{{ count }}</Badge>
+            <span class="text-muted-foreground">{{ statusName(status) }}</span><Badge variant="secondary">{{ count }}</Badge>
           </div>
           <div class="border-t pt-3 text-sm"><span class="text-muted-foreground">Worker 活跃数</span><span class="float-right font-medium">{{ data?.workerActive ?? 0 }}</span></div>
         </CardContent>
       </Card>
       <Card class="lg:col-span-2">
-        <CardHeader><CardTitle class="text-base">运行时概览（进程启动后）</CardTitle></CardHeader>
-        <CardContent class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <CardHeader><CardTitle class="text-base">累计任务概览</CardTitle></CardHeader>
+        <CardContent class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div><p class="text-xs text-muted-foreground">完成任务</p><p class="text-2xl font-semibold">{{ data?.completed ?? 0 }}</p></div>
           <div><p class="text-xs text-muted-foreground">平均生成耗时</p><p class="text-2xl font-semibold">{{ duration(data?.averageJobDurationMs) }}</p></div>
-          <div><p class="text-xs text-muted-foreground">租约恢复</p><p class="text-2xl font-semibold">{{ data?.recovered ?? 0 }}</p></div>
           <div><p class="text-xs text-muted-foreground">数据更新时间</p><p class="mt-1 text-sm font-medium">{{ dateTime(data?.generatedAt) }}</p></div>
         </CardContent>
       </Card>

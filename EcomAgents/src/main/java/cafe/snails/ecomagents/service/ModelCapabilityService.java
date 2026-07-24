@@ -37,6 +37,7 @@ public class ModelCapabilityService {
             }
         }
         capabilityRepository.deleteByModelId(modelId);
+        capabilityRepository.flush();
         return capabilityRepository.saveAll(requests.stream().map(request -> AiModelCapability.builder()
                 .modelId(modelId).capability(request.capability()).protocol(request.protocol())
                 .modelNameOverride(blankToNull(request.modelNameOverride()))

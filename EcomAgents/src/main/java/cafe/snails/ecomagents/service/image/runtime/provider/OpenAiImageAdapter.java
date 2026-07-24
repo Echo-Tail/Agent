@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.service.image.runtime.provider;
 import cafe.snails.ecomagents.exception.*;
 import cafe.snails.ecomagents.model.*;
 import com.fasterxml.jackson.databind.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.core.annotation.Order;
@@ -14,6 +15,7 @@ import java.util.*;
 
 @Component
 @Order(100)
+@Slf4j
 public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
     private final ObjectMapper mapper;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;
@@ -29,8 +31,26 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
     @Override
     public List<GeneratedProviderImage> generate(ImageGenerationJob job, List<ImageGenerationJobInput> inputs,
             String credentialSecret) {
-        return job.getCapability() == ModelCapability.TEXT_TO_IMAGE
-                ? textToImage(job, credentialSecret) : imageToImage(job, inputs, credentialSecret);
+        List<GeneratedProviderImage> generated = new ArrayList<>();
+        BusinessException lastFailure = null;
+        for (int requestIndex = 0; requestIndex < job.getTargetCount(); requestIndex++) {
+            try {
+                List<GeneratedProviderImage> response = job.getCapability() == ModelCapability.TEXT_TO_IMAGE
+                        ? textToImage(job, credentialSecret) : imageToImage(job, inputs, credentialSecret);
+                generated.add(response.get(0));
+                log.info("OpenAI image request completed: jobId={}, request={}/{}, collectedCount={}",
+                        job.getId(), requestIndex + 1, job.getTargetCount(), generated.size());
+            } catch (BusinessException error) {
+                lastFailure = error;
+                log.warn("OpenAI image request failed: jobId={}, request={}/{}, errorCode={}",
+                        job.getId(), requestIndex + 1, job.getTargetCount(), error.getErrorCode());
+            }
+        }
+        if (generated.isEmpty()) {
+            throw lastFailure != null ? lastFailure
+                    : new BusinessException(ErrorCode.INTERNAL_ERROR, "图片供应商未返回图片数据");
+        }
+        return generated;
     }
 
     private List<GeneratedProviderImage> textToImage(ImageGenerationJob job, String secret) {
@@ -39,11 +59,11 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
             var body = mapper.createObjectNode();
             body.put("model", job.getRemoteModelName());
             body.put("prompt", job.getPrompt());
-            body.put("n", job.getTargetCount());
+            body.put("n", 1);
             body.put("size", option(options, "size", "1024x1024"));
             body.put("quality", option(options, "quality", "auto"));
             body.put("output_format", option(options, "outputFormat", "png"));
-            return callJson(endpoint(job.getApiUrl(), "generations"), mapper.writeValueAsBytes(body), secret);
+            return callJson(job, endpoint(job.getApiUrl(), "generations"), mapper.writeValueAsBytes(body), secret);
         } catch (BusinessException e) { throw e; }
         catch (Exception e) { throw new BusinessException(ErrorCode.INTERNAL_ERROR, "构建图片生成请求失败"); }
     }
@@ -55,7 +75,7 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
             ByteArrayOutputStream body = new ByteArrayOutputStream();
             field(body, boundary, "model", job.getRemoteModelName());
             field(body, boundary, "prompt", job.getPrompt());
-            field(body, boundary, "n", String.valueOf(job.getTargetCount()));
+            field(body, boundary, "n", "1");
             JsonNode options = options(job);
             field(body, boundary, "size", option(options, "size", "1024x1024"));
             field(body, boundary, "quality", option(options, "quality", "auto"));
@@ -65,18 +85,20 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
                 file(body, boundary, fieldName, input);
             }
             body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-            return call(endpoint(job.getApiUrl(), "edits"), body.toByteArray(), secret,
+            return call(job, endpoint(job.getApiUrl(), "edits"), body.toByteArray(), secret,
                     "multipart/form-data; boundary=" + boundary);
         } catch (BusinessException e) { throw e; }
         catch (Exception e) { throw new BusinessException(ErrorCode.INTERNAL_ERROR, "构建图片编辑请求失败"); }
     }
 
-    private List<GeneratedProviderImage> callJson(String url, byte[] body, String secret) {
-        return call(url, body, secret, "application/json");
+    private List<GeneratedProviderImage> callJson(ImageGenerationJob job, String url, byte[] body, String secret) {
+        return call(job, url, body, secret, "application/json");
     }
 
-    private List<GeneratedProviderImage> call(String target, byte[] body, String secret, String contentType) {
+    private List<GeneratedProviderImage> call(ImageGenerationJob job, String target, byte[] body, String secret,
+            String contentType) {
         HttpURLConnection connection = null;
+        long startedAt = System.nanoTime();
         try {
             connection = (HttpURLConnection) URI.create(target).toURL().openConnection(Proxy.NO_PROXY);
             connection.setRequestMethod("POST");
@@ -88,6 +110,9 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
             connection.setDoOutput(true);
             try (OutputStream output = connection.getOutputStream()) { output.write(body); }
             int status = connection.getResponseCode();
+            log.info("OpenAI image provider responded: jobId={}, capability={}, remoteModel={}, httpStatus={}, durationMs={}",
+                    job.getId(), job.getCapability(), job.getRemoteModelName(), status,
+                    (System.nanoTime() - startedAt) / 1_000_000);
             InputStream stream = status >= 200 && status < 300 ? connection.getInputStream() : connection.getErrorStream();
             String response;
             if (stream == null) response = "";
@@ -108,8 +133,18 @@ public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
             }
             return images;
         } catch (BusinessException e) { throw e; }
-        catch (SocketTimeoutException e) { throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片供应商请求超时"); }
-        catch (Exception e) { throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片供应商请求失败"); }
+        catch (SocketTimeoutException e) {
+            log.warn("OpenAI image provider timed out: jobId={}, capability={}, remoteModel={}, durationMs={}",
+                    job.getId(), job.getCapability(), job.getRemoteModelName(),
+                    (System.nanoTime() - startedAt) / 1_000_000);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片供应商请求超时");
+        }
+        catch (Exception e) {
+            log.warn("OpenAI image provider request failed: jobId={}, capability={}, remoteModel={}, errorType={}, durationMs={}",
+                    job.getId(), job.getCapability(), job.getRemoteModelName(), e.getClass().getSimpleName(),
+                    (System.nanoTime() - startedAt) / 1_000_000);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片供应商请求失败");
+        }
         finally { if (connection != null) connection.disconnect(); }
     }
 

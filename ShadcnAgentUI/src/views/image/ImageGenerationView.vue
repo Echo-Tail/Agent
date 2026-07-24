@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import {
   Check, Image, Upload, Trash2, RefreshCw, Loader2, AlertCircle, Download,
-  ZoomIn, XCircle,
+  ZoomIn, XCircle, PanelsTopLeft,
 } from 'lucide-vue-next'
 import {
   submitTextImageJob, submitImageToImageJob, getImageJob, getImageJobResults,
@@ -499,7 +499,14 @@ function formatTime(ms: number): string {
 
 <template>
   <div class="space-y-6">
-    <PageHeader :title="$t('pageTitle.imageGeneration')" :description="$t('pageTitle.imageGenDesc')" />
+    <PageHeader :title="$t('pageTitle.imageGeneration')" :description="$t('pageTitle.imageGenDesc')">
+      <Button as-child variant="outline">
+        <RouterLink :to="{ name: 'ImageCanvasSessions' }">
+          <PanelsTopLeft class="mr-2 h-4 w-4" />
+          返回图像画布
+        </RouterLink>
+      </Button>
+    </PageHeader>
 
     <!-- No model warning -->
     <div v-if="!modelLoading && !hasModel" class="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-400 text-sm">

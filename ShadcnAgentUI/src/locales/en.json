@@ -25,12 +25,18 @@
     "imageHistory": "History",
     "amazonImageWorkbench": "Amazon Image Workbench"
   },
+  "navGroup": {
+    "communication": "Communication",
+    "creation": "Creation",
+    "resources": "Knowledge & Resources",
+    "admin": "Administration",
+    "system": "System"
+  },
   "pageTitle": {
     "myAgents": "My Agents",
     "chat": "Chat",
     "agentPlaza": "Agent Plaza",
     "imageGeneration": "Image Generation",
-    "imageSuperResolution": "Image Upscaling",
     "imageSuperResolution": "Image Upscaling",
     "imageGenDesc": "Generate images using gpt-image-2 model",
     "createAgent": "Create Agent",

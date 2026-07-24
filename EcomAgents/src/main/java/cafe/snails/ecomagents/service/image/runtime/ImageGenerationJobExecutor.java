@@ -8,13 +8,16 @@ import cafe.snails.ecomagents.service.image.runtime.provider.*;
 import cafe.snails.ecomagents.service.image.runtime.storage.ImageOutputStorage;
 import cafe.snails.ecomagents.service.image.runtime.storage.ImageRemoteDownloader;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ImageGenerationJobExecutor {
     private final ImageGenerationJobRepository jobs;
     private final ImageGenerationJobInputRepository inputs;
@@ -53,6 +56,9 @@ public class ImageGenerationJobExecutor {
             job.setAttemptCount(job.getAttemptCount() + 1);
             job = jobs.save(job);
         }
+        log.info("Image job execution started: jobId={}, workerId={}, attempt={}, provider={}, protocol={}, capability={}, modelId={}, targetCount={}",
+                job.getId(), workerId, job.getAttemptCount(), job.getProvider(), job.getProtocol(),
+                job.getCapability(), job.getModelId(), job.getTargetCount());
         try {
             List<ImageGenerationJobInput> jobInputs = inputs.findByJobIdOrderByInputIndex(jobId);
             String secret = resolveSecret(job);
@@ -68,9 +74,15 @@ public class ImageGenerationJobExecutor {
             } else {
                 job.setExecutionPhase(ImageGenerationExecutionPhase.SUBMITTING);
                 job = jobs.save(job);
+                log.info("Image provider submission started: jobId={}, provider={}, protocol={}, capability={}, remoteModel={}, inputCount={}",
+                        job.getId(), job.getProvider(), job.getProtocol(), job.getCapability(),
+                        job.getRemoteModelName(), jobInputs.size());
                 ImageGenerationJob submittedJob = job;
                 ProviderSubmission submission = metrics.timeProviderCall(job, "submit",
                         () -> adapter.submit(submittedJob, jobInputs, secret));
+                log.info("Image provider submission completed: jobId={}, asynchronous={}, returnedCount={}",
+                        job.getId(), submission.asynchronous(),
+                        submission.images() == null ? 0 : submission.images().size());
                 if (submission.asynchronous()) {
                     job.setProviderTaskToken(submission.taskToken());
                     job.setProviderStatus("SUBMITTED");
@@ -116,9 +128,15 @@ public class ImageGenerationJobExecutor {
             ImageGenerationJob saved = jobs.save(job);
             usageRecorder.record(saved);
             metrics.terminal(saved);
+            log.info("Image job completed: jobId={}, status={}, successCount={}, failureCount={}, durationMs={}",
+                    saved.getId(), saved.getStatus(), saved.getSuccessCount(), saved.getFailureCount(),
+                    elapsedMillis(saved));
             return saved;
         } catch (RuntimeException error) {
             ImageGenerationExecutionPhase failedPhase = job.getExecutionPhase();
+            log.error("Image job execution failed: jobId={}, phase={}, attempt={}, provider={}, protocol={}, capability={}, errorType={}",
+                    job.getId(), failedPhase, job.getAttemptCount(), job.getProvider(), job.getProtocol(),
+                    job.getCapability(), error.getClass().getSimpleName(), error);
             job.setExecutionPhase(null);
             job.setWorkerId(null);
             job.setLeaseUntil(null);
@@ -141,6 +159,8 @@ public class ImageGenerationJobExecutor {
                 job.setRetryable(true);
                 job.setCompletedAt(null);
                 metrics.retryScheduled(job);
+                log.warn("Image job retry scheduled: jobId={}, attempt={}, nextAttemptAt={}",
+                        job.getId(), job.getAttemptCount(), job.getNextAttemptAt());
             } else {
                 job.setStatus(ImageGenerationJobStatus.FAILED);
                 job.setFailureCount(job.getTargetCount());
@@ -156,6 +176,8 @@ public class ImageGenerationJobExecutor {
             if (saved.getStatus() == ImageGenerationJobStatus.FAILED) {
                 usageRecorder.record(saved);
                 metrics.terminal(saved);
+                log.warn("Image job marked failed: jobId={}, errorCode={}, retryable={}, durationMs={}",
+                        saved.getId(), saved.getErrorCode(), saved.getRetryable(), elapsedMillis(saved));
             }
             return saved;
         }
@@ -186,6 +208,7 @@ public class ImageGenerationJobExecutor {
             }
             ImageGenerationJob pollJob = job;
             ProviderPollResult result = metrics.timeProviderCall(pollJob, "poll", () -> adapter.poll(pollJob, secret));
+            log.debug("Image provider poll completed: jobId={}, providerStatus={}", job.getId(), result.status());
             job.setProviderStatus(result.status().name());
             job = jobs.save(job);
             if (result.status() == ProviderPollResult.Status.SUCCEEDED) return new PollOutcome(job, result.images());
@@ -198,6 +221,12 @@ public class ImageGenerationJobExecutor {
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片任务轮询被中断");
             }
         }
+    }
+
+    private long elapsedMillis(ImageGenerationJob job) {
+        LocalDateTime start = job.getStartedAt() != null ? job.getStartedAt() : job.getCreatedAt();
+        LocalDateTime end = job.getCompletedAt() != null ? job.getCompletedAt() : LocalDateTime.now();
+        return start == null ? 0 : Math.max(0, Duration.between(start, end).toMillis());
     }
 
     private record PollOutcome(ImageGenerationJob job, List<GeneratedProviderImage> images) {}

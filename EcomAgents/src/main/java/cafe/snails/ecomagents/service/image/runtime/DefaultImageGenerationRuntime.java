@@ -7,12 +7,14 @@ import cafe.snails.ecomagents.service.*;
 import cafe.snails.ecomagents.service.image.runtime.command.*;
 import cafe.snails.ecomagents.service.image.runtime.storage.ImageInputSnapshotStorage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DefaultImageGenerationRuntime implements ImageGenerationRuntime {
     private final ImageGenerationJobRepository jobs;
     private final ImageGenerationJobInputRepository inputs;
@@ -37,6 +39,9 @@ public class DefaultImageGenerationRuntime implements ImageGenerationRuntime {
                 .capability(capability).credentialId(resolved.credentialId())
                 .status(ImageGenerationJobStatus.PENDING).build());
         if (command instanceof ImageToImageCommand imageCommand) snapshotInputs(job.getId(), imageCommand.inputs());
+        log.info("Image job submitted: jobId={}, userId={}, modelId={}, capability={}, targetCount={}, inputCount={}",
+                job.getId(), job.getUserId(), job.getModelId(), job.getCapability(), job.getTargetCount(),
+                command instanceof ImageToImageCommand imageCommand ? imageCommand.inputs().size() : 0);
         return job;
     }
 
@@ -82,6 +87,9 @@ public class DefaultImageGenerationRuntime implements ImageGenerationRuntime {
                         .snapshotPath(input.getSnapshotPath()).mimeType(input.getMimeType())
                         .fileSize(input.getFileSize()).sha256(input.getSha256()).build()).toList();
         inputs.saveAll(copies);
+        log.info("Image job retry submitted: jobId={}, retryOfJobId={}, userId={}, modelId={}, capability={}, targetCount={}",
+                retried.getId(), original.getId(), userId, retried.getModelId(), retried.getCapability(),
+                retried.getTargetCount());
         return retried;
     }
 
