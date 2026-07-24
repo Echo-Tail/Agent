@@ -24,6 +24,7 @@ import {
 import type { ImageRecord, SuperResolutionJob } from '@/api/image'
 
 const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox } = useImageLightbox()
+const missingImageUrl = '/404.png'
 
 const sourceTab = ref<'upload' | 'history'>('upload')
 const uploadFile = ref<File | null>(null)
@@ -76,6 +77,16 @@ function imageUrl(path: string | null | undefined): string {
   if (!path) return ''
   if (/^(blob:|https?:\/\/)/i.test(path)) return path
   return path.replace(/\\/g, '/')
+}
+
+function jobImageUrl(job: SuperResolutionJob): string {
+  if (job.status === 'SUCCEEDED' && job.resultPath) return imageUrl(job.resultPath)
+  return job.sourceAvailable === false ? missingImageUrl : imageUrl(job.sourcePath)
+}
+
+function handleImageError(event: Event) {
+  const image = event.currentTarget as HTMLImageElement
+  if (!image.src.endsWith(missingImageUrl)) image.src = missingImageUrl
 }
 
 function firstImagePath(record: ImageRecord): string {
@@ -327,7 +338,7 @@ function formatTime(value: string): string {
         <div v-if="loadingJobs" class="flex h-24 items-center justify-center"><Loader2 class="h-5 w-5 animate-spin" /></div>
         <p v-else-if="!activeJobs.length" class="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">暂无处理中任务</p>
         <div v-for="job in activeJobs" :key="job.id" class="grid grid-cols-[72px_1fr] gap-3 rounded-md border border-border p-2">
-          <img :src="imageUrl(job.sourcePath)" class="h-[72px] w-[72px] cursor-zoom-in rounded object-cover" alt="任务源图" @click="openLightbox(imageUrl(job.sourcePath), '任务源图')" />
+          <img :src="jobImageUrl(job)" class="h-[72px] w-[72px] cursor-zoom-in rounded object-cover" alt="任务源图" @error="handleImageError" @click="openLightbox(jobImageUrl(job), '任务源图')" />
           <div class="min-w-0 py-1">
             <div class="flex items-center gap-2"><Loader2 class="h-4 w-4 animate-spin text-primary" /><span class="text-sm font-medium">正在超分，请等待...</span></div>
             <p class="mt-2 text-xs text-muted-foreground">x{{ job.upscaleFactor }} · {{ job.sourceWidth }}x{{ job.sourceHeight }}</p>
@@ -344,7 +355,7 @@ function formatTime(value: string): string {
       </div>
       <div v-if="recentJobs.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div v-for="job in recentJobs" :key="job.id" class="overflow-hidden rounded-md border border-border bg-background">
-          <img :src="imageUrl(job.status === 'SUCCEEDED' ? job.resultPath : job.sourcePath)" class="aspect-square w-full cursor-zoom-in object-contain bg-muted/30" alt="超分任务图片" @click="openLightbox(imageUrl(job.status === 'SUCCEEDED' ? job.resultPath : job.sourcePath), '超分任务图片')" />
+          <img :src="jobImageUrl(job)" class="aspect-square w-full cursor-zoom-in object-contain bg-muted/30" alt="超分任务图片" @error="handleImageError" @click="openLightbox(jobImageUrl(job), '超分任务图片')" />
           <div class="space-y-2 border-t border-border p-3">
             <div class="flex items-center justify-between gap-2">
               <span class="flex items-center gap-1.5 text-sm font-medium">

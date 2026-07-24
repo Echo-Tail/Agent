@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'sonner'
 import PageHeader from '@/components/PageHeader.vue'
 import AspectRatioIcon from '@/components/AspectRatioIcon.vue'
@@ -11,11 +11,15 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  generateImage, editImage, type ImageGenerationResult,
+  submitTextImageJob, submitImageToImageJob, getImageJob, getImageJobResults,
+  cancelImageJob, retryImageJob, type ImageJob,
   collectAsinImages, analyzeExpressionCached,
 } from '@/api/image'
 import { listSpaces, listAssets } from '@/api/assets'
 import type { AssetSpace, PublicAsset } from '@/api/assets'
+import type { AiModel } from '@/types/api'
+import { defaultImageSize, imageSizeOptions } from '@/utils/imageSizePolicy'
+import { imageJobPollDelay, imageJobResult, isImageJobTerminal } from '@/utils/imageJobRuntime'
 import {
   Plus, Loader2, Trash2, WandSparkles, Search, ImagePlus, X,
   Download, Copy, Check, ZoomIn,
@@ -49,19 +53,23 @@ const genSize = ref('1254x1254')
 const genQuality = ref('auto')
 const genCount = ref(1)
 const genModelId = ref<number | undefined>()
-const sizeOptions = [
-  { value: '1024x1024', label: '1024x1024', ratio: '1 / 1', ratioLabel: '1:1' },
-  { value: '1254x1254', label: '1254x1254', ratio: '1 / 1', ratioLabel: '1:1' },
-  { value: '1672x941', label: '1672x941', ratio: '16 / 9', ratioLabel: '16:9' },
-  { value: '1536x1024', label: '1536x1024', ratio: '3 / 2', ratioLabel: '3:2' },
-  { value: '1024x1536', label: '1024x1536', ratio: '2 / 3', ratioLabel: '2:3' },
-  { value: '1448x1086', label: '1448x1086', ratio: '4 / 3', ratioLabel: '4:3' },
-  { value: '1659x948', label: '1659x948', ratio: '7 / 4', ratioLabel: '7:4' },
-]
-const selectedSizeOption = computed(() => sizeOptions.find(opt => opt.value === genSize.value) ?? sizeOptions[0])
+const models = ref<AiModel[]>([])
+const selectedImageModel = computed(() => models.value.find(model => model.id === genModelId.value))
+const sizeOptions = computed(() => imageSizeOptions(selectedImageModel.value?.modelName))
+const selectedSizeOption = computed(() => sizeOptions.value.find(opt => opt.value === genSize.value) ?? sizeOptions.value[0])
+watch(genModelId, () => {
+  if (!sizeOptions.value.some(option => option.value === genSize.value)) {
+    genSize.value = defaultImageSize(selectedImageModel.value?.modelName)
+  }
+})
 const genReferenceFiles = ref<File[]>([])
 const genResults = ref<string[]>([])
 const genRevisedPrompt = ref('')
+const activeImageJob = ref<ImageJob | null>(null)
+const cancellingImageJob = ref(false)
+const retryingImageJob = ref(false)
+const ACTIVE_AMAZON_IMAGE_JOB_KEY = 'amazon-image-workbench-active-job-id'
+let imageJobPollVersion = 0
 
 // Lightbox
 const { lightboxOpen, lightboxUrl, lightboxAlt, openLightbox: showLightbox } = useImageLightbox()
@@ -167,28 +175,137 @@ function deleteResult(idx: number) {
 
 async function handleGenerate() {
   if (!genPrompt.value.trim()) { toast.error('请填写提示词'); return }
+  if (!genModelId.value) { toast.error('请选择图片模型'); return }
   generating.value = true
+  genResults.value = []
   try {
-    let result: ImageGenerationResult
+    const optionsJson = JSON.stringify({ size: genSize.value, quality: genQuality.value })
+    let job: ImageJob
     if (genReferenceFiles.value.length > 0) {
-      result = await editImage(
-        genPrompt.value, genReferenceFiles.value, genSize.value, genQuality.value,
-        undefined, genCount.value, undefined,
-      )
+      job = await submitImageToImageJob({
+        modelId: genModelId.value, prompt: genPrompt.value, targetCount: genCount.value,
+        optionsJson, images: genReferenceFiles.value,
+      })
     } else {
-      result = await generateImage(
-        genPrompt.value, genSize.value, genQuality.value, genCount.value, undefined,
-      )
+      job = await submitTextImageJob({
+        modelId: genModelId.value, prompt: genPrompt.value,
+        targetCount: genCount.value, optionsJson,
+      })
     }
-    genResults.value = result.urls || []
-    genRevisedPrompt.value = result.revisedPrompt || ''
-    toast.success(`已生成 ${result.urls?.length || 0} 张图片`)
+    setActiveImageJob(job)
+    await pollImageJob(job.id)
   } catch (e: any) {
     toast.error(e?.response?.data?.message || '生成失败')
-  } finally {
-    generating.value = false
+    if (!activeImageJob.value) generating.value = false
   }
 }
+
+function setActiveImageJob(job: ImageJob | null) {
+  activeImageJob.value = job
+  if (job && !isImageJobTerminal(job.status)) localStorage.setItem(ACTIVE_AMAZON_IMAGE_JOB_KEY, String(job.id))
+  else localStorage.removeItem(ACTIVE_AMAZON_IMAGE_JOB_KEY)
+}
+
+async function pollImageJob(jobId: number) {
+  const version = ++imageJobPollVersion
+  let attempts = 0
+  generating.value = true
+  while (version === imageJobPollVersion) {
+    try {
+      const job = await getImageJob(jobId)
+      if (version !== imageJobPollVersion) return
+      activeImageJob.value = job
+      if (isImageJobTerminal(job.status)) {
+        setActiveImageJob(job)
+        await finishImageJob(job)
+        return
+      }
+      await delay(imageJobPollDelay(++attempts))
+    } catch {
+      if (version === imageJobPollVersion) await delay(3000)
+    }
+  }
+}
+
+async function finishImageJob(job: ImageJob) {
+  generating.value = false
+  if (job.status === 'SUCCEEDED' || job.status === 'PARTIALLY_SUCCEEDED') {
+    const records = await getImageJobResults(job.id)
+    const result = imageJobResult(job, records)
+    genResults.value = result.urls
+    genRevisedPrompt.value = result.revisedPrompt || ''
+    toast.success(job.status === 'PARTIALLY_SUCCEEDED'
+      ? `${job.successCount} 张生成成功，${job.failureCount} 张失败`
+      : `已生成 ${result.urls.length} 张图片`)
+  } else if (job.status === 'FAILED') {
+    toast.error(job.safeErrorMessage || '生成失败')
+  } else if (job.status === 'CANCELLED') {
+    toast.info('图片生成任务已取消')
+  }
+}
+
+async function recoverImageJob() {
+  const rawId = localStorage.getItem(ACTIVE_AMAZON_IMAGE_JOB_KEY)
+  if (!rawId || !/^\d+$/.test(rawId)) return
+  try {
+    const job = await getImageJob(Number(rawId))
+    activeImageJob.value = job
+    genPrompt.value = job.prompt
+    genModelId.value = job.modelId
+    if (isImageJobTerminal(job.status)) {
+      setActiveImageJob(job)
+      await finishImageJob(job)
+    } else {
+      void pollImageJob(job.id)
+    }
+  } catch {
+    localStorage.removeItem(ACTIVE_AMAZON_IMAGE_JOB_KEY)
+  }
+}
+
+async function handleCancelImageJob() {
+  if (!activeImageJob.value || cancellingImageJob.value) return
+  cancellingImageJob.value = true
+  try {
+    const job = await cancelImageJob(activeImageJob.value.id)
+    setActiveImageJob(job)
+    if (isImageJobTerminal(job.status)) await finishImageJob(job)
+  } finally {
+    cancellingImageJob.value = false
+  }
+}
+
+async function handleRetryImageJob() {
+  if (!activeImageJob.value || retryingImageJob.value) return
+  retryingImageJob.value = true
+  genResults.value = []
+  try {
+    const job = await retryImageJob(activeImageJob.value.id)
+    setActiveImageJob(job)
+    await pollImageJob(job.id)
+  } finally {
+    retryingImageJob.value = false
+  }
+}
+
+function delay(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)) }
+
+const activeImageJobLabel = computed(() => {
+  if (!activeImageJob.value) return ''
+  const phaseLabels: Record<string, string> = {
+    PREPARING: '准备输入', SUBMITTING: '提交到模型', POLLING: '等待模型生成',
+    DOWNLOADING: '下载结果', PERSISTING: '保存结果',
+  }
+  if (!isImageJobTerminal(activeImageJob.value.status)) {
+    return phaseLabels[activeImageJob.value.executionPhase || ''] || '排队等待'
+  }
+  return activeImageJob.value.status === 'SUCCEEDED' ? '生成成功'
+    : activeImageJob.value.status === 'PARTIALLY_SUCCEEDED' ? '部分成功'
+      : activeImageJob.value.status === 'CANCELLED' ? '已取消' : '生成失败'
+})
+
+onMounted(() => { void recoverImageJob() })
+onBeforeUnmount(() => { imageJobPollVersion++ })
 
 function handleRefFiles(e: Event) {
   const input = e.target as HTMLInputElement
@@ -197,8 +314,6 @@ function handleRefFiles(e: Event) {
 
 // --- Model management integration ---
 import { getImageModelsApi } from '@/api/model'
-import type { AiModel } from '@/types/api'
-const models = ref<AiModel[]>([])
 getImageModelsApi().then(m => { models.value = m; if (m.length > 0) genModelId.value = m[0].id }).catch(() => {})
 
 // --- Asset picker ---
@@ -385,6 +500,38 @@ async function pickAsset(asset: PublicAsset) {
             </div>
           </CardContent>
         </Card>
+
+        <div v-if="activeImageJob" class="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-4 py-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm font-medium">
+              <Loader2 v-if="!isImageJobTerminal(activeImageJob.status)" class="h-4 w-4 animate-spin" />
+              <span>{{ activeImageJobLabel }}</span>
+              <span class="text-xs font-normal text-muted-foreground">任务 #{{ activeImageJob.id }}</span>
+            </div>
+            <p v-if="activeImageJob.safeErrorMessage" class="mt-1 text-xs text-destructive">
+              {{ activeImageJob.safeErrorMessage }}
+            </p>
+            <p v-else class="mt-1 text-xs text-muted-foreground">
+              成功 {{ activeImageJob.successCount }} / {{ activeImageJob.targetCount }}，失败 {{ activeImageJob.failureCount }}
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <Button
+              v-if="!isImageJobTerminal(activeImageJob.status)"
+              variant="outline" size="sm" :disabled="cancellingImageJob"
+              @click="handleCancelImageJob"
+            >
+              <Loader2 v-if="cancellingImageJob" class="mr-1 h-3.5 w-3.5 animate-spin" />取消任务
+            </Button>
+            <Button
+              v-if="isImageJobTerminal(activeImageJob.status) && activeImageJob.status !== 'SUCCEEDED'"
+              variant="outline" size="sm" :disabled="retryingImageJob || !activeImageJob.retryable"
+              @click="handleRetryImageJob"
+            >
+              <Loader2 v-if="retryingImageJob" class="mr-1 h-3.5 w-3.5 animate-spin" />重试
+            </Button>
+          </div>
+        </div>
 
         <!-- Results -->
         <Card v-if="genResults.length > 0">

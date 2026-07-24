@@ -84,6 +84,9 @@ public class AmazonImageTask {
     @Column
     private Long generationRecordId;
 
+    @Column(name = "image_job_id")
+    private Long imageJobId;
+
     @Column(columnDefinition = "TEXT")
     private String resultPaths;
 

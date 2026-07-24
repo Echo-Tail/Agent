@@ -14,4 +14,6 @@ public interface ImageGenerationRecordRepository extends JpaRepository<ImageGene
 
     /** 查询指定用户的所有记录，按创建时间倒序 */
     List<ImageGenerationRecord> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<ImageGenerationRecord> findByJobIdOrderByOutputIndex(Long jobId);
 }

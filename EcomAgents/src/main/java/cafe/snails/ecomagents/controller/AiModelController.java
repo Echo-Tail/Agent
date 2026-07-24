@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.controller;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.ModelValidateRequest;
 import cafe.snails.ecomagents.model.AiModel;
+import cafe.snails.ecomagents.model.ModelCapability;
 import cafe.snails.ecomagents.service.AiModelService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -40,8 +41,9 @@ public class AiModelController {
 
     /** 获取已启用的图片生成模型列表 */
     @GetMapping("/models/image")
-    public ApiResponse<List<AiModel>> getImageModels() {
-        return aiModelService.getEnabledImageModels();
+    public ApiResponse<List<AiModel>> getImageModels(
+            @RequestParam(value = "capability", defaultValue = "TEXT_TO_IMAGE") ModelCapability capability) {
+        return aiModelService.getEnabledImageModels(capability);
     }
 
     /** 获取单个模型详情 */

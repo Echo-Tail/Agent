@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.model;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * AI 模型配置实体，映射 ai_models 表。
@@ -41,8 +42,13 @@ public class AiModel {
     private String apiUrl;
 
     /** API 密钥 */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "api_key", length = 500)
     private String apiKey;
+
+    /** 默认加密凭据；能力配置可单独覆盖。 */
+    @Column(name = "default_credential_id")
+    private Long defaultCredentialId;
 
     /** API 格式类型：openai / anthropic */
     @Column(name = "api_type", length = 20)

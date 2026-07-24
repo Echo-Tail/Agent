@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale, getCurrentLocale } from '@/locales'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -29,6 +30,7 @@ import {
   Moon,
   Menu,
   ChevronLeft,
+  ChevronDown,
   Bot,
   Languages,
   MessageCircle,
@@ -38,6 +40,7 @@ import {
   PanelsTopLeft,
   ScrollText,
   ScanLine,
+  Activity,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -75,6 +78,7 @@ const pageTitleKey: Record<string, string> = {
   ToolManage: 'pageTitle.toolManage',
   SkillManage: 'pageTitle.skillManage',
   TokenUsage: 'pageTitle.tokenUsage',
+  ImageRuntimeMonitoring: 'pageTitle.imageRuntimeMonitoring',
   TicketManage: 'pageTitle.ticketManage',
   KnowledgeBase: 'pageTitle.knowledgeBase',
   PublicAssets: 'pageTitle.publicAssets',
@@ -97,31 +101,51 @@ interface NavItem {
   adminOnly?: boolean
 }
 
-// 分组导航 — 组之间显示分割线
-const navGroups: NavItem[][] = [
-  // 核心 AI 交互
-  [
+interface NavGroup {
+  id: string
+  translationKey: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
+  {
+    id: 'communication',
+    translationKey: 'navGroup.communication',
+    items: [
     { translationKey: 'nav.chat', key: 'Chat', icon: MessageSquare },
     { translationKey: 'nav.groupChat', key: 'GroupChat', icon: MessageCircle },
     { translationKey: 'nav.messages', key: 'Messages', icon: Mail },
+    ],
+  },
+  {
+    id: 'creation',
+    translationKey: 'navGroup.creation',
+    items: [
     { translationKey: 'nav.myAgents', key: 'Dashboard', icon: LayoutDashboard },
     { translationKey: 'nav.agentPlaza', key: 'AgentPlaza', icon: Users },
-    { translationKey: 'nav.imageGeneration', key: 'ImageGeneration', icon: Image },
+    { translationKey: 'nav.imageGeneration', key: 'ImageCanvasSessions', icon: Image },
     { translationKey: 'nav.imageSuperResolution', key: 'ImageSuperResolution', icon: ScanLine },
     { translationKey: 'nav.productProfiles', key: 'ProductProfileList', icon: FileText },
     { translationKey: 'nav.amazonImageWorkbench', key: 'AmazonImageWorkbench', icon: PanelsTopLeft },
     { translationKey: 'nav.imageHistory', key: 'ImageHistory', icon: History },
+    ],
+  },
+  {
+    id: 'resources',
+    translationKey: 'navGroup.resources',
+    items: [
     { translationKey: 'nav.publicAssets', key: 'PublicAssets', icon: ImagePlus },
     { translationKey: 'nav.promptLibrary', key: 'PromptLibrary', icon: ScrollText },
-  ],
-  // 数据与记录
-  [
-    { translationKey: 'nav.history', key: 'History', icon: History },
     { translationKey: 'nav.knowledgeBase', key: 'KnowledgeBase', icon: BookOpen },
+    { translationKey: 'nav.history', key: 'History', icon: History },
     { translationKey: 'nav.myTickets', key: 'MyTickets', icon: Ticket },
-  ],
-  // 管理后台
-  [
+    ],
+  },
+  {
+    id: 'admin',
+    translationKey: 'navGroup.admin',
+    items: [
+    { translationKey: 'nav.imageRuntimeMonitoring', key: 'ImageRuntimeMonitoring', icon: Activity, adminOnly: true },
     { translationKey: 'nav.tokenUsage', key: 'TokenUsage', icon: BarChart3, adminOnly: true },
     { translationKey: 'nav.userManage', key: 'UserManage', icon: UserCog, adminOnly: true },
     { translationKey: 'nav.modelManage', key: 'ModelManage', icon: Brain, adminOnly: true },
@@ -129,20 +153,43 @@ const navGroups: NavItem[][] = [
     { translationKey: 'nav.toolManage', key: 'ToolManage', icon: Wrench, adminOnly: true },
     { translationKey: 'nav.ticketManage', key: 'TicketManage', icon: TicketCheck, adminOnly: true },
     { translationKey: 'nav.logs', key: 'Logs', icon: FileText, adminOnly: true },
-  ],
-  // 设置
-  [
+    ],
+  },
+  {
+    id: 'system',
+    translationKey: 'navGroup.system',
+    items: [
     { translationKey: 'nav.settings', key: 'Settings', icon: Settings },
-  ],
+    ],
+  },
 ]
 
 const visibleNavGroups = computed(() =>
   navGroups
-    .map(group => group.filter(item => !item.adminOnly || auth.isAdmin))
-    .filter(group => group.length > 0)
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.adminOnly || auth.isAdmin),
+    }))
+    .filter(group => group.items.length > 0)
 )
 
 const activeKey = computed(() => (route.name as string) || 'Dashboard')
+const expandedGroups = ref<Record<string, boolean>>({
+  communication: true,
+  creation: true,
+  resources: true,
+  admin: false,
+  system: true,
+})
+
+function toggleGroup(groupId: string) {
+  expandedGroups.value[groupId] = !expandedGroups.value[groupId]
+}
+
+watch(activeKey, key => {
+  const group = navGroups.find(item => item.items.some(navItem => navItem.key === key))
+  if (group) expandedGroups.value[group.id] = true
+}, { immediate: true })
 
 function navigate(key: string) {
   router.push({ name: key })
@@ -208,12 +255,27 @@ const userAvatar = computed(() => {
       </div>
 
       <!-- Nav -->
-      <nav class="flex-1 overflow-y-auto py-2 px-2 space-y-1">
-        <template v-for="(group, groupIndex) in visibleNavGroups" :key="groupIndex">
-          <div v-if="groupIndex > 0" class="border-t border-sidebar-border my-2" />
+      <nav class="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
+        <template v-for="(group, groupIndex) in visibleNavGroups" :key="group.id">
+          <Separator v-if="sidebarCollapsed && groupIndex > 0" class="my-1" />
           <button
-            v-for="item in group"
+            v-if="!sidebarCollapsed"
+            type="button"
+            class="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            :aria-expanded="expandedGroups[group.id]"
+            @click="toggleGroup(group.id)"
+          >
+            <span>{{ $t(group.translationKey) }}</span>
+            <ChevronDown
+              class="size-3.5 transition-transform"
+              :class="{ '-rotate-90': !expandedGroups[group.id] }"
+            />
+          </button>
+          <div v-show="sidebarCollapsed || expandedGroups[group.id]" class="flex flex-col gap-0.5">
+          <button
+            v-for="item in group.items"
             :key="item.key"
+            type="button"
             @click="navigate(item.key)"
           :class="[
             'relative flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm transition-colors',
@@ -238,6 +300,7 @@ const userAvatar = computed(() => {
             class="absolute right-2 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1"
           >{{ activeUpscaleCount > 99 ? '99+' : activeUpscaleCount }}</span>
         </button>
+          </div>
         </template>
       </nav>
 

@@ -198,14 +198,34 @@ export const logger = {
 
 // ---- 全局错误监听 ----
 
+const BENIGN_RESIZE_OBSERVER_MESSAGES = [
+  'ResizeObserver loop completed with undelivered notifications',
+  'ResizeObserver loop limit exceeded',
+]
+
+/**
+ * 浏览器会在同一帧内发生多轮布局测量时派发该通知。Vue Flow 等依赖
+ * ResizeObserver 的组件可能正常触发它，它不代表应用异常或数据丢失。
+ */
+export function isBenignResizeObserverError(message: unknown): boolean {
+  const text = typeof message === 'string' ? message : ''
+  return BENIGN_RESIZE_OBSERVER_MESSAGES.some(item => text.includes(item))
+}
+
 /**
  * 注册全局错误/未捕获 Promise 异常监听。
  * 在 main.ts 中调用一次即可。
  */
 export function setupGlobalErrorLogging() {
   window.addEventListener('error', (event) => {
+    const message = event.message || event.error?.message
+    if (isBenignResizeObserverError(message)) {
+      // 阻止浏览器把非致命的 ResizeObserver 通知继续输出为未捕获错误。
+      event.preventDefault()
+      return
+    }
     logger.error('GLOBAL', 'Uncaught error', {
-      message: event.message,
+      message,
       filename: event.filename,
       lineno: event.lineno,
       colno: event.colno,
@@ -223,7 +243,9 @@ export function setupGlobalErrorLogging() {
 
   // 拦截 console.error 以捕获第三方库的错误
   console.error = function (...args: unknown[]) {
-    logger.error('CONSOLE', args.map(a => (typeof a === 'string' ? maskString(a) : String(a))).join(' '))
+    const message = args.map(a => (typeof a === 'string' ? maskString(a) : String(a))).join(' ')
+    if (isBenignResizeObserverError(message)) return
+    logger.error('CONSOLE', message)
     consoleSink.error(...args)
   }
 

@@ -8,6 +8,7 @@
     "history": "历史会话",
     "myTickets": "我的工单",
     "knowledgeBase": "知识库",
+    "imageRuntimeMonitoring": "图片运行监控",
     "tokenUsage": "Token 用量",
     "ticketManage": "工单管理",
     "logs": "日志",
@@ -24,12 +25,18 @@
     "imageHistory": "生成历史",
     "amazonImageWorkbench": "Amazon 图像工作台"
   },
+  "navGroup": {
+    "communication": "沟通",
+    "creation": "创作工作台",
+    "resources": "知识与资源",
+    "admin": "管理后台",
+    "system": "系统"
+  },
   "pageTitle": {
     "myAgents": "我的 Agent",
     "chat": "对话",
     "agentPlaza": "Agent 广场",
     "imageGeneration": "图像生成",
-    "imageSuperResolution": "图像超分",
     "imageSuperResolution": "图像超分",
     "imageGenDesc": "使用 gpt-image-2 模型生成图片",
     "createAgent": "创建 Agent",
@@ -40,6 +47,7 @@
     "history": "历史会话",
     "myTickets": "我的工单",
     "knowledgeBase": "知识库",
+    "imageRuntimeMonitoring": "图片运行监控",
     "tokenUsage": "Token 用量",
     "ticketManage": "工单管理",
     "logs": "日志",

@@ -71,6 +71,7 @@ export interface AiModel {
   modelName: string
   apiUrl: string
   apiKey?: string
+  defaultCredentialId?: number
   apiType: string
   maxTokens: number
   temperature: number
@@ -79,4 +80,29 @@ export interface AiModel {
   modelType: string
   createdAt: string
   createdBy: number
+}
+
+export type ModelCapability = 'CHAT' | 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE'
+export type ModelProtocol = 'OPENAI_CHAT' | 'OPENAI_IMAGE' | 'BAILIAN_IMAGE'
+
+export interface AiModelCapability {
+  id?: number
+  modelId?: number
+  capability: ModelCapability
+  protocol: ModelProtocol
+  modelNameOverride?: string
+  apiUrlOverride?: string
+  credentialIdOverride?: number
+  optionsJson?: string
+}
+
+export interface ModelCredential {
+  id: number
+  name: string
+  provider: string
+  maskedHint: string
+  encryptionVersion: number
+  createdAt: string
+  updatedAt: string
+  lastRotatedAt: string
 }

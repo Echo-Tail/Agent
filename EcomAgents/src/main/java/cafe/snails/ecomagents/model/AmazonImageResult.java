@@ -17,6 +17,9 @@ public class AmazonImageResult {
     @Column(name = "task_id", nullable = false)
     private Long taskId;
 
+    @Column(name = "generation_record_id")
+    private Long generationRecordId;
+
     @Column(name = "image_path", nullable = false, length = 500)
     private String imagePath;
 

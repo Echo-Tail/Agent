@@ -28,7 +28,11 @@ const router = createRouter({
         { path: '', name: 'Dashboard', component: () => import('@/views/dashboard/DashboardView.vue') },
         { path: 'agents', name: 'AgentList', component: () => import('@/views/agent/AgentList.vue') },
         { path: 'agents/plaza', name: 'AgentPlaza', component: () => import('@/views/agent/AgentPlaza.vue') },
-        { path: 'agents/image', name: 'ImageGeneration', component: () => import('@/views/image/ImageGenerationView.vue') },
+        { path: 'agents/image', name: 'ImageCanvasSessions', component: () => import('@/views/image/ImageCanvasSessionsView.vue') },
+        { path: 'agents/image/:sessionId', name: 'ImageCanvas', component: () => import('@/views/image/ImageCanvasView.vue') },
+        { path: 'agents/image-legacy', name: 'ImageGenerationLegacy', component: () => import('@/views/image/ImageGenerationView.vue') },
+        { path: 'agents/image-canvas', redirect: { name: 'ImageCanvasSessions' } },
+        { path: 'agents/image-canvas/:sessionId', redirect: to => ({ name: 'ImageCanvas', params: { sessionId: to.params.sessionId } }) },
         { path: 'images/super-resolution', name: 'ImageSuperResolution', component: () => import('@/views/image/ImageSuperResolutionView.vue') },
         { path: 'agents/products', name: 'ProductProfileList', component: () => import('@/views/product/ProductProfileListView.vue') },
         { path: 'agents/products/:id', name: 'ProductProfileDetail', component: () => import('@/views/product/ProductProfileDetailView.vue') },
@@ -52,6 +56,7 @@ const router = createRouter({
         { path: 'knowledge', name: 'KnowledgeBase', component: () => import('@/views/knowledge/KnowledgeBase.vue') },
         { path: 'knowledge/:id', name: 'KnowledgeDetail', component: () => import('@/views/knowledge/KnowledgeBase.vue') },
         { path: 'settings', name: 'Settings', component: () => import('@/views/settings/SettingsView.vue') },
+        { path: 'admin/image-runtime', name: 'ImageRuntimeMonitoring', component: () => import('@/views/admin/ImageRuntimeMonitoring.vue') },
         { path: 'admin/token-usage', name: 'TokenUsage', component: () => import('@/views/admin/TokenUsage.vue') },
         { path: 'admin/tickets', name: 'TicketManage', component: () => import('@/views/admin/TicketManage.vue') },
         { path: 'logs', name: 'Logs', component: () => import('@/views/log/LogViewer.vue') },
@@ -83,7 +88,7 @@ router.beforeEach(async (to, _from) => {
     }
   }
 
-  const adminRoutes = ['UserManage', 'ModelManage', 'ToolManage', 'SkillManage', 'TokenUsage', 'TicketManage']
+  const adminRoutes = ['UserManage', 'ModelManage', 'ToolManage', 'SkillManage', 'ImageRuntimeMonitoring', 'TokenUsage', 'TicketManage']
   if (adminRoutes.includes(to.name as string)) {
     const auth = useAuthStore()
     const valid = await auth.verifyAuth()
