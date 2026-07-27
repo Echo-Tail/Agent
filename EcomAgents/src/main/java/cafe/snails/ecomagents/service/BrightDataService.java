@@ -51,6 +51,13 @@ public class BrightDataService {
 
     /** 监控进度请求超时 15 秒 */
     private static final Duration PROGRESS_TIMEOUT = Duration.ofSeconds(15);
+    private static final int MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+
+    private WebClient brightDataClient() {
+        return webClientBuilder.clone()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_RESPONSE_BYTES))
+                .build();
+    }
 
     // ==================== 公开方法 ====================
 
@@ -83,7 +90,7 @@ public class BrightDataService {
                     bodyPreview);
 
             // 调用 Bright Data API
-            String responseBody = webClientBuilder.build()
+            String responseBody = brightDataClient()
                     .post()
                     .uri(requestUrl)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())
@@ -209,7 +216,7 @@ public class BrightDataService {
                     urlBuilder, requestBodyJson.length() > 300 ? requestBodyJson.substring(0, 300) + "..." : requestBodyJson);
 
             // 调用 Bright Data API
-            String responseBody = webClientBuilder.build()
+            String responseBody = brightDataClient()
                     .post()
                     .uri(urlBuilder.toString())
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())
@@ -261,7 +268,7 @@ public class BrightDataService {
     public ApiResponse<BrightDataSnapshotStatus> getProgress(String snapshotId) {
         log.info("[BrightData] >>> getProgress: snapshotId={}", snapshotId);
         try {
-            String responseBody = webClientBuilder.build()
+            String responseBody = brightDataClient()
                     .get()
                     .uri(brightDataConfig.getBaseUrl() + "/datasets/v3/progress/" + snapshotId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())
@@ -305,7 +312,7 @@ public class BrightDataService {
 
         try {
             String fmt = (format != null) ? format : "json";
-            String responseBody = webClientBuilder.build()
+            String responseBody = brightDataClient()
                     .get()
                     .uri(brightDataConfig.getBaseUrl() + "/datasets/v3/snapshot/" + snapshotId
                             + "?format=" + fmt)
@@ -359,7 +366,7 @@ public class BrightDataService {
     public ApiResponse<Void> cancelSnapshot(String snapshotId) {
         log.info("[BrightData] >>> cancelSnapshot: snapshotId={}", snapshotId);
         try {
-            webClientBuilder.build()
+            brightDataClient()
                     .post()
                     .uri(brightDataConfig.getBaseUrl() + "/datasets/v3/snapshot/" + snapshotId + "/cancel")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())
@@ -490,7 +497,7 @@ public class BrightDataService {
             }
             log.info("[BrightData] >>> listSnapshots: datasetId={}, status={}, limit={}", resolvedDatasetId, status, limit);
 
-            String responseBody = webClientBuilder.build()
+            String responseBody = brightDataClient()
                     .get()
                     .uri(urlBuilder.toString())
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + brightDataConfig.getApiKey())

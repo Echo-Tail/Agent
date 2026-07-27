@@ -23,14 +23,19 @@
     "promptLibrary": "提示词库",
     "productProfiles": "产品资料",
     "imageHistory": "生成历史",
-    "amazonImageWorkbench": "Amazon 图像工作台"
+    "amazonImageWorkbench": "Amazon 图像工作台",
+    "reviewAnalysis": "评论洞察",
+    "reviewTasks": "分析任务",
+    "reviewReport": "洞察报告",
+    "reviewEvidence": "评论证据"
   },
   "navGroup": {
     "communication": "沟通",
     "creation": "创作工作台",
     "resources": "知识与资源",
     "admin": "管理后台",
-    "system": "系统"
+    "system": "系统",
+    "reviewAnalysis": "评论洞察"
   },
   "pageTitle": {
     "myAgents": "我的 Agent",
@@ -66,6 +71,10 @@
     "productProfiles": "产品资料",
     "productProfilesDesc": "维护自有产品档案和默认产品图片",
     "amazonImageWorkbench": "Amazon 图像工作台",
+    "reviewAnalysis": "Car Stereo 评论洞察",
+    "reviewTasks": "评论洞察 · 分析任务",
+    "reviewReport": "评论洞察 · 洞察报告",
+    "reviewEvidence": "评论洞察 · 评论证据",
     "imageHistory": "生成历史",
     "imageHistoryDesc": "查看文生图与图生图的历史记录",
     "amazonImageWorkbenchDesc": "管理 Amazon US car stereo 副图与 A+ 图生图流程"

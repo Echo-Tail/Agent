@@ -1,0 +1,44 @@
+package cafe.snails.ecomagents.dto.review;
+
+import jakarta.validation.constraints.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+public final class ReviewQueryDtos {
+    private ReviewQueryDtos() {}
+
+    public record ProductReviewResponse(
+            Long id, String asin, BigDecimal rating, String title, String reviewText,
+            LocalDateTime reviewDate, Boolean verifiedPurchase, Integer helpfulCount,
+            String reviewerName, String sourceUrl, LocalDateTime collectedAt) {}
+
+    public record InsightResponse(
+            Long id, Long reviewId, String asin, BigDecimal rating, String reviewText,
+            String userProblem, String usageScenario, String productModule, String severity,
+            String sentiment, String evidenceQuote, String actionType, String improvementAction,
+            Integer returnRisk, Integer conversionRisk, BigDecimal confidence,
+            Boolean manuallyEdited, LocalDateTime updatedAt) {}
+
+    public record UpdateInsightRequest(
+            @NotBlank @Size(max = 5000) String userProblem,
+            @NotBlank String usageScenario,
+            @NotBlank String productModule,
+            @NotBlank String severity,
+            @NotBlank String sentiment,
+            @NotBlank @Size(max = 5000) String evidenceQuote,
+            @NotBlank String actionType,
+            @NotBlank @Size(max = 10000) String improvementAction,
+            @NotNull @Min(1) @Max(5) Integer returnRisk,
+            @NotNull @Min(1) @Max(5) Integer conversionRisk) {}
+
+    public record DimensionCount(String key, long count) {}
+
+    public record DashboardResponse(
+            Long runId, int reviewCount, int insightCount, int opportunityCount,
+            long manuallyEditedInsightCount, BigDecimal averageRating,
+            List<DimensionCount> ratings, List<DimensionCount> severities,
+            List<DimensionCount> scenarios, List<DimensionCount> modules,
+            List<DimensionCount> actionTypes, Map<String, Integer> productReviewCounts) {}
+}
