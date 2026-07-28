@@ -16,6 +16,7 @@ import java.util.*;
 @Component
 @Order(100)
 @Slf4j
+/** OpenAI 兼容图片生成接口适配器。 */
 public class OpenAiImageAdapter implements ImageGenerationProviderAdapter {
     private final ObjectMapper mapper;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;

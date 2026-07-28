@@ -24,6 +24,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 负责提示词库内容的检索、创建与维护。 */
 public class PromptLibraryService {
 
     private static final long MAX_COVER_SIZE = 5 * 1024 * 1024; // 5MB

@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 @Slf4j
+/** 提示词库接口，负责提示词模板的查询、创建、更新、封面设置和删除。 */
 @RestController
 @RequestMapping("/v1/prompts")
 @RequiredArgsConstructor

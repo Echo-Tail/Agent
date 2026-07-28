@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import cafe.snails.ecomagents.dto.ToolAvailability;
 import cafe.snails.ecomagents.model.*;
 import cafe.snails.ecomagents.repository.*;
@@ -54,7 +54,7 @@ class HarnessChatServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private LlmConfig llmConfig;
+    private ModelRuntimeProperties runtimeProperties;
     @Mock
     private AgentToolAvailabilityService toolAvailabilityService;
 
@@ -66,7 +66,7 @@ class HarnessChatServiceTest {
                 harnessAgentManager, objectMapper, llmTaskExecutor, sessionMapper,
                 agentRepository, aiModelRepository, knowledgeBaseService,
                 tokenUsageService, tokenCounter, fileStorageService,
-                sessionRepository, userRepository, llmConfig, toolAvailabilityService);
+                sessionRepository, userRepository, runtimeProperties, toolAvailabilityService);
     }
 
     // ==================== requiresRealtimeLookup ====================

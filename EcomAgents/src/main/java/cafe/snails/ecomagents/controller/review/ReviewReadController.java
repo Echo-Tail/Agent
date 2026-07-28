@@ -11,12 +11,14 @@ import org.springframework.data.domain.*;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 
+/** 评论分析结果读取接口，提供评论、洞察、确认和仪表盘数据。 */
 @RestController
 @RequestMapping("/v1/review-analysis/projects/{projectId}")
 @RequiredArgsConstructor
 public class ReviewReadController {
     private final ReviewReadService service;
 
+    /** 分页查询项目采集到的商品评论。 */
     @GetMapping("/reviews")
     public ApiResponse<Page<ProductReviewResponse>> reviews(
             @PathVariable Long projectId,
@@ -32,6 +34,7 @@ public class ReviewReadController {
                 page(page, size, Sort.by(Sort.Direction.DESC, "reviewDate", "id")), userId));
     }
 
+    /** 分页查询分析任务产生的洞察。 */
     @GetMapping("/analysis-runs/{runId}/insights")
     public ApiResponse<Page<InsightResponse>> insights(
             @PathVariable Long projectId,
@@ -51,6 +54,7 @@ public class ReviewReadController {
                 page(page, size, Sort.by(Sort.Direction.DESC, "updatedAt", "id")), userId));
     }
 
+    /** 更新指定洞察的人工编辑字段。 */
     @PatchMapping("/analysis-runs/{runId}/insights/{insightId}")
     public ApiResponse<InsightResponse> updateInsight(
             @PathVariable Long projectId,
@@ -61,18 +65,21 @@ public class ReviewReadController {
         return ApiResponse.success(service.updateInsight(projectId, runId, insightId, request, userId));
     }
 
+    /** 确认评论分析任务结果。 */
     @PostMapping("/analysis-runs/{runId}/confirm")
     public ApiResponse<AnalysisRunResponse> confirm(
             @PathVariable Long projectId, @PathVariable Long runId, @CurrentUserId Long userId) {
         return ApiResponse.success(ReviewAnalysisService.toResponse(service.confirm(projectId, runId, userId)));
     }
 
+    /** 获取评论分析任务的仪表盘汇总数据。 */
     @GetMapping("/analysis-runs/{runId}/dashboard")
     public ApiResponse<DashboardResponse> dashboard(
             @PathVariable Long projectId, @PathVariable Long runId, @CurrentUserId Long userId) {
         return ApiResponse.success(service.dashboard(projectId, runId, userId));
     }
 
+    /** 构建经过边界约束的分页参数。 */
     private Pageable page(int page, int size, Sort sort) {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(100, size));

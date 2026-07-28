@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 评论分析项目的一次版本化执行记录。
+ */
 @Entity
 @Table(name = "review_analysis_runs")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

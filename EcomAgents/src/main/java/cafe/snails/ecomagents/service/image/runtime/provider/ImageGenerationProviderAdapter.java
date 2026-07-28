@@ -3,6 +3,7 @@ package cafe.snails.ecomagents.service.image.runtime.provider;
 import cafe.snails.ecomagents.model.*;
 import java.util.List;
 
+/** 定义不同供应商图片生成接口的统一适配规范。 */
 public interface ImageGenerationProviderAdapter {
     boolean supports(ModelProtocol protocol, ModelCapability capability);
     default void validate(ImageGenerationJob job, List<ImageGenerationJobInput> inputs) {}

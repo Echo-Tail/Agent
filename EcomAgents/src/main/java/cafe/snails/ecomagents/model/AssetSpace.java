@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 用户素材的逻辑存储空间。
+ */
 @Entity
 @Table(name = "asset_spaces")
 @Getter @Setter @ToString

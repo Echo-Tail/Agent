@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+/** 负责评论洞察抽样审核和质量门禁计算。 */
 public class ReviewValidationService {
     private static final int AUDIT_SAMPLE_SIZE = 50;
     private final ReviewProjectService projectService;

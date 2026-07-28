@@ -5,6 +5,9 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 商品卖点认知分析结果的版本快照。
+ */
 @Entity
 @Table(name = "product_selling_point_cognition_versions")
 @Getter @Setter @ToString

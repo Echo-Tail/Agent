@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 @Component
+/** 采集图片生成任务、供应商请求和耗时指标。 */
 public class ImageGenerationMetrics {
     private static final String PREFIX = "ecomagents.image.runtime";
     private final MeterRegistry registry;

@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 图片会话内可复用的图片素材。
+ */
 @Entity
 @Table(name = "image_assets")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

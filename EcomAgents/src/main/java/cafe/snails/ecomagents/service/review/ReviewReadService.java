@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+/** 提供评论、洞察和分析看板的只读查询能力。 */
 public class ReviewReadService {
     private final ReviewProjectService projectService;
     private final ProductReviewRepository reviewRepository;

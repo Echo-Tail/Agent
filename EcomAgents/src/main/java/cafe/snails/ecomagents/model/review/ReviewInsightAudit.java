@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 评论洞察的人工质量审核记录。
+ */
 @Entity
 @Table(name = "review_insight_audits")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

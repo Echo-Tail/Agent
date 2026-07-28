@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.service.image.runtime.provider;
 
 import java.util.List;
 
+/** 异步图片生成供应商的任务轮询结果。 */
 public record ProviderPollResult(Status status, List<GeneratedProviderImage> images, String safeError) {
     public enum Status { PENDING, SUCCEEDED, FAILED }
     public ProviderPollResult { images = images == null ? List.of() : List.copyOf(images); }

@@ -5,6 +5,9 @@ import cafe.snails.ecomagents.model.ModelProtocol;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 模型能力与调用协议的配置请求。
+ */
 public record ModelCapabilityConfigRequest(
         @NotNull ModelCapability capability,
         @NotNull ModelProtocol protocol,

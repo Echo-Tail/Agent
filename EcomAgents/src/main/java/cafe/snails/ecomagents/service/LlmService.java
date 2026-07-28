@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.Msg;
@@ -42,19 +42,18 @@ public class LlmService {
     /** 默认最大输出 token 数，避免模型返回过长文本。 */
     public static final int DEFAULT_MAX_TOKENS = 256000;
 
-    /** AgentScope Model 实例，由 AgentScopeConfig 注入 */
-    private final Model model;
-    /** LLM 全局配置（API key、默认模型等） */
-    private final LlmConfig llmConfig;
+    private final AiModelService aiModelService;
+    private final ModelRuntimeProperties runtimeProperties;
     /** JSON 序列化器 */
     private final ObjectMapper objectMapper;
 
     /**
      * 创建 LLM 服务并注入默认模型、配置和 JSON 序列化器。
      */
-    public LlmService(Model model, LlmConfig llmConfig, ObjectMapper objectMapper) {
-        this.model = model;
-        this.llmConfig = llmConfig;
+    public LlmService(AiModelService aiModelService, ModelRuntimeProperties runtimeProperties,
+                      ObjectMapper objectMapper) {
+        this.aiModelService = aiModelService;
+        this.runtimeProperties = runtimeProperties;
         this.objectMapper = objectMapper;
     }
 
@@ -89,45 +88,24 @@ public class LlmService {
     public String streamChat(String systemPrompt, List<Map<String, String>> history,
                              SseEmitter emitter, GenerateOptions optionsOverride) {
         if (optionsOverride == null) {
-            optionsOverride = GenerateOptions.builder()
-                    .temperature(llmConfig.getTemperature())
-                    .maxTokens(DEFAULT_MAX_TOKENS)
-                    .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
-                            .timeout(java.time.Duration.ofSeconds(llmConfig.getStreamTimeout()))
-                            .maxAttempts(1)
-                            .build())
-                    .build();
+            optionsOverride = aiModelService.buildModelOptions(null);
+        }
+        if (optionsOverride == null) {
+            throw new IllegalStateException("No enabled default AI model is configured");
         }
         boolean hasPerModelKey = optionsOverride.getApiKey() != null
                 && !optionsOverride.getApiKey().isBlank();
-        if (!hasPerModelKey && "sk-placeholder".equals(llmConfig.getApiKey())) {
-            log.warn("LLM API key not configured (placeholder detected), throwing");
-            throw new IllegalStateException(
-                    "LLM API key not configured. Set llm.api.key or LLM_API_KEY environment variable.");
+        if (!hasPerModelKey) {
+            throw new IllegalStateException("The selected AI model has no credential configured");
         }
 
         List<Msg> messages = buildMessages(systemPrompt, history);
-        long streamTimeout = llmConfig.getStreamTimeout();
+        long streamTimeout = runtimeProperties.getStreamTimeout();
 
-        String modelName = optionsOverride.getModelName() != null ? optionsOverride.getModelName() : llmConfig.getModel();
-        String apiKeyMask = (hasPerModelKey || llmConfig.getApiKey() != null)
-                ? maskApiKey(hasPerModelKey ? optionsOverride.getApiKey() : llmConfig.getApiKey())
-                : "none";
+        String modelName = optionsOverride.getModelName();
+        String apiKeyMask = maskApiKey(optionsOverride.getApiKey());
 
-        Model effectiveModel = model;
-        if (hasPerModelKey && optionsOverride.getBaseUrl() != null) {
-            String modelNameOverride = optionsOverride.getModelName() != null
-                    ? optionsOverride.getModelName() : llmConfig.getModel();
-            log.info("Creating per-request OpenAIChatModel: modelName={}, baseUrl={}, apiKey={}",
-                    modelNameOverride, optionsOverride.getBaseUrl(), apiKeyMask);
-            effectiveModel = OpenAIChatModel.builder()
-                    .apiKey(optionsOverride.getApiKey())
-                    .modelName(modelNameOverride)
-                    .baseUrl(optionsOverride.getBaseUrl())
-                    .endpointPath(optionsOverride.getEndpointPath() != null
-                            ? optionsOverride.getEndpointPath() : "/v1/chat/completions")
-                    .build();
-        }
+        Model effectiveModel = createModel(optionsOverride);
 
         log.info("LLM streamChat starting: modelName={}, apiKey={}, systemPromptLen={}, historyMsgs={}",
                 modelName, apiKeyMask,
@@ -219,27 +197,14 @@ public class LlmService {
     public String syncChat(String systemPrompt, List<Map<String, String>> history,
                             GenerateOptions optionsOverride) {
         if (optionsOverride == null) {
-            optionsOverride = GenerateOptions.builder()
-                    .temperature(llmConfig.getTemperature())
-                    .maxTokens(DEFAULT_MAX_TOKENS)
-                    .executionConfig(io.agentscope.core.model.ExecutionConfig.builder()
-                            .timeout(java.time.Duration.ofSeconds(30))
-                            .maxAttempts(1)
-                            .build())
-                    .build();
+            optionsOverride = aiModelService.buildModelOptions(null);
+        }
+        if (optionsOverride == null) {
+            throw new IllegalStateException("No enabled default AI model is configured");
         }
         List<Msg> messages = buildMessages(systemPrompt, history);
 
-        Model effectiveModel = model;
-        if (optionsOverride.getApiKey() != null && optionsOverride.getBaseUrl() != null) {
-            effectiveModel = OpenAIChatModel.builder()
-                    .apiKey(optionsOverride.getApiKey())
-                    .modelName(optionsOverride.getModelName() != null ? optionsOverride.getModelName() : llmConfig.getModel())
-                    .baseUrl(optionsOverride.getBaseUrl())
-                    .endpointPath(optionsOverride.getEndpointPath() != null
-                            ? optionsOverride.getEndpointPath() : "/v1/chat/completions")
-                    .build();
-        }
+        Model effectiveModel = createModel(optionsOverride);
 
         StringBuilder fullText = new StringBuilder();
         effectiveModel.stream(messages, List.of(), optionsOverride)
@@ -251,6 +216,25 @@ public class LlmService {
 
         String result = fullText.toString();
         return result.isEmpty() ? null : result;
+    }
+
+    private Model createModel(GenerateOptions options) {
+        if (options.getApiKey() == null || options.getApiKey().isBlank()) {
+            throw new IllegalStateException("The selected AI model has no credential configured");
+        }
+        if (options.getModelName() == null || options.getModelName().isBlank()) {
+            throw new IllegalStateException("The selected AI model has no model name configured");
+        }
+        if (options.getBaseUrl() == null || options.getBaseUrl().isBlank()) {
+            throw new IllegalStateException("The selected AI model has no API URL configured");
+        }
+        return OpenAIChatModel.builder()
+                .apiKey(options.getApiKey())
+                .modelName(options.getModelName())
+                .baseUrl(options.getBaseUrl())
+                .endpointPath(options.getEndpointPath() != null
+                        ? options.getEndpointPath() : "/v1/chat/completions")
+                .build();
     }
 
     /**

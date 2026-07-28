@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 图片会话与图片生成任务之间的关联记录。
+ */
 @Entity
 @Table(name = "image_session_jobs", uniqueConstraints = {
         @UniqueConstraint(name = "uk_image_session_job", columnNames = "job_id"),

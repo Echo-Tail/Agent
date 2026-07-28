@@ -18,6 +18,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 执行单个图片生成任务并持久化执行结果。 */
 public class ImageGenerationJobExecutor {
     private final ImageGenerationJobRepository jobs;
     private final ImageGenerationJobInputRepository inputs;

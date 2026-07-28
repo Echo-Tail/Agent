@@ -1,7 +1,9 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
+import cafe.snails.ecomagents.config.RagProperties;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
+import cafe.snails.ecomagents.model.ModelProtocol;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
 import cafe.snails.ecomagents.service.rag.KnowledgeUnit;
 import cafe.snails.ecomagents.service.rag.KnowledgeUnitParserService;
@@ -57,8 +59,9 @@ public class LocalKnowledgeIndexService {
 
     /** 知识文档仓库，用于按知识库加载待索引文档。 */
     private final KnowledgeDocumentRepository docRepository;
-    /** LLM/RAG 配置，提供 embedding 地址、模型、维度和超时参数。 */
-    private final LlmConfig llmConfig;
+    private final ModelRuntimeProperties runtimeProperties;
+    private final RagProperties ragProperties;
+    private final EmbeddingModelResolver embeddingModelResolver;
     /** 知识单元解析器，将原始文档拆分为可索引的父子块。 */
     private final KnowledgeUnitParserService knowledgeUnitParserService;
 
@@ -138,7 +141,7 @@ public class LocalKnowledgeIndexService {
                         .build();
                 List<Document> results = index.knowledge()
                         .retrieve(queryText, config)
-                        .block(Duration.ofSeconds(Math.max(1, llmConfig.getRagRetrievalTimeout())));
+                        .block(Duration.ofSeconds(Math.max(1, ragProperties.getRetrievalTimeout())));
                 if (results == null) {
                     continue;
                 }
@@ -274,6 +277,11 @@ public class LocalKnowledgeIndexService {
     private KnowledgeIndex rebuildIndex(Long kbId, long version) {
         List<KnowledgeDocument> docs = docRepository.findByKnowledgeBaseIdOrderByUploadedAtDesc(kbId);
         SimpleKnowledge knowledge = createKnowledge();
+        if (knowledge == null) {
+            indexes.remove(kbId);
+            log.info("No enabled EMBEDDING AiModel is configured; skipped rebuilding KB {}", kbId);
+            return new KnowledgeIndex(null, 0);
+        }
         int indexedUnits = 0;
         int totalUnits = 0;
 
@@ -345,17 +353,19 @@ public class LocalKnowledgeIndexService {
      * 创建 SimpleKnowledge 实例，绑定 Ollama embedding 模型和内存向量存储。
      */
     private SimpleKnowledge createKnowledge() {
+        var configured = embeddingModelResolver.resolve().orElse(null);
+        if (configured == null || configured.protocol() != ModelProtocol.OLLAMA_EMBEDDING) return null;
         OllamaTextEmbedding embeddingModel = OllamaTextEmbedding.builder()
-                .baseUrl(resolveEmbeddingBaseUrl())
-                .modelName(resolveEmbeddingModel())
-                .dimensions(resolveEmbeddingDimension())
+                .baseUrl(configured.apiUrl())
+                .modelName(configured.modelName())
+                .dimensions(configured.dimension())
                 .executionConfig(ExecutionConfig.builder()
-                        .timeout(Duration.ofSeconds(Math.max(10, llmConfig.getReadTimeout())))
+                        .timeout(Duration.ofSeconds(Math.max(10, runtimeProperties.getReadTimeout())))
                         .maxAttempts(1)
                         .build())
                 .build();
         VDBStoreBase store = InMemoryStore.builder()
-                .dimensions(resolveEmbeddingDimension())
+                .dimensions(configured.dimension())
                 .build();
         return SimpleKnowledge.builder()
                 .embeddingModel(embeddingModel)
@@ -402,28 +412,6 @@ public class LocalKnowledgeIndexService {
         return sb.toString();
     }
 
-    /**
-     * 解析 embedding 服务地址，未配置时使用 Ollama 默认地址。
-     */
-    private String resolveEmbeddingBaseUrl() {
-        String configured = llmConfig.getEmbeddingApiUrl();
-        return configured == null || configured.isBlank() ? "http://localhost:11434" : configured;
-    }
-
-    /**
-     * 解析 embedding 模型名称，未配置时使用 bge-m3 默认模型。
-     */
-    private String resolveEmbeddingModel() {
-        String configured = llmConfig.getEmbeddingModel();
-        return configured == null || configured.isBlank() ? "bge-m3:latest" : configured;
-    }
-
-    /**
-     * 解析 embedding 向量维度，并保证至少为 1。
-     */
-    private int resolveEmbeddingDimension() {
-        return Math.max(1, llmConfig.getEmbeddingDimension());
-    }
 
     /**
      * 判断异常链中是否包含超时信号。

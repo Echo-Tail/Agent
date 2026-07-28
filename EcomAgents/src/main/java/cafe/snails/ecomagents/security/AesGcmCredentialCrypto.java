@@ -10,6 +10,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+/**
+ * 使用 AES-256-GCM 对模型访问凭证进行加密和解密。
+ *
+ * <p>密文包含格式版本、随机数和认证密文，并以 Base64 字符串保存。</p>
+ */
 @Component
 public class AesGcmCredentialCrypto implements CredentialCrypto {
     private static final byte FORMAT_VERSION = 1;
@@ -18,10 +23,16 @@ public class AesGcmCredentialCrypto implements CredentialCrypto {
     private final String encodedMasterKey;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    /**
+     * 使用配置中的 Base64 主密钥创建凭证加密器。
+     */
     public AesGcmCredentialCrypto(@Value("${model.credentials.master-key:}") String encodedMasterKey) {
         this.encodedMasterKey = encodedMasterKey;
     }
 
+    /**
+     * 使用随机 Nonce 加密凭证明文并返回 Base64 密文。
+     */
     @Override
     public String encrypt(String plaintext) {
         if (plaintext == null || plaintext.isBlank()) throw new IllegalArgumentException("凭据不能为空");
@@ -41,6 +52,9 @@ public class AesGcmCredentialCrypto implements CredentialCrypto {
         }
     }
 
+    /**
+     * 校验密文格式版本并解密为凭证明文。
+     */
     @Override
     public String decrypt(String encryptedValue) {
         try {
@@ -62,6 +76,9 @@ public class AesGcmCredentialCrypto implements CredentialCrypto {
         }
     }
 
+    /**
+     * 解析并校验配置的 256 位 AES 主密钥。
+     */
     private SecretKeySpec key() {
         if (encodedMasterKey == null || encodedMasterKey.isBlank()) {
             throw new IllegalStateException("未配置 MODEL_CREDENTIAL_MASTER_KEY");

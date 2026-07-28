@@ -82,8 +82,13 @@ export interface AiModel {
   createdBy: number
 }
 
-export type ModelCapability = 'CHAT' | 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE'
-export type ModelProtocol = 'OPENAI_CHAT' | 'OPENAI_IMAGE' | 'BAILIAN_IMAGE'
+export type ModelCapability = 'CHAT' | 'EMBEDDING' | 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE'
+export type ModelProtocol =
+  | 'OPENAI_CHAT'
+  | 'OPENAI_EMBEDDING'
+  | 'OLLAMA_EMBEDDING'
+  | 'OPENAI_IMAGE'
+  | 'BAILIAN_IMAGE'
 
 export interface AiModelCapability {
   id?: number

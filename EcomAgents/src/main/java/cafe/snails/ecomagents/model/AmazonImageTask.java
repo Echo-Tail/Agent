@@ -5,6 +5,9 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 亚马逊商品图片生成任务及其执行状态。
+ */
 @Entity
 @Table(name = "amazon_image_tasks")
 @Getter @Setter @ToString

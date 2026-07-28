@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+/** 记录图片生成调用产生的模型用量。 */
 public class ImageGenerationUsageRecorder {
     private final TokenUsageService tokenUsageService;
     private final UserRepository users;

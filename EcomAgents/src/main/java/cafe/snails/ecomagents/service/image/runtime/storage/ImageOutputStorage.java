@@ -7,6 +7,7 @@ import java.nio.file.*;
 import java.util.UUID;
 
 @Component
+/** 负责保存图片生成结果并创建素材记录。 */
 public class ImageOutputStorage {
     @Value("${file.upload-dir:./uploads}") private String uploadDir;
     public String store(Long jobId, int index, byte[] content, String mimeType) {

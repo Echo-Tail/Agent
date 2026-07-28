@@ -22,6 +22,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 封装图片超分辨率处理能力及文件输出流程。 */
 public class ImageSuperResolutionService {
 
     private static final String DEFAULT_MODE = "base";

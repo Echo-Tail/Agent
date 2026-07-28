@@ -6,6 +6,7 @@ import java.math.*;
 import java.util.*;
 
 @Component
+/** 根据业务影响和实施成本计算改进机会优先级。 */
 public class ReviewOpportunityScorer {
     private static final Map<String, BigDecimal> SEVERITY = Map.of(
             "critical", BigDecimal.valueOf(100),

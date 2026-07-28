@@ -13,12 +13,14 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.*;
 
+/** 图片生成作业接口，负责提交、查询、取消及重试作业。 */
 @RestController
 @RequestMapping("/v1/image-jobs")
 @RequiredArgsConstructor
 public class ImageJobController {
     private final ImageGenerationRuntime runtime;
 
+    /** 提交文生图作业。 */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<ImageJobResponse> submitText(@Valid @RequestBody TextImageJobRequest request,
             @CurrentUserId Long userId) {
@@ -27,6 +29,7 @@ public class ImageJobController {
         return ApiResponse.success("图片任务已提交", ImageJobResponse.from(runtime.submit(command)));
     }
 
+    /** 提交包含参考图片的图生图作业。 */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ImageJobResponse> submitImage(
             @RequestParam Long modelId, @RequestParam String prompt,
@@ -43,21 +46,25 @@ public class ImageJobController {
         return ApiResponse.success("图片任务已提交", ImageJobResponse.from(runtime.submit(command)));
     }
 
+    /** 查询指定图片作业状态。 */
     @GetMapping("/{id}")
     public ApiResponse<ImageJobResponse> get(@PathVariable Long id, @CurrentUserId Long userId) {
         return ApiResponse.success(ImageJobResponse.from(runtime.get(id, userId)));
     }
 
+    /** 查询指定作业的生成结果。 */
     @GetMapping("/{id}/results")
     public ApiResponse<List<ImageGenerationRecord>> results(@PathVariable Long id, @CurrentUserId Long userId) {
         return ApiResponse.success(runtime.results(id, userId));
     }
 
+    /** 取消尚未完成的图片作业。 */
     @PostMapping("/{id}/cancel")
     public ApiResponse<ImageJobResponse> cancel(@PathVariable Long id, @CurrentUserId Long userId) {
         return ApiResponse.success(ImageJobResponse.from(runtime.cancel(id, userId)));
     }
 
+    /** 重试失败或已终止的图片作业。 */
     @PostMapping("/{id}/retry")
     public ApiResponse<ImageJobResponse> retry(@PathVariable Long id, @CurrentUserId Long userId) {
         return ApiResponse.success(ImageJobResponse.from(runtime.retry(id, userId)));

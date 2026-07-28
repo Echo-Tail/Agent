@@ -73,11 +73,14 @@ const capabilityConfigs = ref<AiModelCapability[]>([])
 
 const capabilityOptions: { value: ModelCapability; label: string }[] = [
   { value: 'CHAT', label: '对话' },
+  { value: 'EMBEDDING', label: '向量嵌入' },
   { value: 'TEXT_TO_IMAGE', label: '文生图' },
   { value: 'IMAGE_TO_IMAGE', label: '图生图' },
 ]
 const protocolOptions: { value: ModelProtocol; label: string }[] = [
   { value: 'OPENAI_CHAT', label: 'OpenAI Chat' },
+  { value: 'OPENAI_EMBEDDING', label: 'OpenAI Embedding' },
+  { value: 'OLLAMA_EMBEDDING', label: 'Ollama Embedding' },
   { value: 'OPENAI_IMAGE', label: 'OpenAI Image' },
   { value: 'BAILIAN_IMAGE', label: '阿里百炼图片' },
 ]
@@ -172,10 +175,18 @@ function toggleCapability(capability: ModelCapability, enabled: boolean) {
     capabilityConfigs.value = capabilityConfigs.value.filter((item) => item.capability !== capability)
     return
   }
-  const protocol: ModelProtocol = capability === 'CHAT'
-    ? 'OPENAI_CHAT'
-    : editingModel.value.provider === 'qwen' ? 'BAILIAN_IMAGE' : 'OPENAI_IMAGE'
-  capabilityConfigs.value.push({ capability, protocol })
+  let protocol: ModelProtocol
+  if (capability === 'CHAT') protocol = 'OPENAI_CHAT'
+  else if (capability === 'EMBEDDING') {
+    protocol = editingModel.value.provider === 'ollama' ? 'OLLAMA_EMBEDDING' : 'OPENAI_EMBEDDING'
+  } else {
+    protocol = editingModel.value.provider === 'qwen' ? 'BAILIAN_IMAGE' : 'OPENAI_IMAGE'
+  }
+  capabilityConfigs.value.push({
+    capability,
+    protocol,
+    optionsJson: capability === 'EMBEDDING' ? '{"dimension":1024}' : undefined,
+  })
 }
 
 function openCreate() {

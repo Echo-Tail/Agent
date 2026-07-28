@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.net.*;
 
 @Component
+/** 安全下载图片供应商返回的远程图片。 */
 public class ImageRemoteDownloader {
     private static final int MAX_BYTES = 25 * 1024 * 1024;
 

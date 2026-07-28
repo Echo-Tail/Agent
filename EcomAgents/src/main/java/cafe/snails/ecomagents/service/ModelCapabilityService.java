@@ -12,6 +12,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责 AI 模型能力配置的查询与维护。 */
 public class ModelCapabilityService {
     private final AiModelRepository modelRepository;
     private final AiModelCapabilityRepository capabilityRepository;

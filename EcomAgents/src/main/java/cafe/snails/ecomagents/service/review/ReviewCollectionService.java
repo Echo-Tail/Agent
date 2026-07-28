@@ -15,6 +15,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 负责商品评论采集批次的创建与数据入库。 */
 public class ReviewCollectionService {
     public static final String AMAZON_REVIEWS_DATASET_ID = "gd_le8e811kzy4ggddlq";
 

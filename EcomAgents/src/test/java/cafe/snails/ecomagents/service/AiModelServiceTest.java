@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.model.AiModel;
 import cafe.snails.ecomagents.model.ModelCredential;
@@ -33,7 +33,7 @@ class AiModelServiceTest {
     private AiModelRepository repository;
 
     @Mock
-    private LlmConfig llmConfig;
+    private ModelRuntimeProperties runtimeProperties;
 
     @Mock
     private ModelCredentialService credentialService;
@@ -44,8 +44,8 @@ class AiModelServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(llmConfig.getMaxTokens()).thenReturn(2048);
-        service = new AiModelService(repository, llmConfig, credentialService);
+        lenient().when(runtimeProperties.getStreamTimeout()).thenReturn(60L);
+        service = new AiModelService(repository, runtimeProperties, credentialService);
         sampleModel = AiModel.builder()
                 .id(1L).name("GPT-4o").provider("openai").modelName("gpt-4o")
                 .apiUrl("https://api.openai.com/v1/chat/completions")

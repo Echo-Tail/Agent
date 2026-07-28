@@ -12,6 +12,7 @@ import java.util.*;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+/** 将评论洞察聚类为可执行的产品改进机会。 */
 public class ReviewOpportunityClusterer {
     private static final int MAX_CLUSTER_INPUT = 50;
     private final LlmService llmService;

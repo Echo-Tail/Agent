@@ -14,6 +14,7 @@ import java.util.regex.*;
 
 @Service
 @RequiredArgsConstructor
+/** 对采集的商品评论进行清洗、去重和标准化。 */
 public class ReviewNormalizationService {
     private static final Pattern ASIN_IN_URL = Pattern.compile("(?i)/(?:dp|product-reviews)/([A-Z0-9]{10})(?:[/?]|$)");
     private final ObjectMapper objectMapper;

@@ -1,7 +1,7 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.RagProperties;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.KnowledgeAuditLog;
 import cafe.snails.ecomagents.model.KnowledgeBase;
@@ -52,7 +52,7 @@ public class KnowledgeBaseService {
     private final AgentRepository agentRepository;
     private final WorkspaceInitService workspaceInitService;
     private final LocalKnowledgeIndexService localKnowledgeIndexService;
-    private final LlmConfig llmConfig;
+    private final RagProperties ragProperties;
     private final KnowledgeUnitParserService knowledgeUnitParserService;
 
     // ========== Knowledge Base CRUD ==========
@@ -345,11 +345,11 @@ public class KnowledgeBaseService {
         if (kbIds == null || kbIds.isEmpty()) return "";
 
         long startedAt = System.nanoTime();
-        int searchLimit = llmConfig.getRagSearchLimit();
+        int searchLimit = ragProperties.getSearchLimit();
 
         // Dense vector search
         LocalKnowledgeIndexService.KnowledgeSearchResult vectorResult = localKnowledgeIndexService.searchSimilarDetailed(
-                kbIds, userQuery, searchLimit, llmConfig.getRagSimilarityThreshold());
+                kbIds, userQuery, searchLimit, ragProperties.getSimilarityThreshold());
 
         // Sparse keyword search
         List<ScoredUnit> sparseResults = findRelevantUnitsScored(kbIds, userQuery);
@@ -465,7 +465,7 @@ public class KnowledgeBaseService {
         int minScore = topScore > 0 ? Math.max(1, (int) Math.ceil(topScore * 0.75)) : 0;
         List<ScoredUnit> selected = scoredUnits.stream()
                 .filter(scored -> scored.score() >= minScore)
-                .limit(Math.max(1, llmConfig.getRagSearchLimit()))
+                .limit(Math.max(1, ragProperties.getSearchLimit()))
                 .toList();
         log.info("Sparse retrieval candidates: docs={}, units={}, selected={}, topScore={}",
                 docs.size(), scoredUnits.size(), selected.size(), topScore);
@@ -511,7 +511,7 @@ public class KnowledgeBaseService {
         int minScore = topScore > 0 ? Math.max(1, (int) Math.ceil(topScore * 0.75)) : 0;
         List<ScoredUnit> selected = scoredUnits.stream()
                 .filter(scored -> scored.score() >= minScore)
-                .limit(Math.max(1, llmConfig.getRagSearchLimit()))
+                .limit(Math.max(1, ragProperties.getSearchLimit()))
                 .toList();
         log.info("Knowledge unit retrieval candidates: docs={}, parsedUnits={}, matchedUnits={}, selectedUnits={}, topScore={}, minScore={}, identifiers={}",
                 docs.size(), parsedUnits.size(), scoredUnits.size(), selected.size(), topScore, minScore, identifiers);
@@ -889,7 +889,7 @@ public class KnowledgeBaseService {
      * 按配置限制注入模型的知识上下文长度，避免提示词过长。
      */
     private String limitContext(String context) {
-        int maxChars = Math.max(500, llmConfig.getRagMaxContextChars());
+        int maxChars = Math.max(500, ragProperties.getMaxContextChars());
         if (context == null || context.length() <= maxChars) {
             return context;
         }

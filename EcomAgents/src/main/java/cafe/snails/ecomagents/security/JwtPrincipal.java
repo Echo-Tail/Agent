@@ -12,9 +12,14 @@ import java.util.Collection;
 @Getter
 public class JwtPrincipal extends User {
 
+    /** 当前认证用户的数据库主键。 */
     private final Long userId;
+    /** JWT 声明中携带的用户角色。 */
     private final String jwtRole;
 
+    /**
+     * 创建携带业务用户标识和角色的认证主体。
+     */
     public JwtPrincipal(Long userId, String username, String jwtRole,
                         Collection<? extends GrantedAuthority> authorities) {
         super(username, "", authorities);

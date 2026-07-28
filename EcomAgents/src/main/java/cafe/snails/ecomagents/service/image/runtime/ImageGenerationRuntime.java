@@ -5,6 +5,7 @@ import cafe.snails.ecomagents.model.ImageGenerationRecord;
 import cafe.snails.ecomagents.service.image.runtime.command.ImageGenerationCommand;
 import java.util.List;
 
+/** 定义图片生成任务的提交、查询与重试运行时能力。 */
 public interface ImageGenerationRuntime {
     ImageGenerationJob submit(ImageGenerationCommand command);
     ImageGenerationJob get(Long jobId, Long userId);

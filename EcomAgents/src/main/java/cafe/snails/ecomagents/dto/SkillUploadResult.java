@@ -24,6 +24,9 @@ public class SkillUploadResult {
     /** 失败的技能名称及原因 */
     private List<FailedItem> failed;
 
+    /**
+     * 单个技能导入失败的明细。
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

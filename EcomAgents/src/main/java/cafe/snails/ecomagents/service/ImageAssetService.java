@@ -17,6 +17,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责图片会话素材的查询、保存与删除。 */
 public class ImageAssetService {
     private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
     private static final Set<String> ALLOWED_TYPES = Set.of("image/jpeg", "image/png", "image/bmp");

@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.MsgRole;
@@ -30,9 +30,9 @@ import static org.mockito.Mockito.*;
 class LlmServiceTest {
 
     @Mock
-    private Model model;
+    private AiModelService aiModelService;
     @Mock
-    private LlmConfig llmConfig;
+    private ModelRuntimeProperties runtimeProperties;
     @Mock
     private ObjectMapper objectMapper;
 
@@ -40,14 +40,14 @@ class LlmServiceTest {
 
     @BeforeEach
     void setUp() {
-        llmService = new LlmService(model, llmConfig, objectMapper);
+        llmService = new LlmService(aiModelService, runtimeProperties, objectMapper);
     }
 
     // ==================== Constructor ====================
 
     @Test
     void constructor_shouldAcceptParameters() {
-        var service = new LlmService(model, llmConfig, objectMapper);
+        var service = new LlmService(aiModelService, runtimeProperties, objectMapper);
         assertNotNull(service);
     }
 
@@ -161,8 +161,6 @@ class LlmServiceTest {
 
     @Test
     void streamChat_placeholderKey_shouldThrow() {
-        when(llmConfig.getApiKey()).thenReturn("sk-placeholder");
-
         assertThrows(IllegalStateException.class,
                 () -> llmService.streamChat("prompt", List.of(), null));
     }
@@ -173,8 +171,7 @@ class LlmServiceTest {
                 .apiKey("sk-real-key")
                 .modelName("gpt-4")
                 .build();
-        lenient().when(llmConfig.getApiKey()).thenReturn("sk-placeholder");
-        when(llmConfig.getStreamTimeout()).thenReturn(30L);
+        when(runtimeProperties.getStreamTimeout()).thenReturn(30L);
 
         var emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter();
         assertThrows(Exception.class, () ->

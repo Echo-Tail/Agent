@@ -30,6 +30,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 负责亚马逊商品图片任务的创建、执行与结果管理。 */
 public class AmazonImageTaskService {
 
     public static final String STATUS_DRAFT = "DRAFT";

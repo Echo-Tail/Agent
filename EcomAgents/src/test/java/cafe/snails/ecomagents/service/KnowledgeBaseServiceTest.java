@@ -1,7 +1,7 @@
 package cafe.snails.ecomagents.service;
 
 import cafe.snails.ecomagents.dto.ApiResponse;
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.RagProperties;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.KnowledgeBase;
 import cafe.snails.ecomagents.model.KnowledgeDocument;
@@ -45,7 +45,7 @@ class KnowledgeBaseServiceTest {
     @Mock
     private LocalKnowledgeIndexService localKnowledgeIndexService;
     @Mock
-    private LlmConfig llmConfig;
+    private RagProperties ragProperties;
 
     private KnowledgeBaseService service;
     private KnowledgeBase sampleKb;
@@ -53,11 +53,11 @@ class KnowledgeBaseServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(llmConfig.getRagSearchLimit()).thenReturn(5);
-        lenient().when(llmConfig.getRagSimilarityThreshold()).thenReturn(0.15);
-        lenient().when(llmConfig.getRagMaxContextChars()).thenReturn(4000);
+        lenient().when(ragProperties.getSearchLimit()).thenReturn(5);
+        lenient().when(ragProperties.getSimilarityThreshold()).thenReturn(0.15);
+        lenient().when(ragProperties.getMaxContextChars()).thenReturn(4000);
         knowledgeUnitParserService = new KnowledgeUnitParserService(new ObjectMapper());
-        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, localKnowledgeIndexService, llmConfig, knowledgeUnitParserService);
+        service = new KnowledgeBaseService(kbRepository, docRepository, auditLogRepository, agentRepository, workspaceInitService, localKnowledgeIndexService, ragProperties, knowledgeUnitParserService);
         sampleKb = KnowledgeBase.builder()
                 .id(1L).name("电商运营手册").description("运营规范")
                 .createdAt(LocalDate.of(2024, 1, 1)).createdBy(1L).build();
@@ -313,7 +313,7 @@ class KnowledgeBaseServiceTest {
 
     @Test
     void buildKnowledgeContext_shouldRespectConfiguredContextBudget() {
-        when(llmConfig.getRagMaxContextChars()).thenReturn(600);
+        when(ragProperties.getMaxContextChars()).thenReturn(600);
         String longChunk = "x".repeat(2000);
         when(localKnowledgeIndexService.searchSimilarDetailed(List.of(1L), "shipping", 5, 0.15))
                 .thenReturn(new LocalKnowledgeIndexService.KnowledgeSearchResult(List.of(longChunk, longChunk), false, false, 1, 8, 4000));

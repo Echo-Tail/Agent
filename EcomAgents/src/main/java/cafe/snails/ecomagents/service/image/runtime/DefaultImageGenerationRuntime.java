@@ -15,6 +15,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 图片生成运行时的默认实现，负责提交并查询生成任务。 */
 public class DefaultImageGenerationRuntime implements ImageGenerationRuntime {
     private final ImageGenerationJobRepository jobs;
     private final ImageGenerationJobInputRepository inputs;

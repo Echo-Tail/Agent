@@ -15,6 +15,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+/** 执行评论分析并持久化洞察、失败记录和改进机会。 */
 public class ReviewAnalysisExecutor {
     static final int MAX_REVIEWS_PER_LLM_REQUEST = 50;
     private final ReviewAnalysisRunRepository runRepository;

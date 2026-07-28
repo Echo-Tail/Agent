@@ -5,6 +5,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 从单条商品评论中提取的结构化业务洞察。
+ */
 @Entity
 @Table(name = "review_insights")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

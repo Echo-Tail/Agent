@@ -4,6 +4,7 @@ import cafe.snails.ecomagents.exception.BusinessException;
 import cafe.snails.ecomagents.exception.ErrorCode;
 import java.util.Set;
 
+/** 校验并规范化不同图片生成协议支持的尺寸。 */
 public final class ImageSizePolicy {
     private static final long QWEN_20_MIN_PIXELS = 512L * 512L;
     private static final long QWEN_20_MAX_PIXELS = 2048L * 2048L;

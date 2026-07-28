@@ -12,6 +12,7 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 @Component
+/** 负责持久化图片生成任务的输入快照。 */
 public class ImageInputSnapshotStorage {
     private static final long MAX_BYTES = 10L * 1024 * 1024;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;

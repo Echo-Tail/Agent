@@ -17,6 +17,7 @@ import java.util.*;
 
 @Component
 @Order(100)
+/** 阿里云百炼图片生成接口适配器。 */
 public class BailianImageAdapter implements ImageGenerationProviderAdapter {
     private final ObjectMapper mapper;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;

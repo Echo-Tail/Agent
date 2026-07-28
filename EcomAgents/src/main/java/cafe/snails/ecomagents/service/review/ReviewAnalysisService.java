@@ -14,6 +14,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+/** 负责评论分析任务的创建、确认与状态管理。 */
 public class ReviewAnalysisService {
     public static final String PROMPT_VERSION = "review_extraction_v2_zh";
     static final int DEFAULT_BATCH_SIZE = 50;
