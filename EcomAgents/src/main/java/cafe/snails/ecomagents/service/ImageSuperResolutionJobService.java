@@ -40,6 +40,7 @@ import java.util.concurrent.Executor;
 
 @Service
 @Slf4j
+/** 负责图片超分辨率任务的提交、查询与状态维护。 */
 public class ImageSuperResolutionJobService {
     public static final String PENDING = "PENDING";
     public static final String RUNNING = "RUNNING";

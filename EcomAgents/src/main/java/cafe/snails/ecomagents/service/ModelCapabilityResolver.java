@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+/** 根据模型及能力配置解析最终调用参数。 */
 public class ModelCapabilityResolver {
     private final AiModelRepository modelRepository;
     private final AiModelCapabilityRepository capabilityRepository;

@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
+import cafe.snails.ecomagents.config.RagProperties;
 import cafe.snails.ecomagents.repository.KnowledgeDocumentRepository;
 import cafe.snails.ecomagents.service.rag.KnowledgeUnitParserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,20 +30,21 @@ class LocalKnowledgeIndexServiceTest {
     @Mock
     private KnowledgeDocumentRepository docRepository;
     @Mock
-    private LlmConfig llmConfig;
+    private ModelRuntimeProperties runtimeProperties;
+    @Mock
+    private RagProperties ragProperties;
+    @Mock
+    private EmbeddingModelResolver embeddingModelResolver;
 
     private LocalKnowledgeIndexService service;
 
     @BeforeEach
     void setUp() {
-        lenient().when(llmConfig.getRagRetrievalTimeout()).thenReturn(8L);
-        lenient().when(llmConfig.getEmbeddingApiUrl()).thenReturn("http://localhost:11434");
-        lenient().when(llmConfig.getEmbeddingModel()).thenReturn("bge-m3:latest");
-        lenient().when(llmConfig.getEmbeddingDimension()).thenReturn(1024);
-        lenient().when(llmConfig.getReadTimeout()).thenReturn(30L);
+        lenient().when(ragProperties.getRetrievalTimeout()).thenReturn(8L);
+        lenient().when(runtimeProperties.getReadTimeout()).thenReturn(30L);
 
         service = new LocalKnowledgeIndexService(
-                docRepository, llmConfig,
+                docRepository, runtimeProperties, ragProperties, embeddingModelResolver,
                 new KnowledgeUnitParserService(new ObjectMapper()));
     }
 

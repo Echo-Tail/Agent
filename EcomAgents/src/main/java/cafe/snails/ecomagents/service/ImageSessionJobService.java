@@ -18,6 +18,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责在图片会话中创建并管理图片生成任务。 */
 public class ImageSessionJobService {
     private final ImageSessionRepository sessionRepository;
     private final ImageSessionJobRepository linkRepository;

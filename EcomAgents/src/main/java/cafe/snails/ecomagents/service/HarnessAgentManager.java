@@ -1,6 +1,5 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.model.Agent;
@@ -51,7 +50,7 @@ public class HarnessAgentManager {
     private final ToolConfigRepository toolConfigRepository;
     private final KnowledgeBaseService knowledgeBaseService;
     private final WorkspaceConfig workspaceConfig;
-    private final LlmConfig llmConfig;
+    private final ModelCredentialService credentialService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -150,14 +149,14 @@ public class HarnessAgentManager {
      * @throws IllegalArgumentException 模型不存在或被禁用时抛出
      */
     private void validateAgentModel(Agent agent) {
-        if (agent.getModelId() != null) {
-            AiModel model = aiModelRepository.findById(agent.getModelId()).orElse(null);
-            if (model == null) {
-                throw new IllegalArgumentException("Agent 绑定的模型不存在");
-            }
-            if (!model.getEnabled()) {
-                throw new IllegalArgumentException("Agent 绑定的模型已被禁用");
-            }
+        AiModel model = findModel(agent);
+        if (model == null) {
+            throw new IllegalArgumentException(agent.getModelId() == null
+                    ? "未配置已启用的默认模型"
+                    : "Agent 绑定的模型不存在");
+        }
+        if (!Boolean.TRUE.equals(model.getEnabled())) {
+            throw new IllegalArgumentException("Agent 绑定的模型已被禁用");
         }
     }
 
@@ -268,10 +267,11 @@ public class HarnessAgentManager {
      */
     private String resolveApiKey(Agent agent) {
         AiModel aiModel = findModel(agent);
-        if (aiModel != null && aiModel.getApiKey() != null && !aiModel.getApiKey().isBlank()) {
-            return aiModel.getApiKey();
+        if (aiModel == null) return null;
+        if (aiModel.getDefaultCredentialId() != null) {
+            return credentialService.resolveSecret(aiModel.getDefaultCredentialId());
         }
-        return llmConfig.getApiKey();
+        return aiModel.getApiKey();
     }
 
     /**
@@ -283,7 +283,7 @@ public class HarnessAgentManager {
         if (aiModel != null && aiModel.getModelName() != null) {
             return aiModel.getModelName();
         }
-        return llmConfig.getModel();
+        return null;
     }
 
     /**
@@ -292,9 +292,7 @@ public class HarnessAgentManager {
      */
     private String resolveBaseUrl(Agent agent) {
         AiModel aiModel = findModel(agent);
-        String apiUrl = aiModel != null ? aiModel.getApiUrl() : null;
-        if (apiUrl == null) apiUrl = llmConfig.getApiUrl();
-        return extractBaseUrl(apiUrl);
+        return extractBaseUrl(aiModel != null ? aiModel.getApiUrl() : null);
     }
 
     /**
@@ -304,7 +302,6 @@ public class HarnessAgentManager {
     private String resolveEndpointPath(Agent agent) {
         AiModel aiModel = findModel(agent);
         String apiUrl = aiModel != null ? aiModel.getApiUrl() : null;
-        if (apiUrl == null) apiUrl = llmConfig.getApiUrl();
 
         String path = extractPath(apiUrl);
         if (!path.isBlank()) {
@@ -323,8 +320,12 @@ public class HarnessAgentManager {
 
     /** 根据 Agent 查找绑定的 AiModel（可能返回 null） */
     private AiModel findModel(Agent agent) {
-        if (agent.getModelId() == null) return null;
-        return aiModelRepository.findById(agent.getModelId()).orElse(null);
+        if (agent.getModelId() != null) {
+            return aiModelRepository.findById(agent.getModelId()).orElse(null);
+        }
+        return aiModelRepository.findByIsDefaultTrue()
+                .filter(model -> Boolean.TRUE.equals(model.getEnabled()))
+                .orElse(null);
     }
 
     /**
@@ -332,6 +333,7 @@ public class HarnessAgentManager {
      * <p>例如：从 {@code https://api.openai.com/v1/chat/completions} 提取 {@code https://api.openai.com}。</p>
      */
     private static String extractBaseUrl(String apiUrl) {
+        if (apiUrl == null || apiUrl.isBlank()) return null;
         try {
             java.net.URI uri = java.net.URI.create(apiUrl);
             int port = uri.getPort();
@@ -339,7 +341,7 @@ public class HarnessAgentManager {
                     ? uri.getScheme() + "://" + uri.getHost() + ":" + port
                     : uri.getScheme() + "://" + uri.getHost();
         } catch (Exception e) {
-            return "https://api.openai.com";
+            return null;
         }
     }
 
@@ -348,13 +350,14 @@ public class HarnessAgentManager {
      * <p>例如：从 {@code https://api.openai.com/v1/chat/completions} 提取 {@code /v1/chat/completions}。</p>
      */
     private static String extractPath(String apiUrl) {
+        if (apiUrl == null || apiUrl.isBlank()) return "";
         try {
             java.net.URI uri = java.net.URI.create(apiUrl);
             String path = uri.getPath();
             String query = uri.getQuery();
             return query != null ? path + "?" + query : path;
         } catch (Exception e) {
-            return "/v1/chat/completions";
+            return "";
         }
     }
 }

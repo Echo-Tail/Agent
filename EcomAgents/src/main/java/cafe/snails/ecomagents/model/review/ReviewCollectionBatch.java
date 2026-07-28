@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 评论数据的一次批量采集任务。
+ */
 @Entity
 @Table(name = "review_collection_batches")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

@@ -3,6 +3,9 @@ package cafe.snails.ecomagents.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+/**
+ * 图片生成任务使用的参考图或蒙版输入。
+ */
 @Entity
 @Table(name="image_generation_job_inputs", uniqueConstraints=@UniqueConstraint(
         name="uk_image_job_input", columnNames={"job_id","input_index"}))

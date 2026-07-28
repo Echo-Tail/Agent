@@ -3,6 +3,9 @@ package cafe.snails.ecomagents.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+/**
+ * AI 模型支持的单项能力及其独立调用配置。
+ */
 @Entity
 @Table(name = "ai_model_capabilities", uniqueConstraints =
         @UniqueConstraint(name = "uk_ai_model_capability", columnNames = {"model_id", "capability"}))

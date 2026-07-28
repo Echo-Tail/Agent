@@ -5,6 +5,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 从评论洞察中聚合得到的产品改进机会。
+ */
 @Entity
 @Table(name = "improvement_opportunities")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

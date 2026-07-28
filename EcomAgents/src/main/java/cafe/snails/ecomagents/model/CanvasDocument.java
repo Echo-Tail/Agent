@@ -7,6 +7,9 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 图片工作区画布的当前文档快照。
+ */
 @Entity
 @Table(name = "canvas_documents")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

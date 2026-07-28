@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 亚马逊商品图片任务生成的单张结果。
+ */
 @Entity
 @Table(name = "amazon_image_results")
 @Getter @Setter @ToString

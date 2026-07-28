@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
+/** 根据模型协议选择对应的图片生成供应商适配器。 */
 public class ImageAdapterRegistry {
     private final List<ImageGenerationProviderAdapter> adapters;
     public ImageAdapterRegistry(List<ImageGenerationProviderAdapter> adapters) { this.adapters = List.copyOf(adapters); }

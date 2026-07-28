@@ -1,6 +1,5 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
 import cafe.snails.ecomagents.config.WorkspaceConfig;
 import cafe.snails.ecomagents.model.Agent;
 import cafe.snails.ecomagents.model.AiModel;
@@ -41,7 +40,7 @@ class HarnessAgentManagerTest {
     @Mock
     private WorkspaceConfig workspaceConfig;
     @Mock
-    private LlmConfig llmConfig;
+    private ModelCredentialService credentialService;
     @Mock
     private ObjectMapper objectMapper;
 
@@ -50,10 +49,8 @@ class HarnessAgentManagerTest {
     @BeforeEach
     void setUp() {
         lenient().when(workspaceConfig.getRoot()).thenReturn(System.getProperty("java.io.tmpdir") + "/agent-test");
-        lenient().when(llmConfig.getApiKey()).thenReturn("sk-global-key");
-        lenient().when(llmConfig.getModel()).thenReturn("gpt-4");
         manager = new HarnessAgentManager(agentRepository, aiModelRepository, toolConfigRepository,
-                knowledgeBaseService, workspaceConfig, llmConfig, objectMapper);
+                knowledgeBaseService, workspaceConfig, credentialService, objectMapper);
     }
 
     // ==================== createSimpleAgent ====================
@@ -127,9 +124,11 @@ class HarnessAgentManagerTest {
     }
 
     @Test
-    void resolveApiKey_shouldFallbackToGlobal() throws Exception {
+    void resolveApiKey_shouldUseDefaultModel() throws Exception {
         var agent = Agent.builder().id(1L).modelId(null).build();
-        assertEquals("sk-global-key", invokeResolveApiKey(agent));
+        when(aiModelRepository.findByIsDefaultTrue()).thenReturn(Optional.of(
+                AiModel.builder().apiKey("sk-default-key").enabled(true).build()));
+        assertEquals("sk-default-key", invokeResolveApiKey(agent));
     }
 
     // ==================== resolveModelName ====================
@@ -144,9 +143,11 @@ class HarnessAgentManagerTest {
     }
 
     @Test
-    void resolveModelName_shouldFallbackToGlobal() throws Exception {
+    void resolveModelName_shouldUseDefaultModel() throws Exception {
         var agent = Agent.builder().id(1L).modelId(null).build();
-        assertEquals("gpt-4", invokeResolveModelName(agent));
+        when(aiModelRepository.findByIsDefaultTrue()).thenReturn(Optional.of(
+                AiModel.builder().modelName("gpt-default").enabled(true).build()));
+        assertEquals("gpt-default", invokeResolveModelName(agent));
     }
 
     // ==================== extractBaseUrl ====================
@@ -162,8 +163,8 @@ class HarnessAgentManagerTest {
     }
 
     @Test
-    void extractBaseUrl_nullUrl_shouldReturnDefault() throws Exception {
-        assertEquals("https://api.openai.com", invokeExtractBaseUrl(null));
+    void extractBaseUrl_nullUrl_shouldReturnNull() throws Exception {
+        assertNull(invokeExtractBaseUrl(null));
     }
 
     // ==================== extractPath ====================
@@ -179,8 +180,8 @@ class HarnessAgentManagerTest {
     }
 
     @Test
-    void extractPath_nullUrl_shouldReturnDefault() throws Exception {
-        assertEquals("/v1/chat/completions", invokeExtractPath(null));
+    void extractPath_nullUrl_shouldReturnEmpty() throws Exception {
+        assertEquals("", invokeExtractPath(null));
     }
 
     // ==================== extractApiKey ====================

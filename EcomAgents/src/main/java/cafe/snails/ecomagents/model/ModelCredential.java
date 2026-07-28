@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 加密保存的模型供应商访问凭证。
+ */
 @Entity
 @Table(name = "model_credentials")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

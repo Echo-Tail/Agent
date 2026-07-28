@@ -12,6 +12,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责评论分析项目及关联商品的业务管理。 */
 public class ReviewProjectService {
     static final String MARKETPLACE = "amazon_us";
     static final String CATEGORY = "car_stereo";

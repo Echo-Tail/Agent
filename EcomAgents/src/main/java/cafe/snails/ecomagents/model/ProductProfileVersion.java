@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 商品档案在一次变更后形成的版本快照。
+ */
 @Entity
 @Table(name = "product_profile_versions")
 @Getter @Setter @ToString

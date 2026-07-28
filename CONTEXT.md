@@ -7,7 +7,7 @@ Agent/                        # 项目根
 ├── EcomAgents/               # Spring Boot 后端 (Gradle, Java 17, port 8888)
 │   ├── build.gradle
 │   └── src/main/java/cafe/snails/ecomagents/
-│       ├── config/           # WebConfig (CORS), DataInitializer (种子数据), LlmConfig
+│       ├── config/           # WebConfig、ModelRuntimeProperties、RagProperties
 │       ├── dto/              # ApiResponse, GroupMemberDTO（含用户名）, 请求/响应 DTO
 │       ├── model/            # JPA 实体: User, Agent, Session, SessionMessage, SessionFolder, InviteCode, AiModel, ToolConfig, ChatGroup, GroupMember, GroupAgent, GroupMessage, GroupFile, ChatPrivateMessage, EmojiPack, UserEmojiFavorite
 │       ├── repository/       # Spring Data JPA Repositories

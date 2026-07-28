@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.service.review;
 
 import java.util.Set;
 
+/** 车载音响评论分析使用的标准分类体系。 */
 public final class CarStereoReviewTaxonomy {
     public static final String VERSION = "car_stereo_v1";
     public static final Set<String> USAGE_SCENARIOS = Set.of(

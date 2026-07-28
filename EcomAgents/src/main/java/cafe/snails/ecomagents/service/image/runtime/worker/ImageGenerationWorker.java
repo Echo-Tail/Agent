@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @ConditionalOnProperty(name="image.runtime.worker-enabled", havingValue="true", matchIfMissing=true)
+/** 从任务队列领取并执行图片生成任务。 */
 public class ImageGenerationWorker {
     private final ImageJobLeaseStore leases;
     private final ImageGenerationWorkerRunner runner;

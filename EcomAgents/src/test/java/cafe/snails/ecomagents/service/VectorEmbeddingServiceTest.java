@@ -1,6 +1,9 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
+import cafe.snails.ecomagents.model.ModelProtocol;
+
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +24,9 @@ import static org.mockito.Mockito.*;
 class VectorEmbeddingServiceTest {
 
     @Mock
-    private LlmConfig llmConfig;
+    private EmbeddingModelResolver embeddingModelResolver;
+    @Mock
+    private ModelRuntimeProperties runtimeProperties;
     @Mock
     private org.springframework.web.reactive.function.client.WebClient.Builder webClientBuilder;
     @Mock
@@ -31,7 +36,7 @@ class VectorEmbeddingServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new VectorEmbeddingService(llmConfig, webClientBuilder, dataSource);
+        service = new VectorEmbeddingService(embeddingModelResolver, runtimeProperties, webClientBuilder, dataSource);
     }
 
     // ==================== chunkText ====================
@@ -99,20 +104,19 @@ class VectorEmbeddingServiceTest {
 
     @Test
     void hasEmbeddingConfig_validKey() throws Exception {
-        when(llmConfig.getEmbeddingApiKey()).thenReturn("sk-real-key");
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.of(embeddingModel(1024, "sk-real-key")));
         assertTrue(invokeHasEmbeddingConfig());
     }
 
     @Test
     void hasEmbeddingConfig_placeholderKey() throws Exception {
-        when(llmConfig.getEmbeddingApiKey()).thenReturn("sk-placeholder");
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.empty());
         assertFalse(invokeHasEmbeddingConfig());
     }
 
     @Test
     void hasEmbeddingConfig_nullKey() throws Exception {
-        when(llmConfig.getEmbeddingApiKey()).thenReturn(null);
-        when(llmConfig.getApiKey()).thenReturn(null);
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.empty());
         assertFalse(invokeHasEmbeddingConfig());
     }
 
@@ -120,66 +124,28 @@ class VectorEmbeddingServiceTest {
 
     @Test
     void embeddingDimension_shouldReturnConfigured() throws Exception {
-        when(llmConfig.getEmbeddingDimension()).thenReturn(1536);
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.of(embeddingModel(1536, "key")));
         assertEquals(1536, invokeEmbeddingDimension());
     }
 
     @Test
     void embeddingDimension_shouldReturnAtLeast1() throws Exception {
-        when(llmConfig.getEmbeddingDimension()).thenReturn(0);
-        assertEquals(1, invokeEmbeddingDimension());
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.empty());
+        assertEquals(1024, invokeEmbeddingDimension());
     }
 
     // ==================== hasExpectedDimension ====================
 
     @Test
     void hasExpectedDimension_match() throws Exception {
-        when(llmConfig.getEmbeddingDimension()).thenReturn(3);
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.of(embeddingModel(3, "key")));
         assertTrue(invokeHasExpectedDimension(List.of(0.1, 0.2, 0.3), 1L));
     }
 
     @Test
     void hasExpectedDimension_mismatch() throws Exception {
-        when(llmConfig.getEmbeddingDimension()).thenReturn(3);
+        when(embeddingModelResolver.resolve()).thenReturn(Optional.of(embeddingModel(3, "key")));
         assertFalse(invokeHasExpectedDimension(List.of(0.1, 0.2), 1L));
-    }
-
-    // ==================== resolveEmbeddingApiUrl ====================
-
-    @Test
-    void resolveEmbeddingApiUrl_useConfigured() throws Exception {
-        when(llmConfig.getEmbeddingApiUrl()).thenReturn("https://custom.ai/v1/embeddings");
-        assertEquals("https://custom.ai/v1/embeddings", invokeResolveEmbeddingApiUrl());
-    }
-
-    @Test
-    void resolveEmbeddingApiUrl_deriveFromChatUrl() throws Exception {
-        when(llmConfig.getEmbeddingApiUrl()).thenReturn(null);
-        when(llmConfig.getApiUrl()).thenReturn("https://api.openai.com/v1/chat/completions");
-        String url = invokeResolveEmbeddingApiUrl();
-        assertEquals("https://api.openai.com/v1/embeddings", url);
-    }
-
-    @Test
-    void resolveEmbeddingApiUrl_defaultWhenNoConfig() throws Exception {
-        when(llmConfig.getEmbeddingApiUrl()).thenReturn(null);
-        when(llmConfig.getApiUrl()).thenReturn(null);
-        assertEquals("https://api.openai.com/v1/embeddings", invokeResolveEmbeddingApiUrl());
-    }
-
-    // ==================== resolveEmbeddingApiKey ====================
-
-    @Test
-    void resolveEmbeddingApiKey_useConfigured() throws Exception {
-        when(llmConfig.getEmbeddingApiKey()).thenReturn("emb-key");
-        assertEquals("emb-key", invokeResolveEmbeddingApiKey());
-    }
-
-    @Test
-    void resolveEmbeddingApiKey_fallbackToChatKey() throws Exception {
-        when(llmConfig.getEmbeddingApiKey()).thenReturn(null);
-        when(llmConfig.getApiKey()).thenReturn("chat-key");
-        assertEquals("chat-key", invokeResolveEmbeddingApiKey());
     }
 
     // ==================== isMissingEmbeddingsTable ====================
@@ -249,21 +215,15 @@ class VectorEmbeddingServiceTest {
         return (boolean) m.invoke(service, embedding, docId);
     }
 
-    private String invokeResolveEmbeddingApiUrl() throws Exception {
-        Method m = VectorEmbeddingService.class.getDeclaredMethod("resolveEmbeddingApiUrl");
-        m.setAccessible(true);
-        return (String) m.invoke(service);
-    }
-
-    private String invokeResolveEmbeddingApiKey() throws Exception {
-        Method m = VectorEmbeddingService.class.getDeclaredMethod("resolveEmbeddingApiKey");
-        m.setAccessible(true);
-        return (String) m.invoke(service);
-    }
-
     private boolean invokeIsMissingEmbeddingsTable(Exception e) throws Exception {
         Method m = VectorEmbeddingService.class.getDeclaredMethod("isMissingEmbeddingsTable", Throwable.class);
         m.setAccessible(true);
         return (boolean) m.invoke(service, e);
+    }
+
+    private EmbeddingModelResolver.EmbeddingModel embeddingModel(int dimension, String apiKey) {
+        return new EmbeddingModelResolver.EmbeddingModel(
+                ModelProtocol.OPENAI_EMBEDDING, "text-embedding-3-small",
+                "https://api.openai.com/v1/embeddings", apiKey, dimension);
     }
 }

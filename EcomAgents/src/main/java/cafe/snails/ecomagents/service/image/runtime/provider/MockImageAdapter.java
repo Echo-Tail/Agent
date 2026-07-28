@@ -9,6 +9,7 @@ import java.util.*;
 @Component
 @Order(0)
 @ConditionalOnProperty(name="image.runtime.mock-adapter-enabled", havingValue="true")
+/** 用于本地开发和测试的模拟图片生成适配器。 */
 public class MockImageAdapter implements ImageGenerationProviderAdapter {
     private static final byte[] PNG = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");

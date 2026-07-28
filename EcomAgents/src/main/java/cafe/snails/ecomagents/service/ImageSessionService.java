@@ -12,6 +12,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责图片工作区会话及画布快照的业务管理。 */
 public class ImageSessionService {
     private final ImageSessionRepository sessionRepository;
     private final CanvasDocumentRepository canvasRepository;

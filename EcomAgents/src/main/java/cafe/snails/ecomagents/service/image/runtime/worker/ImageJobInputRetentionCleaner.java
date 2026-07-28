@@ -12,6 +12,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+/** 定期清理超过保留期限的图片任务输入快照。 */
 public class ImageJobInputRetentionCleaner {
     private final JdbcTemplate jdbc;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;

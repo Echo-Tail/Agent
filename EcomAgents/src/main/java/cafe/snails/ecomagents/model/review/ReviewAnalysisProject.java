@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 组织商品评论采集与分析流程的项目。
+ */
 @Entity
 @Table(name = "review_analysis_projects")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
+import cafe.snails.ecomagents.model.ModelProtocol;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
@@ -48,8 +49,8 @@ public class VectorEmbeddingService {
     /** 相邻分块之间的重叠字符数，保持上下文连续性 */
     private static final int CHUNK_OVERLAP = 200;
 
-    /** LLM/Embedding 配置。 */
-    private final LlmConfig llmConfig;
+    private final EmbeddingModelResolver embeddingModelResolver;
+    private final ModelRuntimeProperties runtimeProperties;
     /** WebClient 构建器，用于调用 Embedding API。 */
     private final WebClient.Builder webClientBuilder;
     /** 数据源，用于初始化 pgvector 表和批量写入向量。 */
@@ -281,7 +282,7 @@ public class VectorEmbeddingService {
     /**
      * 调用 Embedding API 将文本向量化。
      * <p>使用 WebClient 发送 POST 请求到配置的 Embedding API URL，
-     * 返回 float 向量。请求超时由 {@link LlmConfig#getReadTimeout()} 控制。</p>
+     * 返回 float 向量。请求超时由模型运行时配置控制。</p>
      *
      * @param input 输入文本
      * @return 向量（浮点数列表）；API 不可用或失败时返回空列表
@@ -289,19 +290,23 @@ public class VectorEmbeddingService {
     @SuppressWarnings("unchecked")
     private List<Double> embed(String input) {
         try {
+            var configured = embeddingModelResolver.resolve()
+                    .filter(model -> model.protocol() == ModelProtocol.OPENAI_EMBEDDING)
+                    .orElse(null);
+            if (configured == null) return List.of();
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("model", llmConfig.getEmbeddingModel());
+            body.put("model", configured.modelName());
             body.put("input", input);
 
             Map<String, Object> response = webClientBuilder.build()
                     .post()
-                    .uri(resolveEmbeddingApiUrl())
+                    .uri(configured.apiUrl())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + resolveEmbeddingApiKey())
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + configured.apiKey())
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .block(Duration.ofSeconds(Math.max(10, llmConfig.getReadTimeout())));
+                    .block(Duration.ofSeconds(Math.max(10, runtimeProperties.getReadTimeout())));
 
             if (response == null) {
                 return List.of();
@@ -332,55 +337,13 @@ public class VectorEmbeddingService {
         }
     }
 
-    /**
-     * 解析 Embedding API 的完整 URL。
-     * <p>优先级：显式配置的 embeddingApiUrl > 从 chat API URL 推导 > OpenAI 默认。</p>
-     *
-     * @return Embedding API URL
-     */
-    private String resolveEmbeddingApiUrl() {
-        String configured = llmConfig.getEmbeddingApiUrl();
-        if (configured != null && !configured.isBlank()) {
-            return configured;
-        }
-        String apiUrl = llmConfig.getApiUrl();
-        if (apiUrl == null || apiUrl.isBlank()) {
-            return "https://api.openai.com/v1/embeddings";
-        }
-        try {
-            URI uri = URI.create(apiUrl);
-            String path = uri.getPath() == null ? "" : uri.getPath();
-            String embeddingPath = path.endsWith("/chat/completions")
-                    ? path.substring(0, path.length() - "/chat/completions".length()) + "/embeddings"
-                    : "/v1/embeddings";
-            int port = uri.getPort();
-            String base = port > 0
-                    ? uri.getScheme() + "://" + uri.getHost() + ":" + port
-                    : uri.getScheme() + "://" + uri.getHost();
-            return base + embeddingPath;
-        } catch (RuntimeException e) {
-            return "https://api.openai.com/v1/embeddings";
-        }
-    }
-
-    /**
-     * 解析 Embedding API 密钥。
-     * <p>优先级：显式配置的 embeddingApiKey > chat API key。</p>
-     *
-     * @return API 密钥
-     */
-    private String resolveEmbeddingApiKey() {
-        String embeddingApiKey = llmConfig.getEmbeddingApiKey();
-        if (embeddingApiKey != null && !embeddingApiKey.isBlank()) {
-            return embeddingApiKey;
-        }
-        return llmConfig.getApiKey();
-    }
-
-    /** 检查 Embedding API 是否已配置（密钥非空且非占位符） */
+    /** 检查是否配置了 OpenAI 兼容的 Embedding AiModel。 */
     private boolean hasEmbeddingConfig() {
-        String apiKey = resolveEmbeddingApiKey();
-        return apiKey != null && !apiKey.isBlank() && !"sk-placeholder".equals(apiKey);
+        return embeddingModelResolver.resolve()
+                .filter(model -> model.protocol() == ModelProtocol.OPENAI_EMBEDDING)
+                .filter(model -> model.apiUrl() != null && !model.apiUrl().isBlank())
+                .filter(model -> model.apiKey() != null && !model.apiKey().isBlank())
+                .isPresent();
     }
 
     /** 将浮点数列表转换为 PostgreSQL vector 字面量（如 "[0.1,0.2,0.3]"） */
@@ -394,7 +357,9 @@ public class VectorEmbeddingService {
 
     /** 返回配置的向量维度 */
     private int embeddingDimension() {
-        return Math.max(1, llmConfig.getEmbeddingDimension());
+        return embeddingModelResolver.resolve()
+                .map(EmbeddingModelResolver.EmbeddingModel::dimension)
+                .orElse(1024);
     }
 
     /**

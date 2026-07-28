@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 评论分析过程中单条数据的失败记录。
+ */
 @Entity
 @Table(name = "review_analysis_failures")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

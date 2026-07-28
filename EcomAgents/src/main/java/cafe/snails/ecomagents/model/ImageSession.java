@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 用户进行图片创作与编辑的工作区会话。
+ */
 @Entity
 @Table(name = "image_sessions")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 商品档案关联的原始或分析图片。
+ */
 @Entity
 @Table(name = "product_profile_images")
 @Getter @Setter @ToString

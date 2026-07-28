@@ -35,6 +35,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /** 用户详情服务，用于加载认证主体的权限信息。 */
     private final CustomUserDetailsService userDetailsService;
 
+    /**
+     * 提取并校验请求中的 JWT，认证成功后写入安全上下文。
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

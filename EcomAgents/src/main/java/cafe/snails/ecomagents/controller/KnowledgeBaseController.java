@@ -49,6 +49,7 @@ public class KnowledgeBaseController {
         return kbService.createKnowledgeBase(kb, userId);
     }
 
+    /** 更新知识库基本信息。 */
     @PutMapping("/knowledge-bases/{id}")
     public ApiResponse<KnowledgeBase> updateKnowledgeBase(@PathVariable("id") Long id,
                                                           @Valid @RequestBody KnowledgeBase kb) {
@@ -69,6 +70,7 @@ public class KnowledgeBaseController {
         return kbService.listDocuments(kbId);
     }
 
+    /** 向知识库上传单个文档。 */
     @PostMapping("/knowledge-bases/{kbId}/documents")
     public ApiResponse<KnowledgeDocument> uploadDocument(
             @PathVariable("kbId") Long kbId,
@@ -79,6 +81,7 @@ public class KnowledgeBaseController {
         return kbService.uploadDocument(kbId, file, userId, username, request);
     }
 
+    /** 向知识库批量上传文档。 */
     @PostMapping("/knowledge-bases/{kbId}/documents/batch")
     public ApiResponse<List<KnowledgeDocument>> uploadDocuments(
             @PathVariable("kbId") Long kbId,
@@ -89,6 +92,7 @@ public class KnowledgeBaseController {
         return kbService.uploadDocuments(kbId, files, userId, username, request);
     }
 
+    /** 删除知识库中的指定文档。 */
     @DeleteMapping("/knowledge-bases/{kbId}/documents/{docId}")
     public ApiResponse<Void> deleteDocument(
             @PathVariable("kbId") Long kbId,
@@ -101,6 +105,7 @@ public class KnowledgeBaseController {
 
     // ===== Search =====
 
+    /** 跨知识库搜索文档内容。 */
     @GetMapping("/knowledge-bases/search")
     public ApiResponse<List<KnowledgeDocument>> search(@RequestParam("q") String q) {
         return kbService.search(q);
@@ -108,6 +113,7 @@ public class KnowledgeBaseController {
 
     // ===== Audit Logs =====
 
+    /** 查询指定知识库的审计日志。 */
     @GetMapping("/knowledge-bases/{kbId}/audit-logs")
     public ApiResponse<List<KnowledgeAuditLog>> getAuditLogs(@PathVariable("kbId") Long kbId) {
         return ApiResponse.success(kbService.getAuditLogs(kbId));

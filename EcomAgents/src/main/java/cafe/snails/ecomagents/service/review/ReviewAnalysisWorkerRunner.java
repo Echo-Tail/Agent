@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+/** 按计划周期触发待执行的评论分析任务。 */
 public class ReviewAnalysisWorkerRunner {
     private final ReviewAnalysisExecutor executor;
 

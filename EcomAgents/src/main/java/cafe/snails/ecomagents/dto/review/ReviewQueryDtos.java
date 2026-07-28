@@ -6,14 +6,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 评论分析查询相关的数据传输对象集合。
+ */
 public final class ReviewQueryDtos {
     private ReviewQueryDtos() {}
 
+    /** 商品原始评论的响应。 */
     public record ProductReviewResponse(
             Long id, String asin, BigDecimal rating, String title, String reviewText,
             LocalDateTime reviewDate, Boolean verifiedPurchase, Integer helpfulCount,
             String reviewerName, String sourceUrl, LocalDateTime collectedAt) {}
 
+    /** 从单条评论中提取的洞察响应。 */
     public record InsightResponse(
             Long id, Long reviewId, String asin, BigDecimal rating, String reviewText,
             String userProblem, String usageScenario, String productModule, String severity,
@@ -21,6 +26,7 @@ public final class ReviewQueryDtos {
             Integer returnRisk, Integer conversionRisk, BigDecimal confidence,
             Boolean manuallyEdited, LocalDateTime updatedAt) {}
 
+    /** 人工修订评论洞察内容的请求。 */
     public record UpdateInsightRequest(
             @NotBlank @Size(max = 5000) String userProblem,
             @NotBlank String usageScenario,
@@ -33,8 +39,10 @@ public final class ReviewQueryDtos {
             @NotNull @Min(1) @Max(5) Integer returnRisk,
             @NotNull @Min(1) @Max(5) Integer conversionRisk) {}
 
+    /** 单个分析维度及其统计数量。 */
     public record DimensionCount(String key, long count) {}
 
+    /** 评论分析看板的聚合统计响应。 */
     public record DashboardResponse(
             Long runId, int reviewCount, int insightCount, int opportunityCount,
             long manuallyEditedInsightCount, BigDecimal averageRating,

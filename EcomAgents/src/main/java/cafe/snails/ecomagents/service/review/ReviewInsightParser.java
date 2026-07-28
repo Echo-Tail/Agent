@@ -10,6 +10,7 @@ import java.util.*;
 
 @Component
 @RequiredArgsConstructor
+/** 将模型返回内容解析为结构化评论洞察。 */
 public class ReviewInsightParser {
     public static final String SCHEMA_VERSION = "review_insight_v1";
     private final ObjectMapper objectMapper;

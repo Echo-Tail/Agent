@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 图片生成任务的配置、进度与执行结果统计。
+ */
 @Entity
 @Table(name = "image_generation_jobs")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import cafe.snails.ecomagents.dto.ToolAvailability;
 import cafe.snails.ecomagents.harness.HarnessHooks;
 import cafe.snails.ecomagents.harness.SseEvent;
@@ -65,13 +65,13 @@ public class HarnessChatService {
     private final FileStorageService fileStorageService;
     private final SessionRepository sessionRepository;
     private final UserRepository userRepository;
-    private final LlmConfig llmConfig;
+    private final ModelRuntimeProperties runtimeProperties;
     private final AgentToolAvailabilityService toolAvailabilityService;
 
     /**
      * 同步（非流式）聊天，返回 Agent 回复文本。
      * <p>用于群聊中 @Agent 触发自动回复，不涉及 SSE 流式推送。
-     * 自动注入知识库上下文，超时由 {@link LlmConfig#getStreamTimeout()} 控制。</p>
+     * 自动注入知识库上下文，超时由模型运行时配置控制。</p>
      *
      * @param agentId Agent ID
      * @param content 用户消息文本
@@ -89,7 +89,7 @@ public class HarnessChatService {
                             .sessionId("simple-" + System.currentTimeMillis())
                             .userId("0")
                             .build())
-                    .block(Duration.ofSeconds(llmConfig.getStreamTimeout()));
+                    .block(Duration.ofSeconds(runtimeProperties.getStreamTimeout()));
             if (reply != null && reply.getTextContent() != null && !reply.getTextContent().isBlank()) {
                 return reply.getTextContent();
             }
@@ -165,7 +165,7 @@ public class HarnessChatService {
                         .content(List.of(TextBlock.builder().text(actualContent).build()))
                         .build();
 
-                Msg reply = agent.call(userMsg, ctx).block(Duration.ofSeconds(llmConfig.getStreamTimeout()));
+                Msg reply = agent.call(userMsg, ctx).block(Duration.ofSeconds(runtimeProperties.getStreamTimeout()));
 
                 AiModel model = resolveModel(agentId);
 

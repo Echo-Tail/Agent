@@ -14,6 +14,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+/** 负责评论改进机会的查询、编辑与重新评分。 */
 public class ReviewOpportunityService {
     private static final Map<String, Integer> SEVERITY_RANK = Map.of(
             "minor", 1, "moderate", 2, "major", 3, "critical", 4);

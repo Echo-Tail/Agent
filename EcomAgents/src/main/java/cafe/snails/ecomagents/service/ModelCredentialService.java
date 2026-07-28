@@ -16,6 +16,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+/** 负责模型访问凭证的加密保存、轮换与脱敏查询。 */
 public class ModelCredentialService {
     private final ModelCredentialRepository repository;
     private final CredentialCrypto crypto;

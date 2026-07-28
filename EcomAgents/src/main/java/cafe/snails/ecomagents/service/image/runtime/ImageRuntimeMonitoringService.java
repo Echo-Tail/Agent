@@ -18,6 +18,7 @@ import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
+/** 汇总图片生成运行时状态、耗时和失败信息。 */
 public class ImageRuntimeMonitoringService {
     private static final String PREFIX = "ecomagents.image.runtime";
     private final MeterRegistry registry;

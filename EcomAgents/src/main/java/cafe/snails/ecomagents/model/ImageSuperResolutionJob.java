@@ -5,6 +5,9 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 图片超分辨率处理任务及其执行状态。
+ */
 @Entity
 @Table(name = "image_super_resolution_jobs")
 @Getter

@@ -5,6 +5,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 从外部数据源采集的商品原始评论。
+ */
 @Entity
 @Table(name = "product_reviews")
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor

@@ -3,6 +3,9 @@ package cafe.snails.ecomagents.dto.image;
 import cafe.snails.ecomagents.model.ImageSessionOperation;
 import jakarta.validation.constraints.*;
 
+/**
+ * 在图片会话中创建生成任务的请求。
+ */
 public record SessionImageJobRequest(
         @NotNull Long modelId,
         @NotNull ImageSessionOperation operation,

@@ -1,6 +1,6 @@
 package cafe.snails.ecomagents.service;
 
-import cafe.snails.ecomagents.config.LlmConfig;
+import cafe.snails.ecomagents.config.ModelRuntimeProperties;
 import cafe.snails.ecomagents.dto.ApiResponse;
 import cafe.snails.ecomagents.dto.ModelValidateRequest;
 import cafe.snails.ecomagents.model.AiModel;
@@ -30,8 +30,8 @@ public class AiModelService {
 
     /** AI 模型配置仓库。 */
     private final AiModelRepository repository;
-    /** 全局 LLM 配置，用于补齐模型调用默认参数。 */
-    private final LlmConfig llmConfig;
+    /** 模型调用超时等运行参数。 */
+    private final ModelRuntimeProperties runtimeProperties;
     private final ModelCredentialService credentialService;
 
     /** 获取所有模型配置 */
@@ -145,11 +145,13 @@ public class AiModelService {
      * 返回 null 表示使用全局默认配置。
      */
     public io.agentscope.core.model.GenerateOptions buildModelOptions(Long modelId) {
-        if (modelId == null) return null;
-        return repository.findById(modelId)
+        var selected = modelId == null
+                ? repository.findByIsDefaultTrue().filter(model -> Boolean.TRUE.equals(model.getEnabled()))
+                : repository.findById(modelId).filter(model -> Boolean.TRUE.equals(model.getEnabled()));
+        return selected
                 .map(model -> {
                     var execConfig = io.agentscope.core.model.ExecutionConfig.builder()
-                            .timeout(java.time.Duration.ofSeconds(llmConfig.getStreamTimeout()))
+                            .timeout(java.time.Duration.ofSeconds(runtimeProperties.getStreamTimeout()))
                             .maxAttempts(1)
                             .build();
                     return io.agentscope.core.model.GenerateOptions.builder()

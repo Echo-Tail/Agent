@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * 可复用提示词模板及其版本配置。
+ */
 @Entity
 @Table(name = "prompt_library")
 @Getter @Setter @ToString

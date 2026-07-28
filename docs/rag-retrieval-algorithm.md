@@ -178,12 +178,12 @@ limitContext(context)  // 总上限 16000 字
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `llm.embedding-model` | `bge-m3:latest` | Ollama embedding 模型 |
-| `llm.embedding-dimension` | 1024 | 向量维度 |
-| `llm.rag-search-limit` | 5 | 检索返回上限 |
-| `llm.rag-similarity-threshold` | 0.15 | 向量相似度阈值 |
-| `llm.rag-max-context-chars` | 16000 | 上下文总上限 |
-| `llm.rag-retrieval-timeout` | 8s | 检索超时 |
+| `AiModel` 的 `EMBEDDING` 能力 | — | Embedding 地址、模型、凭据和协议 |
+| `EMBEDDING.optionsJson.dimension` | 1024 | 向量维度 |
+| `rag.search-limit` | 5 | 检索返回上限 |
+| `rag.similarity-threshold` | 0.15 | 向量相似度阈值 |
+| `rag.max-context-chars` | 16000 | 上下文总上限 |
+| `rag.retrieval-timeout` | 8s | 检索超时 |
 | `TEXT_CHUNK_SIZE` | 1200 | 文本子块大小 |
 | `TEXT_CHUNK_OVERLAP` | 200 | 文本子块重叠 |
 | `TEXT_PARENT_WINDOW` | 2 | 每 N 子块合并为一个父块 |
@@ -203,4 +203,5 @@ limitContext(context)  // 总上限 16000 字
 | `KnowledgeBaseController.java` | 知识库 API（上传/删除/搜索） |
 | `RetrieveKnowledgeTool.java` | AGENTIC 模式的检索工具 |
 | `HarnessChatService.java` | GENERIC 模式的自动注入 |
-| `LlmConfig.java` | RAG 配置参数 |
+| `RagProperties.java` | RAG 检索策略参数 |
+| `EmbeddingModelResolver.java` | 从 AiModel 解析向量模型 |

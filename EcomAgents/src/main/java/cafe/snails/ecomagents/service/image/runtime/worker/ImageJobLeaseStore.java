@@ -9,6 +9,7 @@ import java.util.*;
 
 @Repository
 @RequiredArgsConstructor
+/** 管理图片生成任务的数据库租约和并发领取。 */
 public class ImageJobLeaseStore {
     private final JdbcTemplate jdbc;
 

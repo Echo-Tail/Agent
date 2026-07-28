@@ -5,6 +5,9 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 商品视觉内容策略的版本快照。
+ */
 @Entity
 @Table(name = "product_visual_strategy_versions")
 @Getter @Setter @ToString

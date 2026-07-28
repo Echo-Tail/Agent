@@ -7,8 +7,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 提示词库数据访问层。
+ */
 public interface PromptLibraryRepository extends JpaRepository<PromptLibrary, Long> {
 
+    /** 按分类、创建者和关键词分页检索提示词。 */
     @Query(value = "SELECT * FROM prompt_library p WHERE " +
            "(:category IS NULL OR p.category = :category) AND " +
            "(:createdBy IS NULL OR p.created_by = :createdBy) AND " +
