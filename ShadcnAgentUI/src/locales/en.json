@@ -23,14 +23,19 @@
     "promptLibrary": "Prompt Library",
     "productProfiles": "Product Profiles",
     "imageHistory": "History",
-    "amazonImageWorkbench": "Amazon Image Workbench"
+    "amazonImageWorkbench": "Amazon Image Workbench",
+    "reviewAnalysis": "Review Insights",
+    "reviewTasks": "Analysis Tasks",
+    "reviewReport": "Insight Report",
+    "reviewEvidence": "Review Evidence"
   },
   "navGroup": {
     "communication": "Communication",
     "creation": "Creation",
     "resources": "Knowledge & Resources",
     "admin": "Administration",
-    "system": "System"
+    "system": "System",
+    "reviewAnalysis": "Review Insights"
   },
   "pageTitle": {
     "myAgents": "My Agents",
@@ -65,6 +70,10 @@
     "promptLibraryDesc": "Share and manage prompts",
     "productProfiles": "Product Profiles",
     "amazonImageWorkbench": "Amazon Image Workbench",
+    "reviewAnalysis": "Car Stereo Review Insights",
+    "reviewTasks": "Review Insights · Analysis Tasks",
+    "reviewReport": "Review Insights · Insight Report",
+    "reviewEvidence": "Review Insights · Review Evidence",
     "productProfilesDesc": "Maintain own product archives and default product images",
     "imageHistory": "History",
     "imageHistoryDesc": "View text-to-image and image-to-image generation history",

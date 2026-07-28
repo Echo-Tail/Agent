@@ -41,6 +41,8 @@ import {
   ScrollText,
   ScanLine,
   Activity,
+  ChartNoAxesCombined,
+  Sparkles,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -84,6 +86,10 @@ const pageTitleKey: Record<string, string> = {
   PublicAssets: 'pageTitle.publicAssets',
   PromptLibrary: 'pageTitle.promptLibrary',
   AmazonImageWorkbench: 'pageTitle.amazonImageWorkbench',
+  ReviewAnalysis: 'pageTitle.reviewAnalysis',
+  ReviewTasks: 'pageTitle.reviewTasks',
+  ReviewReport: 'pageTitle.reviewReport',
+  ReviewEvidence: 'pageTitle.reviewEvidence',
   ImageSuperResolution: 'pageTitle.imageSuperResolution',
   Logs: 'pageTitle.logs',
   Settings: 'pageTitle.settings',
@@ -128,6 +134,15 @@ const navGroups: NavGroup[] = [
     { translationKey: 'nav.productProfiles', key: 'ProductProfileList', icon: FileText },
     { translationKey: 'nav.amazonImageWorkbench', key: 'AmazonImageWorkbench', icon: PanelsTopLeft },
     { translationKey: 'nav.imageHistory', key: 'ImageHistory', icon: History },
+    ],
+  },
+  {
+    id: 'reviewAnalysis',
+    translationKey: 'navGroup.reviewAnalysis',
+    items: [
+    { translationKey: 'nav.reviewTasks', key: 'ReviewTasks', icon: ChartNoAxesCombined },
+    { translationKey: 'nav.reviewReport', key: 'ReviewReport', icon: Sparkles },
+    { translationKey: 'nav.reviewEvidence', key: 'ReviewEvidence', icon: ScrollText },
     ],
   },
   {
@@ -178,6 +193,7 @@ const expandedGroups = ref<Record<string, boolean>>({
   communication: true,
   creation: true,
   resources: true,
+  reviewAnalysis: true,
   admin: false,
   system: true,
 })
