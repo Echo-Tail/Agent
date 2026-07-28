@@ -117,7 +117,7 @@ class ProductProfileServiceParseTest {
 
     @Test
     void createFromAsin_shouldExtractBrightDataArrayProductDetailsAndFeatures() throws Exception {
-        String asin = "B0FY2ZRS14";
+        String asin = "B0TEST1234";
         when(profileRepository.findBySku(asin)).thenReturn(Optional.empty());
         when(brightDataService.scrape(any(), eq(7L))).thenReturn(ApiResponse.success(BrightDataScrapeResponse.builder()
                 .records(List.of(brightDataArrayDetailsRecord(asin)))

@@ -582,7 +582,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
         <form id="review-analysis-form" class="flex flex-col gap-4" @submit.prevent="createTask">
           <div class="flex flex-col gap-2">
             <Label for="asin-input">ASIN 列表</Label>
-            <Textarea id="asin-input" v-model="asinInput" rows="8" placeholder="例如：&#10;B0F59PZN7B&#10;https://www.amazon.com/dp/B09KBH8R7F&#10;B0GZMTHX44" />
+            <Textarea id="asin-input" v-model="asinInput" rows="8" placeholder="例如：&#10;Bxxxxx&#10;https://www.amazon.com/dp/Bxxxxx" />
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">已识别 {{ parsedAsins.length }} 个</Badge>

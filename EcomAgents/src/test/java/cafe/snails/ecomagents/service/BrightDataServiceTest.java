@@ -56,7 +56,7 @@ class BrightDataServiceTest {
     private static BrightDataConfig realConfig;
 
     /** 测试用 ASIN */
-    private static final String TEST_ASIN = "B09KBH8R7F";
+    private static final String TEST_ASIN = "B0TEST1234";
     private static final String TEST_AMAZON_URL = "https://www.amazon.com/dp/" + TEST_ASIN;
     private static final Long TEST_USER_ID = 1L;
 

@@ -146,7 +146,7 @@ class KnowledgeUnitParserServiceTest {
     @Test
     void parseJson_shouldResolveTitle() {
         String json = """
-                {"asin": "B0CFVC7QM7", "title": "Product Title", "price": 49.99}
+                {"asin": "B0TEST1234", "title": "Product Title", "price": 49.99}
                 """;
         KnowledgeDocument doc = doc("product", "json", json);
         List<KnowledgeUnit> units = parser.parse(doc);

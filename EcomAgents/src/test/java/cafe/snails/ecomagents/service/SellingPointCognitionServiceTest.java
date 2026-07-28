@@ -162,7 +162,7 @@ class SellingPointCognitionServiceTest {
                 .userId(7L)
                 .productName("Dodge RAM Stereo")
                 .brand("Kissound")
-                .sku("B0FY2ZRS14")
+                .sku("B0TEST1234")
                 .category("car stereo")
                 .status("PENDING_CONFIRM")
                 .currentVersionId(22L)
