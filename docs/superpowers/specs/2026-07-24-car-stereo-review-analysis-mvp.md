@@ -131,7 +131,7 @@ draft
 
 ```text
 POST /v1/review-analysis/projects
-Body: {"asins":["B0F59PZN7B","B09KBH8R7F"]}
+Body: {"asins":["Bxxxxx","Bxxxxx"]}
 
 POST /v1/review-analysis/projects/{projectId}/collections
 POST /v1/review-analysis/projects/{projectId}/analysis-runs
