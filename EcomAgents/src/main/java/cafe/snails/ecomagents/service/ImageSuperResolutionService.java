@@ -168,7 +168,7 @@ public class ImageSuperResolutionService {
         try {
             connection = (HttpURLConnection) URI.create(imageUrl).toURL().openConnection(java.net.Proxy.NO_PROXY);
             connection.setRequestMethod("GET");
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36");
             connection.setRequestProperty("Accept", "image/*,*/*");
             connection.setConnectTimeout(30_000);
             connection.setReadTimeout(120_000);
@@ -288,7 +288,7 @@ public class ImageSuperResolutionService {
                 URL url = URI.create(imageUrl).toURL();
                 conn = (HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
                 conn.setRequestMethod("GET");
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36");
                 conn.setRequestProperty("Accept", "image/*,*/*");
                 conn.setConnectTimeout(30_000);
                 conn.setReadTimeout(120_000);

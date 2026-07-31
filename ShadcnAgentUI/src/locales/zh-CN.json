@@ -27,7 +27,8 @@
     "reviewAnalysis": "评论洞察",
     "reviewTasks": "分析任务",
     "reviewReport": "洞察报告",
-    "reviewEvidence": "评论证据"
+    "reviewEvidence": "评论证据",
+    "proxySettings": "代理设置"
   },
   "navGroup": {
     "communication": "沟通",
@@ -77,7 +78,8 @@
     "reviewEvidence": "评论洞察 · 评论证据",
     "imageHistory": "生成历史",
     "imageHistoryDesc": "查看文生图与图生图的历史记录",
-    "amazonImageWorkbenchDesc": "管理 Amazon US car stereo 副图与 A+ 图生图流程"
+    "amazonImageWorkbenchDesc": "管理 Amazon US car stereo 副图与 A+ 图生图流程",
+    "proxySettings": "代理设置"
   },
   "pageDesc": {
     "logs": "查看和导出系统运行日志",

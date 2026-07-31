@@ -1113,7 +1113,8 @@ function phaseLabel(phase: string | null) {
               :model-value="promptTargetNodeId ? resultPrompt(promptTargetNodeId) : ''"
               readonly
               rows="4"
-              class="max-h-32 overflow-y-auto text-xs"
+              :max-rows="25"
+              class="resize-none text-xs leading-5"
             />
           </div>
           <div class="space-y-1.5">

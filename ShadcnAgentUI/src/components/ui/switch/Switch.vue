@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<SwitchRootProps & {
   checked?: boolean
 }>(), {
   size: 'default',
+  checked: undefined,
 })
 
 const emits = defineEmits<SwitchRootEmits & {

@@ -1,14 +1,18 @@
 package cafe.snails.ecomagents.service.image.runtime.storage;
 
 import cafe.snails.ecomagents.exception.*;
+import cafe.snails.ecomagents.service.ProxySettingsService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import java.io.InputStream;
 import java.net.*;
 
 @Component
+@RequiredArgsConstructor
 /** 安全下载图片供应商返回的远程图片。 */
 public class ImageRemoteDownloader {
     private static final int MAX_BYTES = 25 * 1024 * 1024;
+    private final ProxySettingsService proxySettingsService;
 
     public DownloadedImage download(String imageUrl) {
         HttpURLConnection connection = null;
@@ -21,9 +25,9 @@ public class ImageRemoteDownloader {
                         || address.isSiteLocalAddress() || address.isMulticastAddress())
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "供应商图片地址指向受限网络");
             }
-            connection = (HttpURLConnection) url.openConnection(Proxy.NO_PROXY);
+            connection = (HttpURLConnection) proxySettingsService.openConnection(url);
             connection.setRequestMethod("GET");
-            connection.setRequestProperty("User-Agent", "EcomAgents-ImageRuntime/1.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36");
             connection.setConnectTimeout(30_000);
             connection.setReadTimeout(60_000);
             if (connection.getResponseCode() != 200)

@@ -260,7 +260,13 @@ onBeforeUnmount(() => previews.value.forEach(url => URL.revokeObjectURL(url)))
     </header>
 
     <div class="nodrag nowheel space-y-4 p-4">
-      <Textarea v-model="prompt" :disabled="busy" class="min-h-24 resize-none bg-background text-sm" placeholder="描述希望生成或修改的图片…" />
+      <Textarea
+        v-model="prompt"
+        :disabled="busy"
+        :max-rows="25"
+        class="min-h-24 resize-none bg-background text-sm leading-5"
+        placeholder="描述希望生成或修改的图片…"
+      />
 
       <div v-if="previews.length || remoteReferences.length" class="grid grid-cols-4 gap-2">
         <div v-for="(reference, index) in remoteReferences" :key="reference.url" class="group relative aspect-square overflow-hidden rounded-lg bg-muted">
