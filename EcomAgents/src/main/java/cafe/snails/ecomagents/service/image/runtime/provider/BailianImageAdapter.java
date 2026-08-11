@@ -2,6 +2,7 @@ package cafe.snails.ecomagents.service.image.runtime.provider;
 
 import cafe.snails.ecomagents.exception.*;
 import cafe.snails.ecomagents.model.*;
+import cafe.snails.ecomagents.service.ProxySettingsService;
 import cafe.snails.ecomagents.service.image.runtime.ImageSizePolicy;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -20,10 +21,14 @@ import java.util.*;
 /** 阿里云百炼图片生成接口适配器。 */
 public class BailianImageAdapter implements ImageGenerationProviderAdapter {
     private final ObjectMapper mapper;
+    private final ProxySettingsService proxySettingsService;
     @Value("${file.upload-dir:./uploads}") private String uploadDir;
     @Value("${image.runtime.bailian-timeout-seconds:600}") private int timeoutSeconds;
 
-    public BailianImageAdapter(ObjectMapper mapper) { this.mapper = mapper; }
+    public BailianImageAdapter(ObjectMapper mapper, ProxySettingsService proxySettingsService) {
+        this.mapper = mapper;
+        this.proxySettingsService = proxySettingsService;
+    }
 
     @Override public boolean supports(ModelProtocol protocol, ModelCapability capability) {
         return protocol == ModelProtocol.BAILIAN_IMAGE &&
@@ -112,11 +117,11 @@ public class BailianImageAdapter implements ImageGenerationProviderAdapter {
     private JsonNode request(String method, String target, JsonNode body, String secret, boolean async) {
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) URI.create(target).toURL().openConnection(Proxy.NO_PROXY);
+            connection = (HttpURLConnection) proxySettingsService.openConnection(URI.create(target).toURL());
             connection.setRequestMethod(method);
             connection.setRequestProperty("Authorization", "Bearer " + secret);
             connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("User-Agent", "EcomAgents-ImageRuntime/1.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36");
             if (async) connection.setRequestProperty("X-DashScope-Async", "enable");
             connection.setConnectTimeout(timeoutSeconds * 1000);
             connection.setReadTimeout(timeoutSeconds * 1000);

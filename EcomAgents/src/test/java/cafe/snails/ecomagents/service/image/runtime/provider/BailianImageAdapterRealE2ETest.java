@@ -1,6 +1,7 @@
 package cafe.snails.ecomagents.service.image.runtime.provider;
 
 import cafe.snails.ecomagents.model.*;
+import cafe.snails.ecomagents.service.ProxySettingsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -15,10 +16,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.net.Proxy;
 import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @Tag("bailian-e2e")
@@ -44,8 +47,11 @@ class BailianImageAdapterRealE2ETest {
     }
 
     @BeforeEach
-    void setUp() {
-        adapter = new BailianImageAdapter(new ObjectMapper());
+    void setUp() throws Exception {
+        ProxySettingsService proxySettingsService = mock(ProxySettingsService.class);
+        when(proxySettingsService.openConnection(any())).thenAnswer(
+                invocation -> invocation.<java.net.URL>getArgument(0).openConnection(Proxy.NO_PROXY));
+        adapter = new BailianImageAdapter(new ObjectMapper(), proxySettingsService);
         ReflectionTestUtils.setField(adapter, "uploadDir", tempDir.toString());
         ReflectionTestUtils.setField(adapter, "timeoutSeconds", 600);
     }

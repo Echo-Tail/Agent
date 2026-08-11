@@ -54,6 +54,7 @@ public class SecurityConfig {
                         .requestMatchers("/v1/users/**").hasRole("ADMIN")
                         .requestMatchers("/v1/model-credentials/**").hasRole("ADMIN")
                         .requestMatchers("/v1/admin/image-runtime/**").hasRole("ADMIN")
+                        .requestMatchers("/v1/admin/proxy-settings/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/models", "/v1/models/**").authenticated()
                         .requestMatchers("/v1/models/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/v1/tools", "/v1/tools/**").authenticated()

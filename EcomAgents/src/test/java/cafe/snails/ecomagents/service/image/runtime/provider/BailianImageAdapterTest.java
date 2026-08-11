@@ -1,18 +1,21 @@
 package cafe.snails.ecomagents.service.image.runtime.provider;
 
 import cafe.snails.ecomagents.model.*;
+import cafe.snails.ecomagents.service.ProxySettingsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class BailianImageAdapterTest {
     HttpServer server;
@@ -21,7 +24,14 @@ class BailianImageAdapterTest {
 
     @BeforeEach void setUp() throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        adapter = new BailianImageAdapter(new ObjectMapper());
+        ProxySettingsService proxySettingsService = mock(ProxySettingsService.class);
+        try {
+            when(proxySettingsService.openConnection(any())).thenAnswer(
+                    invocation -> invocation.<java.net.URL>getArgument(0).openConnection(Proxy.NO_PROXY));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        adapter = new BailianImageAdapter(new ObjectMapper(), proxySettingsService);
         ReflectionTestUtils.setField(adapter, "uploadDir", tempDir.toString());
         ReflectionTestUtils.setField(adapter, "timeoutSeconds", 5);
     }

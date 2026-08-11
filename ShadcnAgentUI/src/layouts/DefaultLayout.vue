@@ -43,6 +43,7 @@ import {
   Activity,
   ChartNoAxesCombined,
   Sparkles,
+  Network,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -81,6 +82,7 @@ const pageTitleKey: Record<string, string> = {
   SkillManage: 'pageTitle.skillManage',
   TokenUsage: 'pageTitle.tokenUsage',
   ImageRuntimeMonitoring: 'pageTitle.imageRuntimeMonitoring',
+  ProxySettings: 'pageTitle.proxySettings',
   TicketManage: 'pageTitle.ticketManage',
   KnowledgeBase: 'pageTitle.knowledgeBase',
   PublicAssets: 'pageTitle.publicAssets',
@@ -161,6 +163,7 @@ const navGroups: NavGroup[] = [
     translationKey: 'navGroup.admin',
     items: [
     { translationKey: 'nav.imageRuntimeMonitoring', key: 'ImageRuntimeMonitoring', icon: Activity, adminOnly: true },
+    { translationKey: 'nav.proxySettings', key: 'ProxySettings', icon: Network, adminOnly: true },
     { translationKey: 'nav.tokenUsage', key: 'TokenUsage', icon: BarChart3, adminOnly: true },
     { translationKey: 'nav.userManage', key: 'UserManage', icon: UserCog, adminOnly: true },
     { translationKey: 'nav.modelManage', key: 'ModelManage', icon: Brain, adminOnly: true },

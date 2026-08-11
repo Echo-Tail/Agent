@@ -27,7 +27,8 @@
     "reviewAnalysis": "Review Insights",
     "reviewTasks": "Analysis Tasks",
     "reviewReport": "Insight Report",
-    "reviewEvidence": "Review Evidence"
+    "reviewEvidence": "Review Evidence",
+    "proxySettings": "Proxy Settings"
   },
   "navGroup": {
     "communication": "Communication",
@@ -77,7 +78,8 @@
     "productProfilesDesc": "Maintain own product archives and default product images",
     "imageHistory": "History",
     "imageHistoryDesc": "View text-to-image and image-to-image generation history",
-    "amazonImageWorkbenchDesc": "Manage Amazon US car stereo secondary image and A+ image workflows"
+    "amazonImageWorkbenchDesc": "Manage Amazon US car stereo secondary image and A+ image workflows",
+    "proxySettings": "Proxy Settings"
   },
   "pageDesc": {
     "logs": "View and export system operation logs",

@@ -1,0 +1,10 @@
+CREATE TABLE proxy_settings (
+    id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    proxy_url VARCHAR(500),
+    updated_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO proxy_settings (id, enabled) VALUES (1, FALSE);

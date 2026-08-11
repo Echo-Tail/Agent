@@ -61,6 +61,7 @@ const router = createRouter({
         { path: 'knowledge/:id', name: 'KnowledgeDetail', component: () => import('@/views/knowledge/KnowledgeBase.vue') },
         { path: 'settings', name: 'Settings', component: () => import('@/views/settings/SettingsView.vue') },
         { path: 'admin/image-runtime', name: 'ImageRuntimeMonitoring', component: () => import('@/views/admin/ImageRuntimeMonitoring.vue') },
+        { path: 'admin/proxy-settings', name: 'ProxySettings', component: () => import('@/views/admin/ProxySettings.vue') },
         { path: 'admin/token-usage', name: 'TokenUsage', component: () => import('@/views/admin/TokenUsage.vue') },
         { path: 'admin/tickets', name: 'TicketManage', component: () => import('@/views/admin/TicketManage.vue') },
         { path: 'logs', name: 'Logs', component: () => import('@/views/log/LogViewer.vue') },
@@ -92,7 +93,7 @@ router.beforeEach(async (to, _from) => {
     }
   }
 
-  const adminRoutes = ['UserManage', 'ModelManage', 'ToolManage', 'SkillManage', 'ImageRuntimeMonitoring', 'TokenUsage', 'TicketManage']
+  const adminRoutes = ['UserManage', 'ModelManage', 'ToolManage', 'SkillManage', 'ImageRuntimeMonitoring', 'ProxySettings', 'TokenUsage', 'TicketManage']
   if (adminRoutes.includes(to.name as string)) {
     const auth = useAuthStore()
     const valid = await auth.verifyAuth()
